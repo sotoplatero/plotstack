@@ -1,0 +1,11 @@
+{
+  "name": "plotstack",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "A local-first newsletter analytics dashboard for Chrome.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "validate": "node scripts/validate-extension.mjs"
+  }
+}

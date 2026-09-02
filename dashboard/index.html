@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="es" data-theme="ink">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>PlotStack — Newsletter Analytics</title>
+    <link rel="icon" href="../assets/icon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <section class="onboarding" id="onboarding" aria-labelledby="onboarding-title">
+      <div class="onboarding-brand brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Plot<span>Stack</span></span>
+      </div>
+      <div class="onboarding-grid">
+        <div class="onboarding-copy">
+          <p class="kicker"><span class="live-dot"></span> ANALÍTICA LOCAL PARA SUBSTACK</p>
+          <h1 id="onboarding-title">Tu newsletter,<br><em>en perspectiva.</em></h1>
+          <p>Conecta la sesión de Substack que ya tienes abierta en Chrome y reúne crecimiento, audiencia y contenido en un solo lugar.</p>
+          <div class="privacy-line">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>PlotStack nunca copia ni almacena tus cookies.</span>
+          </div>
+        </div>
+        <div class="connect-card" id="connect-card">
+          <div class="connect-visual" aria-hidden="true">
+            <div class="substack-glyph"><i></i><i></i><strong>S</strong></div>
+            <div class="connector"><span></span></div>
+            <div class="plotstack-glyph"><span class="brand-mark"><i></i><i></i><i></i></span></div>
+          </div>
+          <div id="connect-content">
+            <p class="step-label">PASO 1 DE 1</p>
+            <h2>Conecta tu publicación</h2>
+            <p>Usaremos tu sesión activa únicamente para consultar endpoints de estadísticas de solo lectura.</p>
+            <button class="connect-button" id="connect-button" type="button"><span>Conectar con Substack</span><b>→</b></button>
+            <button class="login-button" id="login-button" type="button" hidden>Iniciar sesión en Substack ↗</button>
+          </div>
+          <div class="publication-picker" id="publication-picker" hidden>
+            <p class="step-label">ELIGE UNA PUBLICACIÓN</p>
+            <h2>¿Qué quieres analizar?</h2>
+            <div id="publication-list"></div>
+          </div>
+          <div class="connect-status" id="connect-status" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="onboarding-foot"><span>Privado por diseño</span><span>Sin servidor intermedio</span><span>Solo lectura</span></div>
+    </section>
+
+    <div class="shell" id="dashboard-shell" hidden>
+      <aside class="sidebar" aria-label="Navegación principal">
+        <a class="brand" href="#overview" aria-label="PlotStack, inicio">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>Plot<span>Stack</span><small id="app-version"></small></span>
+        </a>
+
+        <nav class="nav-list">
+          <button class="nav-item button-reset is-active" type="button" data-view="resumen" aria-current="page">
+            <svg aria-hidden="true"><use href="#icon-grid"></use></svg><span>Resumen</span>
+          </button>
+          <button class="nav-item button-reset" type="button" data-view="audiencia">
+            <svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Audiencia</span>
+          </button>
+          <button class="nav-item button-reset" type="button" data-view="crecimiento">
+            <svg aria-hidden="true"><use href="#icon-arrow"></use></svg><span>Crecimiento</span>
+          </button>
+          <button class="nav-item button-reset" type="button" data-view="notas">
+            <svg aria-hidden="true"><use href="#icon-note"></use></svg><span>Notas</span>
+          </button>
+          <button class="nav-item button-reset" type="button" data-view="publicaciones">
+            <svg aria-hidden="true"><use href="#icon-mail"></use></svg><span>Publicaciones</span>
+          </button>
+          <button class="nav-item button-reset" type="button" data-view="cobertura">
+            <svg aria-hidden="true"><use href="#icon-database"></use></svg><span>Cobertura</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="source-card">
+            <span class="source-dot"></span>
+            <div><small>Fuente activa</small><strong id="source-name">Substack</strong></div>
+          </div>
+          <button class="nav-item button-reset" id="theme-button" type="button">
+            <svg aria-hidden="true"><use href="#icon-sun"></use></svg><span>Cambiar tema</span>
+          </button>
+          <button class="nav-item button-reset" id="disconnect-button" type="button">
+            <svg aria-hidden="true"><use href="#icon-exit"></use></svg><span>Desconectar</span>
+          </button>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div class="eyebrow"><span></span> Centro de rendimiento</div>
+          <div class="top-actions">
+            <div class="range-control" id="range-control" aria-label="Periodo analizado">
+              <button type="button" data-days="7">7D</button>
+              <button type="button" data-days="30" class="is-active">30D</button>
+              <button type="button" data-days="90">90D</button>
+              <button type="button" data-days="all">Todo</button>
+            </div>
+            <button class="icon-button" id="export-button" type="button" title="Exportar CSV" aria-label="Exportar publicaciones como CSV">
+              <svg aria-hidden="true"><use href="#icon-download"></use></svg>
+            </button>
+            <div class="capture-control">
+              <button class="icon-button" id="capture-button" type="button" title="Capturar página o tarjeta" aria-label="Capturar página o tarjeta" aria-expanded="false" aria-controls="capture-menu">
+                <svg aria-hidden="true"><use href="#icon-camera"></use></svg>
+              </button>
+              <div class="capture-menu" id="capture-menu" hidden>
+                <strong>Capturar</strong>
+                <button type="button" data-capture-action="download-page"><span>Página completa</span><small>Guardar PNG</small></button>
+                <button type="button" data-capture-action="copy-page"><span>Página completa</span><small>Copiar al portapapeles</small></button>
+                <button type="button" data-capture-action="download-card"><span>Una tarjeta</span><small>Elegir y guardar PNG</small></button>
+                <button type="button" data-capture-action="copy-card"><span>Una tarjeta</span><small>Elegir y copiar</small></button>
+              </div>
+            </div>
+            <div class="privacy-control">
+              <button class="icon-button" id="privacy-button" type="button" title="Privacidad de las métricas" aria-label="Configurar métricas sensibles" aria-expanded="false" aria-controls="privacy-menu">
+                <svg aria-hidden="true"><use href="#icon-eye"></use></svg>
+              </button>
+              <div class="privacy-menu" id="privacy-menu" hidden>
+                <div class="privacy-menu-head">
+                  <strong>Datos sensibles</strong>
+                  <span>Ocultos por defecto</span>
+                </div>
+                <label class="privacy-option" for="show-paid">
+                  <span><strong>Suscriptores de pago</strong><small>Totales, desglose y atribución</small></span>
+                  <input id="show-paid" type="checkbox" />
+                </label>
+                <label class="privacy-option" for="show-revenue">
+                  <span><strong>Ingresos</strong><small>Ingreso mensual estimado</small></span>
+                  <input id="show-revenue" type="checkbox" />
+                </label>
+                <p>Las capturas siempre ocultan ambas cifras.</p>
+              </div>
+            </div>
+            <button class="sync-button" id="sync-button" type="button">
+              <svg aria-hidden="true"><use href="#icon-refresh"></use></svg>
+              <span>Sincronizar</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="content" id="overview">
+
+          <div class="view" data-view="resumen">
+            <section class="metrics-grid" aria-label="Métricas principales">
+              <article class="metric-card metric-primary reveal" data-goto="audiencia" role="link" tabindex="0">
+                <div class="card-label"><span>Suscriptores</span><svg aria-hidden="true"><use href="#icon-arrow"></use></svg></div>
+                <p class="metric-value" id="metric-subscribers">—</p>
+                <p class="delta" id="delta-subscribers">—</p>
+                <div class="spark-bars" id="subscriber-bars" aria-hidden="true"></div>
+              </article>
+              <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
+                <div class="card-label"><span>Apertura media</span><span class="metric-glyph">◒</span></div>
+                <p class="metric-value" id="metric-open-rate">—</p>
+                <p class="delta" id="delta-open-rate">—</p>
+                <div class="benchmark"><span id="open-progress"></span></div>
+                <small id="open-reference">—</small>
+              </article>
+              <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
+                <div class="card-label"><span>Clics por envío</span><span class="metric-glyph">⇱</span></div>
+                <p class="metric-value" id="metric-click-rate">—</p>
+                <p class="delta" id="delta-click-rate">—</p>
+                <div class="paid-note"><span id="click-basis">—</span></div>
+              </article>
+              <article class="metric-card reveal" data-goto="audiencia" data-sensitive="paid" role="link" tabindex="0" hidden>
+                <div class="card-label"><span>Suscriptores de pago</span><span class="metric-glyph">↗</span></div>
+                <p class="metric-value" id="metric-paid">—</p>
+                <p class="delta" id="delta-paid">—</p>
+                <div class="paid-note"><span id="paid-conversion">—</span> conversión total</div>
+              </article>
+              <article class="metric-card reveal" data-sensitive="revenue" hidden>
+                <div class="card-label"><span>Ingreso mensual</span><span class="metric-glyph">$</span></div>
+                <p class="metric-value" id="metric-revenue">—</p>
+                <p class="delta" id="delta-revenue">—</p>
+                <div class="paid-note"><span>Estimado desde el ARR actual</span></div>
+              </article>
+            </section>
+
+            <section>
+              <article class="panel chart-panel reveal summary-growth-panel">
+                <div class="panel-header">
+                  <div><h2>Crecimiento de suscriptores</h2></div>
+                  <div class="chart-legend"><span></span>Suscriptores totales</div>
+                </div>
+                <div class="chart-wrap">
+                  <svg id="growth-chart" viewBox="0 0 820 270" role="img" aria-label="Evolución de suscriptores"></svg>
+                  <div class="chart-empty" id="chart-empty" hidden>Sin datos suficientes en el periodo seleccionado. Prueba un rango más amplio o sincroniza de nuevo.</div>
+                </div>
+                <div class="chart-footer">
+                  <div><span id="net-growth-label">Crecimiento neto</span><strong id="net-growth">—</strong></div>
+                  <div><span>Promedio diario</span><strong id="daily-growth">—</strong></div>
+                  <div><span>Mejor día</span><strong id="best-day">—</strong></div>
+                </div>
+              </article>
+            </section>
+
+            <section class="content-summary-grid" aria-label="Interacciones del periodo">
+              <article class="panel content-summary-panel reveal" data-goto="publicaciones" role="link" tabindex="0">
+                <div class="panel-header"><div><h2>Publicaciones</h2><p class="panel-copy">Actividad en <span class="summary-period-label">el periodo</span></p></div><span class="period-badge">Ver todas ↗</span></div>
+                <div class="summary-kpi-grid">
+                  <div><span>Publicaciones</span><strong id="summary-posts-count">—</strong></div>
+                  <div><span>Interacciones</span><strong id="summary-posts-interactions">—</strong></div>
+                  <div><span>Reacciones</span><strong id="summary-posts-reactions">—</strong></div>
+                  <div><span>Comentarios</span><strong id="summary-posts-comments">—</strong></div>
+                  <div><span>Compartidos</span><strong id="summary-posts-shares">—</strong></div>
+                  <div><span>Vistas</span><strong id="summary-posts-views">—</strong></div>
+                </div>
+              </article>
+              <article class="panel content-summary-panel reveal" data-goto="notas" role="link" tabindex="0">
+                <div class="panel-header"><div><h2>Notas</h2><p class="panel-copy">Actividad en <span class="summary-period-label">el periodo</span></p></div><span class="period-badge">Ver todas ↗</span></div>
+                <div class="summary-kpi-grid">
+                  <div><span>Notas</span><strong id="summary-notes-count">—</strong></div>
+                  <div><span>Interacciones</span><strong id="summary-notes-interactions">—</strong></div>
+                  <div><span>Likes</span><strong id="summary-notes-likes">—</strong></div>
+                  <div><span>Comentarios</span><strong id="summary-notes-comments">—</strong></div>
+                  <div><span>Restacks</span><strong id="summary-notes-restacks">—</strong></div>
+                  <div><span>Impresiones</span><strong id="summary-notes-impressions">—</strong></div>
+                </div>
+              </article>
+            </section>
+          </div>
+
+          <div class="view" data-view="audiencia" hidden>
+            <section class="panel chart-panel reveal" id="audience-panel">
+              <div class="panel-header">
+                <div><h2>Suscriptores</h2></div>
+                <div class="chart-legend"><span></span>Suscriptores acumulados</div>
+              </div>
+              <div class="audience-totals" id="audience-totals"></div>
+              <div class="chart-wrap">
+                <svg id="audience-chart" viewBox="0 0 820 270" role="img" aria-label="Suscriptores acumulados por día"></svg>
+                <div class="chart-empty" id="audience-empty" hidden>Substack no devolvió fechas de alta para esta cuenta.</div>
+              </div>
+              <p class="panel-copy" id="audience-note" hidden></p>
+            </section>
+
+            <section class="panel audience-location-card reveal" id="audience-location-panel">
+              <div class="panel-header">
+                <div><h2>Países</h2><p class="panel-copy">Altas gratuitas por ubicación</p></div>
+                <span class="period-badge" id="audience-location-count"></span>
+              </div>
+              <div class="source-list audience-location-list" id="audience-location-list"></div>
+            </section>
+
+            <section class="panel chart-panel reveal" id="followers-panel">
+              <div class="panel-header">
+                <div><h2>Seguidores</h2><p class="panel-copy">Evolución del total de seguidores</p></div>
+                <span class="period-badge" id="followers-change"></span>
+              </div>
+              <div class="chart-wrap">
+                <svg id="followers-chart" viewBox="0 0 820 200" role="img" aria-label="Seguidores en el tiempo"></svg>
+                <div class="chart-empty" id="followers-empty" hidden>Substack no devolvió histórico de seguidores.</div>
+              </div>
+            </section>
+
+            <section class="audience-insights-grid reveal" aria-label="Composición y permanencia de la audiencia">
+              <article class="panel list-panel" id="retention-panel">
+                <div class="panel-header"><div><h2>Retención</h2><p class="panel-copy">Porcentaje que permanece suscrito</p></div></div>
+                <div class="retention-list" id="retention-list"></div>
+                <div class="retention-list" id="paid-retention-list" data-sensitive="paid" hidden></div>
+              </article>
+              <article class="panel list-panel" id="engagement-panel">
+                <div class="panel-header"><div><h2>Actividad de la lista</h2><p class="panel-copy">Puntuación de actividad de Substack por suscriptor</p></div></div>
+                <div class="engagement-bar" id="engagement-bar"></div>
+                <div class="engagement-legend" id="engagement-legend"></div>
+                <p class="panel-copy" id="engagement-note" hidden></p>
+              </article>
+              <article class="panel list-panel" id="composition-panel" data-sensitive="paid" hidden>
+                <div class="panel-header"><div><h2>Composición</h2><p class="panel-copy">Tipos de suscripción de la base actual</p></div></div>
+                <div class="audience-totals" id="composition-grid"></div>
+              </article>
+            </section>
+
+          </div>
+
+          <div class="view" data-view="crecimiento" hidden>
+            <section class="panel acquisition-panel reveal" id="growth-sources">
+              <div class="panel-header">
+                <div><h2>Fuentes de adquisición</h2></div>
+                <span class="period-badge" id="acquisition-period" title="Periodo fijo del endpoint de Substack: no sigue el selector de rango">Últimos 12 meses · fijo</span>
+              </div>
+              <div class="audience-totals">
+                <div><span>Altas atribuidas</span><strong id="acquisition-total">—</strong></div>
+                <div><span>Visitas</span><strong id="acquisition-visitors">—</strong></div>
+                <div><span>Conversión visita → alta</span><strong id="acquisition-conversion">—</strong></div>
+              </div>
+              <p class="panel-copy" id="acquisition-leader">Esperando fuentes de crecimiento…</p>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Fuente</th><th>Visitas</th><th>Altas</th><th>Conversión</th><th>Tendencia</th></tr></thead>
+                  <tbody id="sources-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+
+            <section class="panel chart-panel reveal" id="churn-panel">
+              <div class="panel-header">
+                <div><h2>Altas y bajas</h2></div>
+                <span class="period-badge" id="churn-net">—</span>
+              </div>
+              <div class="audience-totals" id="churn-kpis"></div>
+              <div class="chart-wrap">
+                <svg id="churn-chart" viewBox="0 0 820 200" role="img" aria-label="Altas y bajas por día"></svg>
+                <div class="chart-empty" id="churn-empty" hidden>Sin movimientos de audiencia en este periodo.</div>
+              </div>
+              <p class="panel-copy" id="churn-basis"></p>
+              <p class="panel-copy" id="channels-note" hidden></p>
+            </section>
+
+            <section class="panel chart-panel reveal" id="paid-churn-panel" data-sensitive="paid" hidden>
+              <div class="panel-header">
+                <div><h2>Altas y bajas de pago</h2></div>
+                <span class="period-badge" id="paid-churn-net">—</span>
+              </div>
+              <div class="chart-wrap">
+                <svg id="paid-churn-chart" viewBox="0 0 820 200" role="img" aria-label="Altas y bajas de pago por día"></svg>
+                <div class="chart-empty" id="paid-churn-empty" hidden>Sin movimientos de pago en este periodo.</div>
+              </div>
+            </section>
+
+          </div>
+
+          <div class="view" data-view="notas" hidden>
+            <section class="panel campaigns-panel reveal" id="notes-analytics">
+              <div class="panel-header notes-overview-header">
+                <div><h2>Notas</h2></div>
+                <div class="detail-coverage"><span>Detalle disponible</span><strong id="notes-detail-coverage">—</strong></div>
+              </div>
+              <div class="post-kpi-strip">
+                <div><span>Notas</span><strong id="notes-total">—</strong></div>
+                <div><span>Interacciones</span><strong id="notes-interactions">—</strong></div>
+                <div><span>Likes</span><strong id="notes-likes">—</strong></div>
+                <div><span>Comentarios</span><strong id="notes-comments">—</strong></div>
+                <div><span>Restacks</span><strong id="notes-restacks">—</strong></div>
+                <div><span>Impresiones</span><strong id="notes-impressions">—</strong></div>
+              </div>
+              <p class="panel-copy" id="notes-insight" hidden></p>
+            </section>
+
+            <section class="panel reveal" id="cadence-panel">
+              <div class="panel-header">
+                <div><h2>Cadencia</h2></div>
+                <span class="period-badge" id="cadence-summary">—</span>
+              </div>
+              <div class="heatmap" id="cadence-heatmap"></div>
+              <div class="table-wrap cadence-table-wrap">
+                <table>
+                  <thead><tr><th>Semana</th><th>Notas</th><th>Con estadísticas</th><th>Interacciones</th><th>Promedio</th></tr></thead>
+                  <tbody id="cadence-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel chart-panel reveal" id="attribution-panel">
+              <div class="panel-header">
+                <div><h2>Altas atribuidas a notas</h2><p class="panel-copy">Suscriptores gratuitos que Substack atribuye a cada nota, agregados por día.</p></div>
+                <span class="period-badge" id="attribution-coverage">—</span>
+              </div>
+              <div class="chart-wrap">
+                <svg id="attribution-chart" viewBox="0 0 820 200" role="img" aria-label="Altas gratuitas atribuidas a notas por día"></svg>
+                <div class="chart-empty" id="attribution-empty" hidden>Ninguna nota con estadísticas de detalle en el periodo.</div>
+              </div>
+              <p class="panel-copy" id="attribution-note"></p>
+            </section>
+
+            <section class="panel notes-panel reveal" id="notes">
+              <div class="panel-header notes-header">
+                <div><h2>Todas las notas</h2></div>
+                <div class="notes-header-actions">
+                  <div class="notes-filter">
+                    <label class="field-label" for="notes-search">Buscar</label>
+                    <input type="search" id="notes-search" placeholder="Texto de la nota…" />
+                  </div>
+                  <div class="notes-filter">
+                    <label class="field-label" for="notes-sort">Ordenar</label>
+                    <select id="notes-sort"><option value="interactions">Más interacciones</option><option value="conversion">Más conversión</option><option value="subscribers">Más altas</option><option value="date">Más recientes</option></select>
+                  </div>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Nota</th><th>Fecha</th><th>Likes</th><th>Comentarios</th><th>Restacks</th><th>Interacciones</th><th>Impresiones</th><th>Ratio</th><th>Altas/1000 impr.</th><th>Nuevos subs.</th></tr></thead>
+                  <tbody id="notes-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div class="view" data-view="publicaciones" hidden>
+            <section class="panel campaigns-panel reveal" id="campaigns">
+              <div class="panel-header campaigns-header">
+                <div><h2>Publicaciones</h2></div>
+                <div class="notes-filter">
+                  <label class="field-label" for="posts-search">Buscar</label>
+                  <input type="search" id="posts-search" placeholder="Titular…" />
+                </div>
+              </div>
+              <div class="post-kpi-strip">
+                <div><span>Publicaciones</span><strong id="posts-total">—</strong></div>
+                <div><span>Entregados</span><strong id="posts-delivered">—</strong></div>
+                <div><span>Aperturas únicas</span><strong id="posts-opened">—</strong></div>
+                <div><span>Clics únicos</span><strong id="posts-clicked">—</strong></div>
+                <div><span>Altas atribuidas</span><strong id="posts-signups">—</strong></div>
+                <div><span>Detalle API</span><strong id="posts-detail">—</strong></div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr id="campaigns-head"></tr></thead>
+                  <tbody id="campaigns-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel chart-panel reveal" id="posts-rate-panel">
+              <div class="panel-header">
+                <div><h2>Apertura y CTR por envío</h2><p class="panel-copy">Solo envíos con destinatarios. Línea continua: apertura · discontinua: CTR.</p></div>
+                <span class="period-badge" id="posts-rate-median">—</span>
+              </div>
+              <div class="chart-wrap">
+                <svg id="posts-rate-chart" viewBox="0 0 820 240" role="img" aria-label="Apertura y CTR por envío a lo largo del tiempo"></svg>
+                <div class="chart-empty" id="posts-rate-empty" hidden>Hacen falta al menos dos envíos con destinatarios para dibujar la serie.</div>
+              </div>
+            </section>
+
+            <section class="panel reveal" id="diagnosis-panel">
+              <div class="panel-header">
+                <div><h2>Diagnóstico asunto / contenido</h2><p class="panel-copy">La apertura mide el asunto; el CTOR mide el cuerpo. El umbral es tu propia mediana en cada eje.</p></div>
+                <span class="period-badge" id="diagnosis-medians">—</span>
+              </div>
+              <div class="quadrant-grid" id="diagnosis-grid"></div>
+            </section>
+
+            <section class="intelligence-grid reveal" aria-label="Cortes de rendimiento">
+              <article class="panel list-panel" id="posts-by-day">
+                <div class="panel-header"><div><h2>Rendimiento por día</h2></div></div>
+                <div class="source-list" id="posts-day-list"></div>
+              </article>
+              <article class="panel list-panel" id="posts-by-length">
+                <div class="panel-header"><div><h2>Rendimiento por longitud</h2></div></div>
+                <div class="source-list" id="posts-length-list"></div>
+              </article>
+            </section>
+          </div>
+
+          <div class="view" data-view="cobertura" hidden>
+            <section class="panel coverage-panel reveal" id="data-coverage">
+              <div class="panel-header">
+                <div><h2>Estado de los datos</h2></div>
+                <div class="coverage-score"><strong id="coverage-ready">—</strong><span id="coverage-total">/ —</span></div>
+              </div>
+              <p class="coverage-copy">Cada fuente se sincroniza por separado. Un fallo parcial nunca borra los datos que sí llegaron.</p>
+              <p class="panel-copy" id="coverage-synced">Sin sincronizar</p>
+              <div class="coverage-list" id="coverage-list"></div>
+              <div class="privacy-badge"><span>◇</span><p><strong>Privacidad local</strong>Emails y perfiles individuales se descartan antes de guardar.</p></div>
+            </section>
+          </div>
+
+          <footer>
+            <p><span class="footer-mark"></span> Los datos viven únicamente en este navegador.</p>
+            <p id="last-updated">Sin sincronizar</p>
+          </footer>
+        </div>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <svg class="svg-defs" aria-hidden="true">
+      <symbol id="icon-grid" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></symbol>
+      <symbol id="icon-users" viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 20v-2a4 4 0 0 0-3-3.87M16 2.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="m22 6-10 7L2 6"/></symbol>
+      <symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+      <symbol id="icon-camera" viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></symbol>
+      <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></symbol>
+      <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="m7 17 10-10M7 7h10v10"/></symbol>
+      <symbol id="icon-exit" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></symbol>
+      <symbol id="icon-note" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 9h8M8 13h5"/></symbol>
+      <symbol id="icon-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2.5 0 0 0-2.5-1.5c-1.4 0-2.5.7-2.5 2s1.1 1.8 2.5 2 2.5.7 2.5 2-1.1 2-2.5 2a2.5 2.5 0 0 1-2.5-1.5M12 6v12"/></symbol>
+      <symbol id="icon-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></symbol>
+    </svg>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

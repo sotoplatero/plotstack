@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "PlotStack — Newsletter Analytics",
+  "version": "0.1.1",
+  "description": "Tus métricas de newsletter, ordenadas en un solo dashboard local.",
+  "permissions": ["storage", "tabs", "cookies", "downloads", "clipboardWrite"],
+  "host_permissions": ["https://substack.com/*", "https://*.substack.com/*"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Abrir PlotStack"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/icon.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
