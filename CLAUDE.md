@@ -9,7 +9,14 @@ npm test                                  # node --test sobre tests/*.test.js
 node --test tests/substack-api.test.js    # un solo archivo de test
 node --test --test-name-pattern "notas"   # un solo test por nombre
 npm run validate                          # comprueba manifest + archivos referenciados
+npm run icons                             # regenera assets/icons/*.png desde assets/icon.svg
+npm run package                           # valida y escribe dist/plotstack-<versión>.zip
 ```
+
+Los PNG de `assets/icons/` **se generan**, no se editan: `assets/icon.svg` es la
+fuente de verdad y `scripts/generate-icons.mjs` la rasteriza a mano (sin
+dependencias). Si cambia el logotipo, hay que actualizar `SHAPES` en ese script
+y volver a ejecutar `npm run icons`.
 
 No hay build, bundler ni dependencias de runtime: el código se carga tal cual como extensión descomprimida. Tras editar, hay que pulsar **Actualizar** en `chrome://extensions`.
 
@@ -118,7 +125,7 @@ listeners quedarían colgando.
 - **En el análisis de contenido, `null` nunca es `0`.** `0` es una medición; `null` es ausencia. Una nota sin `note_stats` queda fuera de la mediana en lugar de entrar como cero. Por eso `content-analytics.js` **no** reutiliza `getNotesAnalytics()`, que sí sintetiza ceros para su ranking.
 - **Ningún cociente puede emitir `Infinity` ni `NaN`**: todos pasan por el helper `ratio()`, que devuelve `null` si el denominador es cero. Los no finitos se corrompen al pasar por `chrome.storage` y se renderizarían como "∞×".
 - **Un rasgo con muestra escasa se muestra atenuado, nunca oculto.** Los tres estados (`evidence`, `insufficient`, `nodata`) tienen tratamiento visual distinto; `EVIDENCE_MIN_N` es un umbral de producto, no una prueba de significación.
-- Si añades un archivo de primer nivel al código de la extensión, agrégalo a la lista `required` de `scripts/validate-extension.mjs`.
+- Si añades un archivo de primer nivel al código de la extensión, agrégalo a `EXTENSION_FILES` en `scripts/extension-files.mjs`. Es la lista canónica: `validate-extension.mjs` comprueba que exista y `package-extension.mjs` construye con ella el ZIP de la tienda. Un archivo que no esté ahí **no viaja en el paquete publicado**, aunque funcione al cargar la carpeta descomprimida.
 
 ## Tests
 

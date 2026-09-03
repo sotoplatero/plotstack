@@ -1,0 +1,219 @@
+# Ficha para la Chrome Web Store
+
+Todo lo que hay que pegar en el Developer Dashboard, ya redactado. Los textos
+están en el límite de caracteres que impone cada campo.
+
+## Antes de subir
+
+```powershell
+npm test          # 116 pruebas
+npm run icons     # regenera assets/icons/*.png desde assets/icon.svg
+npm run package   # valida y escribe dist/plotstack-<versión>.zip
+npm run screenshot -- capturas\resumen.png   # capturas a 1280x800 en dist/store/
+```
+
+`npm run package` no empaqueta si la validación falla. El ZIP es una lista
+blanca (`scripts/extension-files.mjs`): no viajan tests, docs, planes ni los
+propios scripts.
+
+Requisitos de cuenta, una sola vez:
+
+- Cuenta de desarrollador de Chrome Web Store (tarifa de alta de 5 USD).
+- Correo de contacto **verificado** en la cuenta. Sin verificar, la ficha no se
+  puede publicar.
+- GitHub Pages activado en el repo: *Settings → Pages → Deploy from a branch →
+  `main` / carpeta `/docs`*. Eso publica la política de privacidad en
+  `https://sotoplatero.github.io/plotstack/privacy/`, que es la URL que pide el
+  formulario.
+
+## Producto
+
+**Nombre** (45 máx.)
+
+```
+PlotStack — Newsletter Analytics
+```
+
+**Descripción breve** (132 máx.)
+
+```
+Tus métricas de newsletter, ordenadas en un solo dashboard local.
+```
+
+**Categoría:** Workflow & Planning
+**Idioma:** Español
+
+**Descripción detallada**
+
+```
+PlotStack reúne en un único dashboard las métricas que Substack reparte entre
+la pantalla de estadísticas, la de crecimiento, el panel de publicaciones y la
+pestaña de Notes.
+
+Funciona sobre la sesión que ya tienes abierta en Chrome: no hay cuenta que
+crear, ni claves de API que pegar, ni servidor intermedio. La extensión consulta
+las estadísticas de tu propia publicación y las guarda en tu equipo.
+
+SEIS VISTAS
+
+• Resumen — suscriptores, tasa de apertura, CTR y crecimiento neto.
+• Audiencia — suscriptores acumulados, altas por día y total de seguidores.
+• Crecimiento — fuentes de adquisición con visitantes y altas, y eventos de
+  crecimiento del periodo.
+• Notas — interacciones, impresiones, mapa de cadencia por día y hora, y las
+  altas atribuidas a cada nota.
+• Publicaciones — tabla ordenable y buscable con las métricas por post, más
+  cortes por día de envío y por longitud.
+• Cobertura — qué fuentes de datos respondieron y cuándo fue la última
+  sincronización.
+
+RIGOR EN LAS CIFRAS
+
+• Las tasas agregadas se ponderan por envíos, nunca se promedian tasas.
+• Un corte con pocos envíos se marca como muestra escasa en vez de presentarse
+  como un hallazgo.
+• Un dato ausente se muestra como ausente, no como un cero.
+• Un crecimiento sin base previa no se convierte en «+100 %».
+• Si una fuente de Substack falla, se conserva el dato anterior y el panel de
+  Cobertura lo dice; nunca se rellena con ceros.
+
+PRIVACIDAD
+
+• No hay servidor de PlotStack. No hay telemetría ni analítica de uso.
+• El valor de tus cookies nunca se lee ni se guarda: solo se comprueba que
+  exista una sesión de Substack.
+• Los correos y perfiles individuales de suscriptores se descartan antes de
+  guardar nada. Solo se conservan métricas agregadas.
+• Las cifras de suscriptores de pago e ingresos están ocultas por defecto y toda
+  captura PNG las vuelve a ocultar, aunque las tengas visibles en pantalla.
+• «Desconectar» borra las métricas guardadas. No cierra tu sesión de Substack.
+
+EXPORTAR
+
+Captura en PNG cualquier vista o tarjeta concreta —al portapapeles o a un
+archivo— y descarga las tablas de publicaciones y notas en CSV. Todo se genera
+en tu navegador.
+
+LIMITACIONES
+
+Esta versión admite publicaciones bajo *.substack.com; los dominios
+personalizados quedan fuera. PlotStack usa los endpoints internos de solo
+lectura del propio panel de Substack, que no están documentados públicamente y
+pueden cambiar.
+
+PlotStack es software de código abierto y no está afiliado a Substack Inc.
+```
+
+## Privacidad — pestaña «Practices»
+
+**Propósito único** (single purpose)
+
+```
+Mostrar al autor de una newsletter de Substack las estadísticas de su propia
+publicación, reunidas en un dashboard local dentro del navegador.
+```
+
+**URL de la política de privacidad**
+
+```
+https://sotoplatero.github.io/plotstack/privacy/
+```
+
+### Justificación de cada permiso
+
+Se pega tal cual en el campo correspondiente. La revisión rechaza las
+justificaciones genéricas: cada una nombra la función concreta.
+
+| Permiso | Justificación |
+| --- | --- |
+| `cookies` | Comprobar si existe una cookie de sesión de Substack (`substack.sid` o `connect.sid`) para saber si el usuario ha iniciado sesión y mostrar el estado de conexión. La extensión solo consulta la **existencia** de la cookie; su valor nunca se lee, transmite ni almacena. |
+| `storage` | Guardar en `chrome.storage.local` las métricas ya agregadas de la publicación, junto con el nombre y subdominio de la cuenta conectada, para que el dashboard se abra sin volver a descargarlas en cada uso. |
+| `tabs` | Abrir el dashboard de la extensión en una pestaña al pulsar el icono, reutilizar la pestaña ya abierta si existe, y abrir la página de acceso de Substack cuando no hay sesión activa. |
+| `downloads` | Guardar en el equipo del usuario los archivos PNG y CSV que él mismo genera desde el dashboard con el botón de captura y el de exportar. |
+| `clipboardWrite` | Copiar al portapapeles la imagen PNG de la vista o tarjeta cuando el usuario elige la opción «Copiar» del menú de captura. |
+| **Host** `https://substack.com/*`, `https://*.substack.com/*` | Leer los endpoints de estadísticas de solo lectura de la publicación del propio usuario (perfil, resumen, estadísticas de email, publicaciones y notas). Es el único origen con el que la extensión se comunica y sin él no hay datos que mostrar. |
+
+**Código remoto:** No. Todo el JavaScript va dentro del paquete; no se carga ni
+se evalúa código externo.
+
+### Declaración de uso de datos
+
+Marcar **solo** esta casilla:
+
+- ☑ *Website content* — las estadísticas de la publicación del propio usuario,
+  que se procesan y se quedan en su equipo.
+
+Y las tres certificaciones del final:
+
+- ☑ No vendo ni transfiero datos de usuario a terceros fuera de los casos de uso aprobados.
+- ☑ No uso ni transfiero datos de usuario con propósitos ajenos a la funcionalidad principal.
+- ☑ No uso ni transfiero datos de usuario para determinar solvencia ni para préstamos.
+
+> No marcar *Personally identifiable information*, *Authentication information*
+> ni *Financial and payment information*: la extensión descarta correos y
+> perfiles individuales antes de guardar, nunca lee el valor de las cookies y no
+> maneja medios de pago. Las cifras de ingresos que muestra son agregados de la
+> propia publicación del usuario, no datos de pago de terceros.
+
+## Recursos gráficos
+
+Lo que la tienda exige y lo que ya está resuelto:
+
+| Recurso | Tamaño | Estado |
+| --- | --- | --- |
+| Icono de la tienda | 128×128 PNG | ✅ `assets/icons/icon-128.png` |
+| Captura de pantalla | 1280×800 o 640×400 PNG | ⏳ **pendiente**, mínimo 1, máximo 5 |
+| Mosaico pequeño | 440×280 PNG | ⏳ opcional, pero mejora la ficha |
+| Imagen destacada | 1400×560 PNG | ⏳ opcional |
+
+Las capturas se sacan del propio dashboard con el botón de cámara
+(*Página → Guardar PNG*), que ya oculta pago e ingresos:
+
+1. Sincronizar una publicación con datos reales.
+2. Capturar **Resumen**, **Publicaciones** y **Notas**.
+3. Darles el tamaño exacto que exige la tienda:
+
+```powershell
+npm run screenshot -- capturas\resumen.png capturas\publicaciones.png
+```
+
+El script escala sin deformar y centra sobre el fondo `#141612`, dejando el
+resultado en `dist/store/`. Nunca amplía una captura pequeña: si sale con
+márgenes anchos, la solución es volver a capturar con la ventana más grande, no
+forzar el escalado.
+
+> Las capturas muestran las cifras reales de la publicación que sincronices.
+> Revisa qué números quedan visibles antes de subirlas: la ficha de la tienda es
+> pública.
+
+## Qué esperar de la revisión
+
+- Los permisos `cookies` y de host amplios sitúan la extensión en revisión
+  manual: cuenta con días, no horas, en la primera publicación.
+- El revisor necesita poder ver la extensión funcionando. En *Notes for
+  reviewer* conviene explicar que hace falta una sesión de Substack con una
+  publicación propia, y ofrecer credenciales de prueba si es posible.
+
+**Notas para el revisor** (borrador):
+
+```
+PlotStack requiere una sesión iniciada de Substack (substack.com) con una
+publicación propia bajo *.substack.com. Al pulsar el icono se abre el dashboard;
+el botón "Conectar con Substack" valida la sesión contra
+GET /api/v1/user/profile/self y, si no hay sesión, abre substack.com/sign-in.
+
+La extensión es de solo lectura: no publica, no modifica ni borra nada en
+Substack. No tiene backend propio; el único origen con el que se comunica es
+substack.com. El valor de las cookies nunca se lee: solo se comprueba con
+chrome.cookies que exista substack.sid o connect.sid.
+
+Código fuente completo: https://github.com/sotoplatero/plotstack
+```
+
+## Después de publicar
+
+- La versión no puede bajar nunca. La siguiente subida debe incrementar
+  `manifest.json` **y** `package.json` a la vez (`npm run validate` falla si
+  divergen).
+- Si cambia qué datos maneja la extensión, actualizar
+  `docs/privacy/index.html` **antes** de subir esa versión.

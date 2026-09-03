@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PlotStack — Analítica local para Substack</title>
+    <meta name="description" content="Extensión de Chrome que reúne las métricas de tu newsletter de Substack en un dashboard local. Sin servidores." />
+    <style>
+      :root { color-scheme: dark; --ink: #141612; --paper: #f0eee6; --lime: #d7ff3f; --muted: #a3a49c; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 5rem 1.5rem; background: var(--ink); color: var(--paper);
+        font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main { max-width: 40rem; margin: 0 auto; }
+      .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; letter-spacing: -.02em; }
+      .brand-mark { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+      .brand-mark i { width: 4px; background: var(--lime); border-radius: 1px; }
+      .brand-mark i:nth-child(1) { height: 8px; }
+      .brand-mark i:nth-child(2) { height: 13px; }
+      .brand-mark i:nth-child(3) { height: 18px; }
+      h1 { font-size: clamp(2rem, 6vw, 3rem); line-height: 1.1; letter-spacing: -.03em; margin: 2rem 0 1rem; }
+      .lede { font-size: 1.15rem; color: var(--paper); margin: 0 0 2rem; }
+      ul { padding-left: 1.2rem; color: var(--paper); }
+      li { margin: .45rem 0; }
+      nav { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2.5rem; }
+      nav a {
+        display: inline-block; padding: .65rem 1.1rem; border-radius: 999px;
+        border: 1px solid rgba(240, 238, 230, .25); color: var(--paper); text-decoration: none;
+      }
+      nav a.primary { background: var(--lime); border-color: var(--lime); color: var(--ink); font-weight: 600; }
+      footer { margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(240, 238, 230, .14); color: var(--muted); font-size: .9rem; }
+      footer a { color: var(--lime); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>PlotStack</span>
+      </div>
+
+      <h1>Tus métricas de Substack, en un solo dashboard local.</h1>
+      <p class="lede">
+        Extensión de Chrome que reúne lo que Substack reparte entre cinco
+        pantallas distintas. Sin servidores, sin telemetría, sin cuenta que crear:
+        todo se calcula y se guarda en tu navegador.
+      </p>
+
+      <ul>
+        <li>Suscriptores, aperturas, CTR y crecimiento en una sola vista.</li>
+        <li>Tabla de publicaciones con métricas por post, ordenable y exportable a CSV.</li>
+        <li>Notas con impresiones, interacciones y altas atribuidas.</li>
+        <li>Capturas PNG de cualquier vista o tarjeta, con las cifras sensibles siempre ocultas.</li>
+      </ul>
+
+      <nav>
+        <a class="primary" href="https://github.com/sotoplatero/plotstack">Código en GitHub</a>
+        <a href="./privacy/">Política de privacidad</a>
+      </nav>
+
+      <footer>
+        Software de código abierto. PlotStack no está afiliado a Substack Inc.
+      </footer>
+    </main>
+  </body>
+</html>

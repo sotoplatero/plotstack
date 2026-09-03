@@ -80,8 +80,31 @@ Substack no documenta públicamente sus endpoints internos de estadísticas. Plo
 ## Desarrollo
 
 ```powershell
-npm test
-npm run validate
+npm test            # 116 pruebas con node --test
+npm run validate    # manifest, archivos, iconos y permisos declarados
+npm run icons       # regenera assets/icons/*.png desde assets/icon.svg
+npm run package     # valida y escribe dist/plotstack-<versión>.zip
+npm run screenshot -- <captura.png>   # capturas a 1280x800 para la ficha
 ```
 
 No hay build ni dependencias de runtime. Después de editar, pulsa **Actualizar** en `chrome://extensions`.
+
+`scripts/extension-files.mjs` es la lista canónica de lo que *es* la extensión:
+la usan a la vez el validador y el empaquetador, así que un archivo nuevo hay
+que añadirlo ahí o no viajará en el ZIP publicado.
+
+Los iconos PNG se generan desde `assets/icon.svg`; no se editan a mano.
+
+## Publicar en la Chrome Web Store
+
+`docs/store/chrome-web-store.md` contiene la ficha completa: textos, la
+justificación de cada permiso que pide el formulario de revisión, las casillas
+de uso de datos que hay que marcar y las notas para el revisor.
+
+La política de privacidad vive en `docs/privacy/index.html` y se publica con
+GitHub Pages (*Settings → Pages → `main` / carpeta `/docs`*) en
+`https://sotoplatero.github.io/plotstack/privacy/`, que es la URL que exige la
+tienda.
+
+`npm run package` genera el ZIP que se sube. Es un paquete de lista blanca: no
+incluye tests, documentación ni los propios scripts.

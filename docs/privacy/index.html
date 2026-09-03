@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Política de privacidad — PlotStack</title>
+    <meta name="description" content="PlotStack no recoge datos: la analítica se calcula y se guarda solo en tu navegador." />
+    <style>
+      :root { color-scheme: dark; --ink: #141612; --paper: #f0eee6; --lime: #d7ff3f; --muted: #a3a49c; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 4rem 1.5rem 6rem; background: var(--ink); color: var(--paper);
+        font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main { max-width: 44rem; margin: 0 auto; }
+      .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; letter-spacing: -.02em; }
+      .brand-mark { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+      .brand-mark i { width: 4px; background: var(--lime); border-radius: 1px; }
+      .brand-mark i:nth-child(1) { height: 8px; }
+      .brand-mark i:nth-child(2) { height: 13px; }
+      .brand-mark i:nth-child(3) { height: 18px; }
+      h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.15; letter-spacing: -.03em; margin: 2.5rem 0 .5rem; }
+      h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 2.75rem 0 .75rem; }
+      .updated { color: var(--muted); font-size: .9rem; margin: 0 0 2.5rem; }
+      .lede { font-size: 1.1rem; border-left: 2px solid var(--lime); padding-left: 1.1rem; margin: 0 0 1rem; }
+      ul { padding-left: 1.2rem; }
+      li { margin: .4rem 0; }
+      code { background: rgba(240, 238, 230, .08); padding: .12em .4em; border-radius: 4px; font-size: .88em; }
+      a { color: var(--lime); }
+      footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid rgba(240, 238, 230, .14); color: var(--muted); font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>PlotStack</span>
+      </div>
+
+      <h1>Política de privacidad</h1>
+      <p class="updated">Última actualización: 2 de septiembre de 2026 · Versión 1.0.0</p>
+
+      <p class="lede">
+        PlotStack no recoge, transmite ni vende ningún dato. No existe servidor de
+        PlotStack: la extensión consulta tu propia cuenta de Substack desde tu
+        navegador y guarda el resultado en tu propio equipo.
+      </p>
+
+      <h2>Qué hace la extensión</h2>
+      <p>
+        PlotStack reúne en un dashboard local las métricas de la publicación de
+        Substack en la que ya has iniciado sesión en Chrome: suscriptores,
+        aperturas, clics, crecimiento, publicaciones y Notas.
+      </p>
+
+      <h2>Datos que se manejan y dónde se quedan</h2>
+      <ul>
+        <li>
+          <strong>Métricas de tu publicación.</strong> Se solicitan a los endpoints de
+          estadísticas de solo lectura de Substack y se guardan, ya agregadas y
+          normalizadas, en <code>chrome.storage.local</code>: es decir, en tu perfil de
+          Chrome, en tu equipo. No salen de ahí.
+        </li>
+        <li>
+          <strong>Nombre y subdominio de la publicación conectada</strong>, para saber qué
+          cuenta se está mostrando.
+        </li>
+        <li>
+          <strong>Preferencias de interfaz</strong> (vista activa, rango de fechas y si
+          decides mostrar las tarjetas de pago e ingresos), en el
+          <code>localStorage</code> del propio dashboard.
+        </li>
+      </ul>
+
+      <h2>Cookies</h2>
+      <p>
+        PlotStack comprueba únicamente <em>si existe</em> una cookie de sesión de
+        Substack (<code>substack.sid</code> o <code>connect.sid</code>) para saber si estás
+        conectado. <strong>El valor de esas cookies nunca se lee, ni se copia, ni se
+        guarda.</strong> Las peticiones se hacen con <code>credentials: "include"</code>, de
+        modo que es Chrome quien adjunta la cookie desde su propio almacén, igual
+        que cuando abres Substack en una pestaña.
+      </p>
+
+      <h2>Qué no se guarda nunca</h2>
+      <ul>
+        <li>Direcciones de correo de tus suscriptores.</li>
+        <li>Perfiles individuales de suscriptores: nombre, foto o cualquier otro dato personal.</li>
+        <li>URLs firmadas de exportación de Substack.</li>
+        <li>El contenido de tus cookies o credenciales de acceso.</li>
+      </ul>
+      <p>
+        Cuando un endpoint de Substack devuelve filas con datos personales —por
+        ejemplo, para reconstruir la serie diaria de altas—, esas filas se
+        agregan a conteos por día en memoria y los campos personales se descartan
+        antes de escribir nada en disco.
+      </p>
+
+      <h2>Terceros</h2>
+      <p>
+        Ninguno. El único servidor con el que la extensión se comunica es
+        <code>substack.com</code> y los subdominios de tu publicación, que es el
+        servicio que tú ya usas. No hay analítica de uso, ni telemetría, ni
+        informes de errores remotos, ni publicidad, ni redes de seguimiento.
+        PlotStack no vende ni transfiere datos a nadie, y no los usa para ningún
+        propósito ajeno a mostrarte tu propio dashboard.
+      </p>
+
+      <h2>Por qué cada permiso</h2>
+      <ul>
+        <li><strong>cookies</strong> — comprobar si hay sesión de Substack activa, sin leer su valor.</li>
+        <li><strong>storage</strong> — guardar en tu equipo las métricas ya agregadas para que el dashboard cargue sin volver a pedirlas.</li>
+        <li><strong>tabs</strong> — abrir el dashboard en una pestaña, reutilizar la que ya esté abierta y llevarte a la página de acceso de Substack si no hay sesión.</li>
+        <li><strong>downloads</strong> — guardar en tu carpeta de descargas los PNG y CSV que generas tú desde el dashboard.</li>
+        <li><strong>clipboardWrite</strong> — copiar al portapapeles la captura PNG cuando eliges «Copiar».</li>
+        <li><strong>Acceso a substack.com</strong> — leer las estadísticas de tu propia cuenta. Sin esto la extensión no tiene nada que mostrar.</li>
+      </ul>
+
+      <h2>Exportaciones locales</h2>
+      <p>
+        Las capturas PNG se generan en tu navegador a partir del propio dashboard
+        y los CSV se construyen con las métricas ya guardadas. En ambos casos el
+        archivo va directo a tu equipo, sin pasar por ningún servidor. Las
+        capturas ocultan siempre las cifras de pago e ingresos, aunque las tengas
+        visibles en pantalla.
+      </p>
+
+      <h2>Conservación y borrado</h2>
+      <p>
+        Los datos se conservan en tu equipo hasta que tú los borras. El botón
+        <strong>Desconectar</strong> del dashboard elimina la conexión y todas las
+        métricas guardadas por PlotStack (no cierra tu sesión de Substack).
+        Desinstalar la extensión borra igualmente todo su almacenamiento local.
+      </p>
+
+      <h2>Cambios en esta política</h2>
+      <p>
+        Si una versión futura cambia qué datos se manejan, esta página se
+        actualizará con la fecha correspondiente antes de publicar esa versión en
+        la Chrome Web Store.
+      </p>
+
+      <h2>Contacto</h2>
+      <p>
+        Dudas sobre privacidad o sobre la extensión:
+        <a href="https://github.com/sotoplatero/plotstack/issues">abre una incidencia en el repositorio</a>.
+      </p>
+
+      <footer>
+        PlotStack es software de código abierto:
+        <a href="https://github.com/sotoplatero/plotstack">github.com/sotoplatero/plotstack</a>.
+        Puedes verificar por ti mismo cada afirmación de esta página leyendo el código.
+      </footer>
+    </main>
+  </body>
+</html>
