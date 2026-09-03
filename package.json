@@ -9,6 +9,7 @@
     "validate": "node scripts/validate-extension.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "package": "node scripts/validate-extension.mjs && node scripts/package-extension.mjs",
-    "screenshot": "node scripts/store-screenshot.mjs"
+    "screenshot": "node scripts/store-screenshot.mjs",
+    "preview": "node scripts/preview-dashboard.mjs"
   }
 }

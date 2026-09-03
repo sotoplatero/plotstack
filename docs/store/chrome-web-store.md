@@ -21,10 +21,10 @@ Requisitos de cuenta, una sola vez:
 - Cuenta de desarrollador de Chrome Web Store (tarifa de alta de 5 USD).
 - Correo de contacto **verificado** en la cuenta. Sin verificar, la ficha no se
   puede publicar.
-- GitHub Pages activado en el repo: *Settings → Pages → Deploy from a branch →
-  `main` / carpeta `/docs`*. Eso publica la política de privacidad en
-  `https://sotoplatero.github.io/plotstack/privacy/`, que es la URL que pide el
-  formulario.
+- ✅ GitHub Pages ya activado (`main` / carpeta `/docs`). La política está en
+  vivo en `https://sotoplatero.github.io/plotstack/privacy/`, que es la URL que
+  pide el formulario. El repo tuvo que pasar a público: Pages no funciona en
+  repos privados con plan gratuito.
 
 ## Producto
 
@@ -162,29 +162,35 @@ Lo que la tienda exige y lo que ya está resuelto:
 | Recurso | Tamaño | Estado |
 | --- | --- | --- |
 | Icono de la tienda | 128×128 PNG | ✅ `assets/icons/icon-128.png` |
-| Captura de pantalla | 1280×800 o 640×400 PNG | ⏳ **pendiente**, mínimo 1, máximo 5 |
-| Mosaico pequeño | 440×280 PNG | ⏳ opcional, pero mejora la ficha |
+| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/` |
+| Mosaico pequeño | 440×280 PNG | ⏳ opcional |
 | Imagen destacada | 1400×560 PNG | ⏳ opcional |
 
-Las capturas se sacan del propio dashboard con el botón de cámara
-(*Página → Guardar PNG*), que ya oculta pago e ingresos:
+Las cinco capturas están hechas y se suben en este orden: `plotstack-resumen`,
+`plotstack-publicaciones`, `plotstack-notas`, `plotstack-crecimiento`,
+`plotstack-audiencia`.
 
-1. Sincronizar una publicación con datos reales.
-2. Capturar **Resumen**, **Publicaciones** y **Notas**.
-3. Darles el tamaño exacto que exige la tienda:
+### Cómo se regeneran
 
 ```powershell
-npm run screenshot -- capturas\resumen.png capturas\publicaciones.png
+npm run preview     # http://localhost:4173/dashboard/
+npm run screenshot -- <captura.png>
 ```
 
-El script escala sin deformar y centra sobre el fondo `#141612`, dejando el
-resultado en `dist/store/`. Nunca amplía una captura pequeña: si sale con
-márgenes anchos, la solución es volver a capturar con la ventana más grande, no
-forzar el escalado.
+`preview-dashboard.mjs` sirve el dashboard real —el mismo `index.html`, el mismo
+`app.js`— con la publicación ficticia **«Carta de muestra»**, y pasa los datos
+por el `normalizeSnapshot` de producción para que el esquema no se adivine.
 
-> Las capturas muestran las cifras reales de la publicación que sincronices.
-> Revisa qué números quedan visibles antes de subirlas: la ficha de la tienda es
-> pública.
+Se capturan con datos ficticios a propósito. Con datos reales, la ficha —que es
+pública— expondría las métricas de negocio del autor, y además las capturas
+quedarían atadas a lo que esa cuenta tuviera el día de la captura. La interfaz
+que se ve es exactamente la que instala el usuario.
+
+Si prefieres capturar tu cuenta real, el botón de cámara del dashboard
+(*Página → Guardar PNG*) ya oculta pago e ingresos; pasa el PNG por
+`npm run screenshot` para darle el tamaño exacto. El script nunca amplía una
+captura pequeña: si sale con márgenes anchos, vuelve a capturar con la ventana
+más grande en vez de forzar el escalado.
 
 ## Qué esperar de la revisión
 
