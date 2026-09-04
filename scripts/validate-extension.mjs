@@ -105,6 +105,9 @@ const permissionUsage = {
   cookies: /chrome\.cookies\b/,
   downloads: /chrome\.downloads\b|globalThis\.chrome\?\.downloads/,
   clipboardWrite: /navigator\?\.clipboard|ClipboardItem/,
+  // Refresco diario en segundo plano: sin él el histórico local solo crece los
+  // días que el usuario abre el dashboard.
+  alarms: /chrome\.alarms\b|chrome\.alarms\?/,
 };
 for (const permission of manifest.permissions ?? []) {
   const pattern = permissionUsage[permission];

@@ -290,11 +290,21 @@ test("los KPI sensibles existen pero nacen ocultos", async () => {
   assert.ok($("#metric-revenue"), "metric-revenue debería seguir existiendo, oculto");
 });
 
-test("los deltas de snapshot declaran contra qué comparan", async () => {
+test("el delta de suscriptores nombra la ventana contra la que compara", async () => {
   await arrancar();
   await verVista("resumen");
-  assert.match($("#delta-subscribers").textContent, /vs\. sincronización anterior/,
-    "el delta de suscriptores no depende del rango y el copy tiene que decirlo");
+  for (const dias of ["7", "30", "90"]) {
+    await rango(dias);
+    const texto = $("#delta-subscribers").textContent;
+    assert.ok(
+      texto.includes(`vs. hace ${dias} días`) || /para comparar/.test(texto),
+      `con ${dias}D el delta debe nombrar su ventana o decir que no hay base: ${texto}`,
+    );
+  }
+  await rango("all");
+  assert.match($("#delta-subscribers").textContent, /desde |para comparar/,
+    "con Todo la base es la primera captura del histórico local");
+  await rango("30");
 });
 
 test("Publicaciones dibuja apertura y CTR por envío y marca la mediana propia", async () => {
@@ -399,4 +409,163 @@ test("las altas de pago de notas viven en un nodo sensible independiente", async
   assert.equal(paid.length, 1, "solo la nota con una alta de pago necesita incremento");
   assert.match(paid[0].textContent, /^ \+ /);
   assert.ok(paid[0].parentNode.textContent.startsWith("7"), "el total gratuito permanece fuera del nodo sensible");
+});
+
+test("el progreso de sincronizacion nombra la fase y su avance", async () => {
+  await arrancar();
+  const listener = globalThis.__plotstackStorageListener;
+  assert.ok(listener, "el dashboard tiene que engancharse a storage.onChanged");
+
+  listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen, publicaciones y audiencia", detail: { done: 0, total: 0 } } } }, "local");
+  await settle(2);
+  assert.equal($("#sync-progress").hidden, false);
+  assert.equal($("#sync-progress").textContent, "Resumen, publicaciones y audiencia",
+    "sin total real no se pinta un 0/0 que no informa");
+  assert.equal($("#sync-button").disabled, true, "no se puede lanzar otra sincronizacion encima");
+  assert.equal($("#sync-label").textContent, "Sincronizando");
+
+  listener({ "plotstack.progress": { newValue: { phase: "detail", step: "Estadísticas de notas", detail: { done: 40, total: 120 } } } }, "local");
+  await settle(2);
+  assert.equal($("#sync-progress").textContent, "Estadísticas de notas 40/120");
+
+  listener({ "plotstack.progress": { newValue: { phase: "done", step: "", detail: { done: 0, total: 0 } } } }, "local");
+  await settle(2);
+  assert.equal($("#sync-progress").hidden, true);
+  assert.equal($("#sync-button").disabled, false);
+  assert.equal($("#sync-label").textContent, "Sincronizar");
+
+  listener({ "plotstack.progress": { newValue: { phase: "error", step: "Detalle", detail: {}, error: "Substack limitó las solicitudes." } } }, "local");
+  await settle(2);
+  assert.match($("#sync-progress").textContent, /limitó las solicitudes/);
+  assert.equal($("#sync-progress").classList.contains("is-error"), true);
+
+  listener({ "plotstack.progress": { newValue: null } }, "local");
+  await settle(2);
+});
+
+test("un snapshot escrito por la fase de detalle repinta sin recrear los nodos con listeners", async () => {
+  await arrancar();
+  await verVista("notas");
+  const cuerpoNotas = $("#notes-table-body");
+  const buscador = $("#notes-search");
+  await verVista("resumen");
+  const antes = $("#metric-subscribers").textContent;
+
+  const listener = globalThis.__plotstackStorageListener;
+  // La suite comparte una sola instancia del dashboard, así que este caso
+  // devuelve el snapshot del fixture al terminar: si no, los siguientes tests
+  // leerían el snapshot mínimo que escribe aquí.
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.snapshot"];
+  listener({
+    "plotstack.snapshot": {
+      newValue: {
+        publication: "Carta de muestra",
+        capturedAt: "2026-08-21T15:00:00Z",
+        metrics: { subscribers: 5000 },
+        previousByRange: { 30: { subscribers: 4000 } },
+        campaigns: [],
+        notes: [],
+      },
+    },
+  }, "local");
+  await settle(4);
+
+  assert.notEqual(txt($("#metric-subscribers").textContent), txt(antes), "el KPI tiene que reflejar el snapshot nuevo");
+  assert.equal(txt($("#metric-subscribers").textContent), "5 mil");
+  // Mostrar/ocultar, nunca destruir: los nodos enganchados en bindEvents siguen
+  // siendo los mismos despues de repintar.
+  assert.equal($("#notes-table-body"), cuerpoNotas);
+  assert.equal($("#notes-search"), buscador);
+
+  listener({ "plotstack.snapshot": { newValue: original } }, "local");
+  await settle(4);
+  assert.equal(txt($("#metric-subscribers").textContent), txt(antes), "el fixture queda restaurado para los demás casos");
+});
+
+test("Resumen pinta las vistas con su ventana fija declarada", async () => {
+  await arrancar();
+  await verVista("resumen");
+  assert.equal(txt($("#metric-views").textContent), "41,2 mil", "las vistas ya se capturaban y no se pintaban");
+  // El delta de vistas va en unidades y puede ser negativo.
+  assert.match(txt($("#delta-views").textContent), /^-3,1 mil vs\. los 30 días anteriores$/);
+  const tarjeta = $("#metric-views").parentNode;
+  assert.equal(tarjeta.querySelectorAll(".period-badge").length, 1,
+    "la ventana de vistas es fija y la tarjeta tiene que declararlo");
+});
+
+test("Notas muestra el desglose de alcance con etiquetas en español", async () => {
+  await arrancar();
+  await verVista("notas");
+  await rango("all");
+  assert.notEqual($("#notes-profile-visits").textContent, "—");
+  assert.notEqual($("#notes-link-clicks").textContent, "—");
+
+  const superficies = $("#notes-surfaces-legend").textContent;
+  const audiencia = $("#notes-audience-legend").textContent;
+  // Ninguna clave cruda de la API llega a la interfaz.
+  for (const crudo of ["Profile page", "Unconnected", "Permalinks", "Subscribers"]) {
+    assert.equal(superficies.includes(crudo), false, `clave cruda en superficies: ${crudo}`);
+    assert.equal(audiencia.includes(crudo), false, `clave cruda en audiencia: ${crudo}`);
+  }
+  assert.match(audiencia, /Suscriptores/);
+  assert.match(audiencia, /Sin conexión/);
+  assert.match(superficies, /Feed/);
+  assert.match(superficies, /Notificaciones/);
+  assert.equal($("#notes-surfaces-bar").hidden, false);
+  // Siete superficies, pero solo se pintan los segmentos con valor.
+  assert.equal($$("#notes-surfaces-bar i").length, 7);
+  assert.match($("#notes-reach-note").textContent, /2 de 3 notas/, "hay que declarar la cobertura del desglose");
+});
+
+test("Cobertura declara el estado del snapshot, no solo de las fuentes ampliadas", async () => {
+  await arrancar();
+  await verVista("cobertura");
+  const texto = $("#coverage-list").textContent;
+  assert.match(texto, /Snapshot principal/);
+  assert.match(texto, /Detalle por publicación/);
+  assert.match(texto, /Estadísticas por nota/);
+  // El fixture tiene 3 notas, 2 con detalle y 1 marcada como sin datos.
+  assert.match(texto, /2 con datos/);
+  assert.match(texto, /de 3/);
+});
+
+test("todo grafico tiene etiqueta accesible y tooltip de cursor", async () => {
+  await arrancar();
+  for (const vista of VISTAS) {
+    await verVista(vista);
+    for (const svg of $$(".chart-wrap svg")) {
+      const etiqueta = svg.attributes["aria-label"];
+      assert.ok(etiqueta && etiqueta.trim(), `${vista}: un lector de pantalla no sabe que hay en ${svg.attributes.id}`);
+      assert.equal(svg.attributes.role, "img");
+    }
+  }
+  // Con la serie dibujada, el contenedor tiene su tooltip creado y oculto: se
+  // crea una sola vez y se muestra al pasar el cursor, no en cada render.
+  await verVista("resumen");
+  await rango("all");
+  const wrap = $("#growth-chart").parentNode;
+  const tooltips = wrap.querySelectorAll(".chart-tooltip");
+  assert.equal(tooltips.length, 1, "un solo tooltip por grafico, no uno por render");
+  assert.equal(tooltips[0].hidden, true, "arranca oculto");
+});
+
+test("los graficos con serie secundaria la declaran en su leyenda", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  assert.equal($$("#churn-panel .chart-legend .is-secondary").length, 1,
+    "el segmento de bajas necesita leyenda junto al dibujo");
+  await verVista("publicaciones");
+  assert.equal($$("#posts-rate-panel .chart-legend .is-secondary").length, 1,
+    "la linea discontinua de CTR necesita leyenda junto al dibujo");
+});
+
+test("Audiencia pinta la matriz de retencion por cohorte", async () => {
+  await arrancar();
+  await verVista("audiencia");
+  const celdas = $$("#retention-list .cohort-cell");
+  assert.ok(celdas.length > 0, "las cohortes se guardaban y no se pintaban");
+  // Un mes sin medicion queda vacio, no como 0%.
+  assert.ok(celdas.some((celda) => celda.classList.contains("is-empty")),
+    "un mes sin dato no puede pintarse como una retencion medida");
+  assert.match($("#retention-list").textContent, /Por cohorte de alta/);
 });

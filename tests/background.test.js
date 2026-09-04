@@ -1,5 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { configureRequestLimiter } from "../src/providers/substack-api.js";
+
+// Sin el hueco entre peticiones del limitador: aqui interesa el orden de las
+// fases, no el ritmo con el que se respeta el limite de Substack.
+configureRequestLimiter({ concurrency: 4, gapMs: 0 });
 
 // `background.js` engancha listeners de chrome.* al importarse, así que el stub
 // tiene que existir antes del import. Se captura el listener de mensajes para
@@ -19,7 +24,13 @@ async function loadBackground({ storage = {}, profileFails = false, followerCoun
     runtime: {
       getURL: (path) => `chrome-extension://test/${path}`,
       onMessage: { addListener: (fn) => { captured.onMessage = fn; } },
-      onInstalled: { addListener: () => {} },
+      onInstalled: { addListener: (fn) => { captured.onInstalled = fn; } },
+      onStartup: { addListener: (fn) => { captured.onStartup = fn; } },
+    },
+    alarms: {
+      created: [],
+      create(name, info) { this.created.push({ name, info }); },
+      onAlarm: { addListener: (fn) => { captured.onAlarm = fn; } },
     },
     action: { onClicked: { addListener: () => {} } },
     storage: {
@@ -66,7 +77,22 @@ async function loadBackground({ storage = {}, profileFails = false, followerCoun
   const send = (message, sender = null) => new Promise((resolve) => {
     captured.onMessage(message, sender, resolve);
   });
-  return { send, store, perfilPedido, captured };
+
+  // La sincronización responde al terminar la fase rápida y sigue con el
+  // detalle en segundo plano, igual que en el navegador. Los tests esperan aquí
+  // el estado final, del mismo modo que el dashboard lo espera por
+  // `storage.onChanged`; sin esto, la fase de detalle seguiría corriendo
+  // después de que el caso restaure los stubs de `chrome`.
+  const esperarDetalle = async (intentos = 200) => {
+    for (let intento = 0; intento < intentos; intento += 1) {
+      const fase = store["plotstack.progress"]?.phase;
+      if (fase === "done" || fase === "error") return store["plotstack.progress"];
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    throw new Error("la fase de detalle no terminó");
+  };
+
+  return { send, store, perfilPedido, captured, esperarDetalle };
 }
 
 const conexionAntigua = {
@@ -82,9 +108,10 @@ test("PLOTSTACK_SYNC refresca el perfil aunque la conexión ya tenga userId", as
   const originalFetch = globalThis.fetch;
   const originalChrome = globalThis.chrome;
   try {
-    const { send, perfilPedido } = await loadBackground({ storage: conexionAntigua });
+    const { send, perfilPedido, esperarDetalle } = await loadBackground({ storage: conexionAntigua });
     const result = await send({ type: "PLOTSTACK_SYNC" });
     assert.equal(result.ok, true, result.error);
+    await esperarDetalle();
     // La regresión: antes solo se pedía el perfil si faltaba `userId`, así que
     // `followerCount` nunca llegaba y los seguidores se quedaban en 0.
     assert.equal(perfilPedido.veces, 1, "el perfil se pide en cada sync");
@@ -99,7 +126,7 @@ test("PLOTSTACK_SYNC conserva los seguidores si el perfil falla", async () => {
   const originalFetch = globalThis.fetch;
   const originalChrome = globalThis.chrome;
   try {
-    const { send } = await loadBackground({
+    const { send, esperarDetalle } = await loadBackground({
       storage: {
         ...conexionAntigua,
         "plotstack.snapshot": { metrics: { followers: 150, subscribers: 80 } },
@@ -108,6 +135,7 @@ test("PLOTSTACK_SYNC conserva los seguidores si el perfil falla", async () => {
     });
     const result = await send({ type: "PLOTSTACK_SYNC" });
     assert.equal(result.ok, true, result.error);
+    await esperarDetalle();
     assert.equal(result.snapshot.metrics.followers, 150, "un perfil caído no pone los seguidores a cero");
   } finally {
     globalThis.fetch = originalFetch;
@@ -123,6 +151,79 @@ test("PLOTSTACK_SYNC exige una publicación conectada", async () => {
     const result = await send({ type: "PLOTSTACK_SYNC" });
     assert.equal(result.ok, false);
     assert.match(result.error, /Conecta una publicación/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
+test("la sincronización responde tras la fase rápida y termina el detalle aparte", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  try {
+    const { send, store, esperarDetalle } = await loadBackground({ storage: conexionAntigua });
+    const result = await send({ type: "PLOTSTACK_SYNC" });
+    // La respuesta llega con el snapshot ya persistido y avisando de que el
+    // detalle sigue: el dashboard pinta sin esperar a las peticiones caras.
+    assert.equal(result.detailPending, true);
+    assert.ok(store["plotstack.snapshot"], "la fase rápida ya persistió el snapshot");
+    assert.equal("detailPhase" in result, false, "una promesa no puede viajar por sendMessage");
+    const progreso = await esperarDetalle();
+    assert.equal(progreso.phase, "done");
+    assert.ok(progreso.startedAt && progreso.finishedAt);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
+test("la alarma diaria sincroniza solo si hay una publicación conectada", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  try {
+    const sinConexion = await loadBackground({ storage: {} });
+    sinConexion.captured.onInstalled({ reason: "update" });
+    assert.deepEqual(
+      globalThis.chrome.alarms.created.map((alarma) => alarma.name),
+      ["plotstack-daily"],
+      "la alarma se registra al instalar o actualizar",
+    );
+    assert.equal(globalThis.chrome.alarms.created[0].info.periodInMinutes, 1440);
+    await sinConexion.captured.onAlarm({ name: "plotstack-daily" });
+    assert.equal(sinConexion.store["plotstack.snapshot"], undefined, "sin conexión no se sincroniza nada");
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
+test("la alarma diaria refresca el snapshot de la publicación conectada", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  try {
+    const { captured, store, esperarDetalle } = await loadBackground({ storage: conexionAntigua });
+    await captured.onAlarm({ name: "plotstack-daily" });
+    await esperarDetalle();
+    assert.equal(store["plotstack.snapshot"].metrics.subscribers, 97);
+    // Otra alarma cualquiera no dispara nada.
+    delete store["plotstack.progress"];
+    await captured.onAlarm({ name: "otra-cosa" });
+    assert.equal(store["plotstack.progress"], undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
+test("PLOTSTACK_DISCONNECT borra también el progreso de sincronización", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  try {
+    const { send, store } = await loadBackground({
+      storage: { ...conexionAntigua, "plotstack.progress": { phase: "done" } },
+    });
+    await send({ type: "PLOTSTACK_DISCONNECT" });
+    assert.deepEqual(Object.keys(store), []);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.chrome = originalChrome;

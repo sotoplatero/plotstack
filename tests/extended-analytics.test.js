@@ -33,6 +33,17 @@ test("normaliza ubicación, crecimiento y retención sin fabricar datos", () => 
   ] });
   assert.deepEqual(growth.totals, { new: 5, losses: 2, net: 3 });
   assert.equal(growth.daily[0].date, "2026-08-20");
+  // Las claves presentes se SUMAN. Con "primer finito", un `new_free: 0`
+  // tapaba las altas de pago de la misma fila y la vista de pago salía a cero.
+  const pago = normalizeSubscriberGrowth({ subscriberGrowth: [
+    { dt: "2026-08-22", new_free: 0, new_paid: 3, num_unsubs: 0, num_expirations: 1 },
+  ] });
+  assert.deepEqual(pago.totals, { new: 3, losses: 1, net: 2 });
+  // Los alias solo entran si ninguna clave principal viene en la fila.
+  const alias = normalizeSubscriberGrowth({ subscriberGrowth: [
+    { dt: "2026-08-23", new_subscribers: 4, unsubscribes: 2 },
+  ] });
+  assert.deepEqual(alias.totals, { new: 4, losses: 2, net: 2 });
   assert.deepEqual(normalizeRetention({ cohortStats: {} }).cohorts, []);
   assert.deepEqual(normalizeRetention({ rates: [{ months_since_subscription: 1, rate: 0.82, comparison: 0.04 }] }).rates,
     [{ month: 1, rate: 0.82, comparison: 0.04 }]);
@@ -233,4 +244,55 @@ test("normalizeGrowthEvents acepta pubEvents y no inventa conteos", () => {
   assert.equal(events[0].label, "La forma mas inteligente");
   assert.equal(events[0].type, "text");
   assert.equal("subscribers" in events[0], false, "el payload real no trae conteos: no se fabrican");
+});
+
+test("normalizeRetention acepta las formas conocidas de cohorte y descarta las demas", () => {
+  // Forma A: filas con mes y tasa explicitos.
+  const filas = normalizeRetention({
+    cohortStats: {
+      "2026-05": [{ months_since_subscription: 0, rate: 1 }, { months_since_subscription: 1, rate: 0.86 }],
+    },
+  });
+  assert.deepEqual(filas.cohorts, [{ cohort: "2026-05", points: [{ month: 0, rate: 1 }, { month: 1, rate: 0.86 }] }]);
+
+  // Forma B: numeros sueltos, donde la posicion ES el mes.
+  const numeros = normalizeRetention({ cohortStats: { "2026-06": [1, 0.8, 0.7] } });
+  assert.deepEqual(numeros.cohorts[0].points, [{ month: 0, rate: 1 }, { month: 1, rate: 0.8 }, { month: 2, rate: 0.7 }]);
+
+  // Forma desconocida: se descarta en vez de interpretarla mal.
+  assert.deepEqual(normalizeRetention({ cohortStats: { "2026-07": { raro: true } } }).cohorts, []);
+  assert.deepEqual(normalizeRetention({ cohortStats: {} }).cohorts, []);
+  assert.deepEqual(normalizeRetention({}).cohorts, []);
+});
+
+test("la fuente audience no repite la peticion que ya hizo la timeline", async () => {
+  const originalFetch = globalThis.fetch;
+  const cuerpos = [];
+  globalThis.fetch = async (url, options) => {
+    if (url.includes("subscriber-stats")) {
+      cuerpos.push(JSON.parse(options.body));
+      return response({
+        count: 97,
+        chartCounts: { totalEmail: 97, lifetime_subscribers: 1 },
+        subscribers: [{ subscription_created_at: "2026-08-01T00:00:00Z", subscription_interval: "free", activity_rating: 4 }],
+      });
+    }
+    return response({});
+  };
+  try {
+    const analytics = await getExtendedAnalytics({ subdomain: "carta" });
+    // Antes eran dos llamadas: una con limit 1 solo para leer chartCounts.
+    assert.equal(cuerpos.length, 1, `subscriber-stats se pide una sola vez, se pidio ${cuerpos.length}`);
+    assert.equal(cuerpos[0].limit, 100, "la unica llamada es la de la serie, no la de limit 1");
+    assert.equal(analytics.audience.total, 97);
+    assert.equal(analytics.audience.emailable, 97);
+    // La fila de Cobertura sigue existiendo para que el usuario vea su estado.
+    const fila = analytics.coverage.find((row) => row.key === "audience");
+    assert.equal(fila.label, "Audiencia");
+    assert.equal(fila.status, "ready");
+    // Y de aqui no sale PII, aunque el payload la traiga.
+    assert.equal(JSON.stringify(analytics).includes("subscription_created_at"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

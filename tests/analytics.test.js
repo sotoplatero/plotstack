@@ -6,6 +6,7 @@ import {
   getCampaignCuts,
   getCampaignDiagnosis,
   getChannelAttribution,
+  getComparisonBase,
   getDerivedMetrics,
   getNotesEngagement,
   getNotesAnalytics,
@@ -81,6 +82,37 @@ test("getDerivedMetrics devuelve null, no un +100% inventado, sin valor anterior
   assert.equal(derived.subscriberGrowth, null, "sin base previa no hay porcentaje");
   assert.equal(derived.paidGrowth, null);
   assert.equal(derived.revenueGrowth, null);
+});
+
+test("getDerivedMetrics compara contra la base del rango pedido, no siempre contra 30 días", () => {
+  const snapshot = {
+    metrics: { subscribers: 1200, paidSubscribers: 60 },
+    previous: { subscribers: 1100, paidSubscribers: 50 },
+    previousByRange: {
+      7: { subscribers: 1170, paidSubscribers: 58 },
+      30: { subscribers: 1100, paidSubscribers: 50 },
+      90: { subscribers: 900, paidSubscribers: 30 },
+    },
+  };
+  assert.equal(getDerivedMetrics(snapshot, 7).comparison.basis, "range");
+  assert.equal(Math.round(getDerivedMetrics(snapshot, 7).subscriberGrowth * 100) / 100, 2.56);
+  assert.equal(Math.round(getDerivedMetrics(snapshot, 30).subscriberGrowth * 100) / 100, 9.09);
+  assert.equal(Math.round(getDerivedMetrics(snapshot, 90).subscriberGrowth * 100) / 100, 33.33);
+});
+
+test("getComparisonBase usa el histórico local con Todo y admite que no hay base", () => {
+  const conHistorico = {
+    metrics: { subscribers: 1200 },
+    trend: [{ date: "2026-01-05", subscribers: 400 }, { date: "2026-09-01", subscribers: 1200 }],
+  };
+  const base = getComparisonBase(conHistorico, Infinity);
+  assert.equal(base.basis, "history");
+  assert.equal(base.sinceDate, "2026-01-05");
+  assert.equal(getDerivedMetrics(conHistorico, Infinity).subscriberGrowth, 200);
+  // Un rango sin arranque publicado por Substack no inventa un porcentaje.
+  const sinBase = getComparisonBase({ metrics: { subscribers: 1200 }, previousByRange: {} }, 90);
+  assert.equal(sinBase.basis, "none");
+  assert.equal(getDerivedMetrics({ metrics: { subscribers: 1200 } }, 90).subscriberGrowth, null);
 });
 
 test("getPublicationEngagement agrega interacciones de publicaciones en la ventana", () => {

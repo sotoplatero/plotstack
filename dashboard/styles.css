@@ -106,7 +106,7 @@ button { color: inherit; }
 main { grid-column: 2; min-width: 0; }
 .topbar { height: 78px; border-bottom: 1px solid var(--line); padding: 0 clamp(24px, 4vw, 58px); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: color-mix(in srgb, var(--ink) 90%, transparent); backdrop-filter: blur(16px); z-index: 8; }
 .eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .16em; color: var(--muted); }.eyebrow span { display: inline-block; width: 28px; height: 1px; background: var(--accent); vertical-align: middle; margin-right: 10px; }
-.top-actions { display: flex; gap: 9px; }.icon-button, .sync-button { height: 39px; border: 1px solid var(--line); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.top-actions { display: flex; gap: 9px; align-items: center; }.icon-button, .sync-button { height: 39px; border: 1px solid var(--line); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .icon-button { width: 39px; }.sync-button { padding: 0 16px; gap: 9px; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 12px; font-weight: 800; }
 .icon-button svg, .sync-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; }.sync-button.is-loading svg { animation: spin .8s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 .content { width: 100%; max-width: none; margin: 0; padding: 58px clamp(24px, 4vw, 58px) 28px; }
@@ -367,3 +367,44 @@ td.is-below-median { color: var(--danger); }
 .quadrant p { color: var(--muted); font-size: 10px; line-height: 1.5; margin: 8px 0 12px; }
 .quadrant small { display: block; font-size: 10px; color: var(--paper); padding: 6px 0; border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 760px) { .channel-grid, .quadrant-grid { grid-template-columns: 1fr; } }
+
+/* Progreso de la sincronizacion: la fase de detalle puede tardar minutos con un
+   historial largo, y un icono girando sin texto no dice en que va. */
+.sync-progress { margin: 0; max-width: 240px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.sync-progress.is-error { color: var(--danger); }
+.sync-button:disabled { opacity: .6; cursor: progress; }
+@media (max-width: 950px) { .sync-progress { display: none; } }
+
+/* Alcance de las notas: siete superficies necesitan siete pasos distinguibles,
+   asi que se degradan del acento al color de linea en vez de inventar una
+   paleta nueva. Las tres de audiencia reutilizan las clases de actividad. */
+.notes-reach { padding: 22px 27px 4px; border-top: 1px solid var(--line); }
+.notes-reach .retention-label { margin-top: 18px; }
+.notes-reach .retention-label:first-child { margin-top: 0; }
+.notes-reach .engagement-legend { grid-template-columns: repeat(4, 1fr); gap: 10px 12px; }
+.engagement-bar .is-s1 { background: var(--accent); }
+.engagement-bar .is-s2 { background: var(--accent); opacity: .8; }
+.engagement-bar .is-s3 { background: var(--accent); opacity: .62; }
+.engagement-bar .is-s4 { background: var(--paper); opacity: .55; }
+.engagement-bar .is-s5 { background: var(--paper); opacity: .4; }
+.engagement-bar .is-s6 { background: var(--paper); opacity: .26; }
+.engagement-bar .is-s7 { background: var(--line); }
+@media (max-width: 760px) { .notes-reach .engagement-legend { grid-template-columns: repeat(2, 1fr); } }
+
+/* Tercer estado de Cobertura: una fuente a medias no es ni verde ni roja. */
+.coverage-item.is-pending strong::before { background: var(--paper); opacity: .55; }
+.coverage-list .retention-label { padding-top: 14px; }
+
+/* Matriz de retencion por cohorte. Una celda vacia es "sin medicion", no 0%. */
+.cohort-grid { display: grid; gap: 3px; align-items: center; margin-top: 4px; }
+.cohort-grid small { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.cohort-grid .cohort-name { text-transform: none; letter-spacing: 0; white-space: nowrap; padding-right: 6px; }
+.cohort-cell { display: block; height: 16px; border-radius: 2px; background: var(--accent); }
+.cohort-cell.is-empty { background: var(--line); opacity: .5; }
+
+/* Leyenda de la serie secundaria: el trazo discontinuo y el segmento oscuro se
+   explicaban en el subtitulo del panel, lejos del dibujo. */
+.chart-legend .is-secondary { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--paper); opacity: .55; margin: 0 6px 0 14px; }
+
+/* Tooltip de cursor: el <title> nativo tarda un segundo y no existe en tactil. */
+.chart-tooltip { position: absolute; top: 4px; padding: 6px 9px; background: var(--ink-soft); border: 1px solid var(--line); color: var(--paper); font-size: 10px; white-space: nowrap; pointer-events: none; z-index: 3; }

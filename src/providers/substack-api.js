@@ -8,7 +8,50 @@ export class SubstackApiError extends Error {
   }
 }
 
+// Limitador ÚNICO para todas las peticiones del proveedor. El snapshot y las
+// fuentes ampliadas se lanzan en paralelo, así que sin un tope global salían
+// ~15 peticiones a la vez (5 detalles + 3 note_stats + 9 fuentes + paginación)
+// y Substack respondía 429, que es lo que cortaba la cola de notas. El 429
+// sigue propagándose: la política de reintento y corte no cambia.
+const limiter = { concurrency: 4, gapMs: 60, active: 0, lastStart: 0, queue: [] };
+
+export function configureRequestLimiter({ concurrency, gapMs } = {}) {
+  if (Number.isFinite(concurrency) && concurrency > 0) limiter.concurrency = Math.floor(concurrency);
+  if (Number.isFinite(gapMs) && gapMs >= 0) limiter.gapMs = gapMs;
+}
+
+const drainLimiter = () => {
+  while (limiter.queue.length && limiter.active < limiter.concurrency) {
+    const release = limiter.queue.shift();
+    limiter.active += 1;
+    release();
+  }
+};
+
+async function withLimit(task) {
+  if (limiter.active >= limiter.concurrency) {
+    await new Promise((resolve) => limiter.queue.push(resolve));
+  } else {
+    limiter.active += 1;
+  }
+  // Hueco mínimo entre salidas: la concurrencia sola permite ráfagas de 4
+  // simultáneas cada milisegundo, que Substack también penaliza.
+  const wait = limiter.gapMs - (Date.now() - limiter.lastStart);
+  if (wait > 0) await pause(wait);
+  limiter.lastStart = Date.now();
+  try {
+    return await task();
+  } finally {
+    limiter.active -= 1;
+    drainLimiter();
+  }
+}
+
 export async function requestJson(url, options = {}) {
+  return withLimit(() => performRequest(url, options));
+}
+
+async function performRequest(url, options = {}) {
   const hasJson = options.json !== undefined;
   const response = await fetch(url, {
     method: options.method || "GET",
@@ -31,10 +74,20 @@ export async function requestJson(url, options = {}) {
 
 const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-export async function getAllProfileFeedItems(userId, maxPages = 60) {
+// Parada incremental: el feed viene de más reciente a más antiguo, así que en
+// cuanto una página entera son notas que ya están en el snapshot, lo que queda
+// detrás también lo está. Sin esto se releían hasta 60 páginas en cada sync.
+// `fullRefresh` fuerza el recorrido completo para refrescar likes y respuestas
+// de notas antiguas; el orquestador lo pide una vez por semana.
+export async function getAllProfileFeedItems(userId, options = 60) {
+  const { maxPages = 60, knownIds = null, fullRefresh = false } = typeof options === "number" ? { maxPages: options } : options || {};
   if (!userId) return [];
   const items = [];
   let cursor = "";
+  const isKnown = (item) => {
+    const key = String(item?.entity_key || "");
+    return knownIds?.has(key) || knownIds?.has(key.replace(/^c-/, ""));
+  };
   for (let page = 0; page < maxPages; page += 1) {
     const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
     let payload;
@@ -48,6 +101,7 @@ export async function getAllProfileFeedItems(userId, maxPages = 60) {
     items.push(...pageItems);
     const nextCursor = payload?.nextCursor || payload?.next_cursor || "";
     if (!nextCursor || !pageItems.length || nextCursor === cursor) break;
+    if (!fullRefresh && knownIds?.size && pageItems.every(isKnown)) break;
     cursor = nextCursor;
     await pause(80);
   }
@@ -109,14 +163,26 @@ const unwrapRows = (payload) => {
   return [];
 };
 
-const rateFrom = (row, rateKeys, numeratorKeys, denominatorKeys) => {
-  for (const key of rateKeys) {
+// Primer valor finito entre los alias, o `null` si ninguno viene en la fila.
+// `null` importa: un numerador ausente no es un cero medido, y tratarlo así
+// hacía que el cociente diera 0% en payloads que sí traen su propia tasa.
+const firstFinite = (row, keys) => {
+  for (const key of keys) {
     const value = Number(row?.[key] ?? row?.stats?.[key]);
-    if (Number.isFinite(value)) return value <= 1 && value > 0 ? value * 100 : value;
+    if (Number.isFinite(value)) return value;
   }
-  const numerator = asNumber(...numeratorKeys.map((key) => row?.[key] ?? row?.stats?.[key]));
-  const denominator = asNumber(...denominatorKeys.map((key) => row?.[key] ?? row?.stats?.[key]));
-  return denominator > 0 ? (numerator / denominator) * 100 : 0;
+  return null;
+};
+
+const rateFrom = (row, rateKeys, numeratorKeys, denominatorKeys) => {
+  const numerator = firstFinite(row, numeratorKeys);
+  const denominator = firstFinite(row, denominatorKeys);
+  // Con numerador y denominador reales manda el cociente: no hay ambigüedad de
+  // unidad y usa el mismo denominador que `weightedRate` y `getRateWindows`.
+  if (numerator !== null && denominator !== null && denominator > 0) return (numerator / denominator) * 100;
+  // Si no, la tasa de la API TAL CUAL: viene en porcentaje (`open_rate: 33.01`
+  // observado), así que la heurística "≤1 ⇒ ×100" convertía un 0,8% en 80%.
+  return firstFinite(row, rateKeys) ?? 0;
 };
 
 export const mapCampaign = (row, index) => ({
@@ -130,7 +196,11 @@ export const mapCampaign = (row, index) => ({
   date: row.post_date || row.published_at || row.sent_at || row.date || "",
   status: "Enviado",
   recipients: asNumber(row.recipients, row.emails_delivered, row.delivered, row.total_email, row.stats?.emails_delivered),
-  openRate: rateFrom(row, ["open_rate", "openRate"], ["emails_opened", "opens"], ["emails_delivered", "delivered"]),
+  // Aperturas y clics ÚNICOS primero (`emails_opened`, `opened`); los totales
+  // (`opens`, `clicks`) solo como último recurso: inflan la tasa porque cuentan
+  // repeticiones del mismo lector. `opened` y `clicked` faltaban en esta lista,
+  // así que un payload que solo trae esas claves caía a la tasa de la API.
+  openRate: rateFrom(row, ["open_rate", "openRate"], ["emails_opened", "opened", "opens"], ["emails_delivered", "delivered"]),
   clickRate: rateFrom(row, ["click_through_rate", "click_rate", "clickRate"], ["emails_clicked", "clicked", "clicks"], ["emails_delivered", "delivered"]),
   sent: asNumber(row.sent, row.stats?.sent),
   delivered: asNumber(row.delivered, row.emails_delivered, row.stats?.delivered),
@@ -156,9 +226,14 @@ export const mapCampaign = (row, index) => ({
   detailAvailable: Boolean(row.stats),
 });
 
-export async function getAllPublishedPosts(base, maxPages = 40) {
+// Mismo criterio incremental que el feed de notas: la lista viene en orden
+// descendente por fecha y solo aporta id, título y fecha; las métricas salen de
+// `post_management/detail`, que ya se reutiliza del snapshot anterior.
+export async function getAllPublishedPosts(base, options = 40) {
+  const { maxPages = 40, knownIds = null, fullRefresh = false } = typeof options === "number" ? { maxPages: options } : options || {};
   const posts = [];
   const limit = 50;
+  const isKnown = (row) => knownIds?.has(String(row?.id ?? row?.post_id));
   for (let page = 0; page < maxPages; page += 1) {
     const offset = page * limit;
     const payload = await requestJson(`${base}/post_management/published?offset=${offset}&limit=${limit}&order_by=post_date&order_direction=desc`);
@@ -166,6 +241,7 @@ export async function getAllPublishedPosts(base, maxPages = 40) {
     posts.push(...rows);
     const total = asNumber(payload?.total);
     if (!rows.length || rows.length < limit || (total && posts.length >= total)) break;
+    if (!fullRefresh && knownIds?.size && rows.every(isKnown)) break;
     await pause(80);
   }
   return posts;
@@ -296,10 +372,11 @@ async function requestWithBackoff(url, retries = NOTE_STATS_RETRIES) {
 
 // Al primer 429 que sobrevive al backoff dejamos de pedir: seguir insistiendo
 // solo profundiza el bloqueo y vacia las estadisticas que si teniamos.
-export async function collectNoteStats(notes, { concurrency = NOTE_STATS_CONCURRENCY, pauseMs = NOTE_STATS_PAUSE_MS } = {}) {
+export async function collectNoteStats(notes, { concurrency = NOTE_STATS_CONCURRENCY, pauseMs = NOTE_STATS_PAUSE_MS, onProgress = null } = {}) {
   const results = new Map();
   let throttled = false;
   let nextIndex = 0;
+  let done = 0;
   const workers = Array.from({ length: Math.min(concurrency, notes.length) }, async () => {
     while (nextIndex < notes.length && !throttled) {
       const note = notes[nextIndex++];
@@ -312,6 +389,10 @@ export async function collectNoteStats(notes, { concurrency = NOTE_STATS_CONCURR
         }
         results.set(String(note.id), { status: "rejected", reason: error });
       }
+      done += 1;
+      // Un aviso cada cinco notas: la cola puede tener cientos y escribir en
+      // `chrome.storage` por cada una es más caro que la propia petición.
+      if (onProgress && (done % 5 === 0 || done === notes.length)) onProgress(done);
       if (pauseMs) await pause(pauseMs);
     }
   });
@@ -400,24 +481,109 @@ export function weightedRate(campaigns, numeratorKey) {
   return denominator > 0 ? (numerator / denominator) * 100 : 0;
 }
 
-export async function getPublicationSnapshot(publication, existingSnapshot) {
+// Refresco completo del historial cuando el snapshot guardado tiene más de una
+// semana: la parada incremental de los paginadores ahorra peticiones, pero sin
+// una pasada completa periódica los likes y respuestas de notas antiguas se
+// quedarían congelados en el valor del día que se capturaron.
+const FULL_REFRESH_AFTER_MS = 7 * 86400000;
+
+const needsFullRefresh = (existingSnapshot) => {
+  const captured = new Date(existingSnapshot?.capturedAt || 0).getTime();
+  if (!Number.isFinite(captured) || captured <= 0) return true;
+  return Date.now() - captured > FULL_REFRESH_AFTER_MS;
+};
+
+const campaignId = (row, index) => String(row?.id ?? row?.post_id ?? index);
+
+// Fusiona la fila de lista con el detalle recién pedido; si el detalle no llegó,
+// conserva el de la sincronización anterior. Un fallo nunca degrada a cero lo
+// que ya se había medido.
+function buildCampaigns(rawRows, detailById, previousById) {
+  return rawRows.map((row, index) => {
+    const id = campaignId(row, index);
+    const detailResult = detailById.get(id);
+    const detailedRow = detailResult?.status === "fulfilled" ? unwrapRows(detailResult.value)[0] : null;
+    if (detailedRow) return mapCampaign({ ...row, ...detailedRow, stats: detailedRow.stats }, index);
+    const previous = previousById.get(id);
+    return previous?.detailAvailable ? previous : mapCampaign(row, index);
+  });
+}
+
+// Notas PROPIAS del feed de perfil: el feed incluye restacks ajenos, que se
+// filtran comparando `comment.user_id`, nunca por la URL del perfil.
+function buildNotes(items, publication) {
+  return items
+    .filter((item) => item?.type === "comment" && String(item?.entity_key || "").startsWith("c-"))
+    .filter((item) => Number(item?.comment?.user_id ?? item?.context?.comment?.user_id) === Number(publication.userId))
+    .map((item, index) => {
+      const note = mapNote(item, index);
+      if (!note.url && publication.userHandle) note.url = `https://substack.com/@${publication.userHandle}/note/c-${note.id}`;
+      return note;
+    });
+}
+
+export function summarizeNotes(notes, throttled = false) {
+  const summary = notes.reduce((total, note) => ({
+    total: total.total + 1,
+    reactions: total.reactions + asNumber(note.reactions),
+    replies: total.replies + asNumber(note.replies),
+    restacks: total.restacks + asNumber(note.restacks),
+    interactions: total.interactions + asNumber(note.reactions) + asNumber(note.replies) + asNumber(note.restacks),
+    notesWithRestacks: total.notesWithRestacks + (asNumber(note.restacks) > 0 ? 1 : 0),
+  }), { total: 0, reactions: 0, replies: 0, restacks: 0, interactions: 0, notesWithRestacks: 0 });
+  const noteTimestamps = notes.map((note) => new Date(note.date).getTime()).filter(Number.isFinite);
+  const firstTimestamp = noteTimestamps.length ? Math.min(...noteTimestamps) : 0;
+  const lastTimestamp = noteTimestamps.length ? Math.max(...noteTimestamps) : 0;
+  summary.activeDays = firstTimestamp && lastTimestamp ? Math.max(1, Math.floor((lastTimestamp - firstTimestamp) / 86400000) + 1) : 0;
+  summary.notesPerDay = summary.activeDays ? summary.total / summary.activeDays : 0;
+  summary.interactionsPerNote = summary.total ? summary.interactions / summary.total : 0;
+  summary.restackRate = summary.total ? (summary.notesWithRestacks / summary.total) * 100 : 0;
+  summary.detailAvailable = notes.filter((note) => note.stats?.available).length;
+  summary.detailPending = notes.filter((note) => note.stats?.fetchState === "pending").length;
+  summary.detailUnavailable = notes.filter((note) => note.stats?.fetchState === "unavailable").length;
+  summary.statsThrottled = Boolean(throttled);
+  summary.firstPublishedAt = firstTimestamp ? new Date(firstTimestamp).toISOString() : "";
+  summary.lastPublishedAt = lastTimestamp ? new Date(lastTimestamp).toISOString() : "";
+  return summary;
+}
+
+// FASE RÁPIDA. Solo escalares y listas: nada de detalle por pieza. Devuelve un
+// snapshot completo y válido para pintar, más el `context` que la fase de
+// detalle necesita (filas crudas y mapas del snapshot anterior). El contexto se
+// pasa en memoria y NUNCA se persiste: `normalizeSnapshot` lo descartaría, y
+// las filas crudas no tienen sitio en `chrome.storage`.
+export async function getCoreSnapshot(publication, existingSnapshot) {
   const base = `https://${publication.subdomain}.substack.com/api/v1`;
-  const calls = [
+  const fullRefresh = needsFullRefresh(existingSnapshot);
+  const previousCampaigns = new Map((existingSnapshot?.campaigns || []).map((campaign) => [String(campaign.id), campaign]));
+  const previousNotes = new Map((existingSnapshot?.notes || []).map((note) => [String(note.id), note]));
+
+  const [summaryResult, range30Result, range7Result, range90Result, emailResult, postsResult] = await Promise.allSettled([
     requestJson(`${base}/publish-dashboard/summary`),
     requestJson(`${base}/publish-dashboard/summary-v2?range=30`),
     requestJson(`${base}/publish-dashboard/summary-v2?range=7`),
     requestJson(`${base}/publish-dashboard/summary-v2?range=90`),
     requestJson(`${base}/publication/stats/email_stats`),
-    getAllPublishedPosts(base),
-    getAllProfileFeedItems(publication.userId),
-  ];
-  const [summaryResult, range30Result, range7Result, range90Result, emailResult, postsResult, notesResult] = await Promise.allSettled(calls);
+    getAllPublishedPosts(base, { knownIds: new Set(previousCampaigns.keys()), fullRefresh }),
+  ]);
   if (summaryResult.status === "rejected" && range30Result.status === "rejected") throw summaryResult.reason;
 
   const summary = summaryResult.value || {};
   const range30 = range30Result.value || {};
   const range7 = range7Result.value || {};
   const range90 = range90Result.value || {};
+  // Base de comparación POR RANGO. `previous` a secas siempre era la de 30
+  // días, así que el delta del Resumen decía "vs. sincronización anterior"
+  // mientras comparaba contra hace un mes con el selector en 7D o 90D. Un
+  // rango cuya petición falló no entra en el mapa: ausencia, no cero.
+  const previousByRange = {};
+  for (const [days, result] of [["7", range7Result], ["30", range30Result], ["90", range90Result]]) {
+    if (result.status !== "fulfilled") continue;
+    const payload = result.value || {};
+    const subscribers = asNumber(payload.totalSubscribersStart);
+    if (subscribers <= 0) continue;
+    previousByRange[days] = { subscribers, paidSubscribers: asNumber(payload.paidSubscribersStart) };
+  }
   // `summary.subscribers` NO es el total: en la captura real vale 0 con 97
   // suscriptores. El total esta en `totalEmail`. Ver docs/product/substack-payloads-observados.md
   const currentSubscribers = asNumber(range30.totalSubscribersEnd, summary.totalEmail);
@@ -433,69 +599,18 @@ export async function getPublicationSnapshot(publication, existingSnapshot) {
   ].filter((point) => point.subscribers > 0);
   const history = Array.isArray(existingSnapshot?.trend) ? existingSnapshot.trend : [];
   const uniqueTrend = new Map([...anchors, ...history, anchors.at(-1)].filter(Boolean).map((point) => [point.date, point]));
+
   const postRows = postsResult.status === "fulfilled" ? unwrapRows(postsResult.value) : [];
   const emailRows = emailResult.status === "fulfilled" ? unwrapRows(emailResult.value) : [];
   const rawCampaigns = postRows.length ? postRows : emailRows;
-  const previousCampaigns = new Map((existingSnapshot?.campaigns || []).map((campaign) => [String(campaign.id), campaign]));
-  const postsToRefresh = rawCampaigns.filter((row, index) => index < 12 || !previousCampaigns.get(String(row.id ?? row.post_id))?.detailAvailable);
-  const postDetailResults = await mapWithConcurrency(
-    postsToRefresh,
-    5,
-    (row) => requestJson(`${base}/post_management/detail/${row.id ?? row.post_id}?offset=0&limit=1`),
-  );
-  const detailById = new Map(postsToRefresh.map((row, index) => [String(row.id ?? row.post_id), postDetailResults[index]]));
-  const campaigns = rawCampaigns.map((row, index) => {
-    const id = String(row.id ?? row.post_id ?? index);
-    const detailResult = detailById.get(id);
-    const detailedRow = detailResult?.status === "fulfilled" ? unwrapRows(detailResult.value)[0] : null;
-    if (detailedRow) return mapCampaign({ ...row, ...detailedRow, stats: detailedRow.stats }, index);
-    const previous = previousCampaigns.get(id);
-    return previous?.detailAvailable ? previous : mapCampaign(row, index);
-  });
-  const noteItems = notesResult.status === "fulfilled" && Array.isArray(notesResult.value) ? notesResult.value : [];
-  let notes = noteItems
-    .filter((item) => item?.type === "comment" && String(item?.entity_key || "").startsWith("c-"))
-    .filter((item) => Number(item?.comment?.user_id ?? item?.context?.comment?.user_id) === Number(publication.userId))
-    .map((item, index) => {
-      const note = mapNote(item, index);
-      if (!note.url && publication.userHandle) note.url = `https://substack.com/@${publication.userHandle}/note/c-${note.id}`;
-      return note;
-    });
-  const previousNotes = new Map((existingSnapshot?.notes || []).map((note) => [String(note.id), note]));
-  const notesToRefresh = notes.filter((note, index) => {
-    if (index < 12) return true;
-    const previous = previousNotes.get(String(note.id))?.stats;
-    if (previous?.available) return false;
-    return Math.max(0, Number(previous?.attempts) || 0) < NOTE_STATS_MAX_ATTEMPTS;
-  });
-  const { results: refreshedById, throttled } = await collectNoteStats(notesToRefresh);
-  notes = notes.map((note) => ({
-    ...note,
-    stats: resolveNoteStats(note, refreshedById.get(String(note.id)), previousNotes.get(String(note.id))?.stats, throttled),
-  }));
-  const notesSummary = notes.reduce((total, note) => ({
-    total: total.total + 1,
-    reactions: total.reactions + note.reactions,
-    replies: total.replies + note.replies,
-    restacks: total.restacks + note.restacks,
-    interactions: total.interactions + note.reactions + note.replies + note.restacks,
-    notesWithRestacks: total.notesWithRestacks + (note.restacks > 0 ? 1 : 0),
-  }), { total: 0, reactions: 0, replies: 0, restacks: 0, interactions: 0, notesWithRestacks: 0 });
-  const noteTimestamps = notes.map((note) => new Date(note.date).getTime()).filter(Number.isFinite);
-  const firstTimestamp = noteTimestamps.length ? Math.min(...noteTimestamps) : 0;
-  const lastTimestamp = noteTimestamps.length ? Math.max(...noteTimestamps) : 0;
-  notesSummary.activeDays = firstTimestamp && lastTimestamp ? Math.max(1, Math.floor((lastTimestamp - firstTimestamp) / 86400000) + 1) : 0;
-  notesSummary.notesPerDay = notesSummary.activeDays ? notesSummary.total / notesSummary.activeDays : 0;
-  notesSummary.interactionsPerNote = notesSummary.total ? notesSummary.interactions / notesSummary.total : 0;
-  notesSummary.restackRate = notesSummary.total ? (notesSummary.notesWithRestacks / notesSummary.total) * 100 : 0;
-  notesSummary.detailAvailable = notes.filter((note) => note.stats.available).length;
-  notesSummary.detailPending = notes.filter((note) => note.stats.fetchState === "pending").length;
-  notesSummary.detailUnavailable = notes.filter((note) => note.stats.fetchState === "unavailable").length;
-  notesSummary.statsThrottled = throttled;
-  notesSummary.firstPublishedAt = firstTimestamp ? new Date(firstTimestamp).toISOString() : "";
-  notesSummary.lastPublishedAt = lastTimestamp ? new Date(lastTimestamp).toISOString() : "";
+  // Sin pedir un solo detalle: cada fila se queda con el que ya tenía.
+  const campaigns = buildCampaigns(rawCampaigns, new Map(), previousCampaigns);
+  // Las notas de la fase rápida son las del snapshot anterior, tal cual. La
+  // fase de detalle las refresca; hasta entonces se muestran las guardadas en
+  // lugar de una tabla vacía.
+  const notes = [...previousNotes.values()];
 
-  return {
+  const snapshot = {
     version: 1,
     provider: "substack",
     publication: publication.name,
@@ -507,7 +622,10 @@ export async function getPublicationSnapshot(publication, existingSnapshot) {
       openRate: asNumber(summary.openRate, summary.open_rate),
       clickRate: weightedRate(campaigns, "clicked"),
       monthlyRevenue: currentArr / 12,
-      totalViews: asNumber(range30.totalViewsEnd, summary.views),
+      totalViews: asNumber(summary.views, range30.totalViewsEnd),
+      // Variación de vistas que ya publica Substack para su ventana de 30 días.
+      // Puede ser negativa: es una variación, no un contador.
+      viewsDelta: asNumber(summary.viewsDelta),
       // `followerCount` viene del perfil, no de la publicación: son seguidores
       // de la cuenta en Substack, no suscriptores del newsletter. Si el perfil no
       // llegó, se conserva el valor anterior: un fallo parcial nunca es cero.
@@ -530,9 +648,85 @@ export async function getPublicationSnapshot(publication, existingSnapshot) {
       monthlyRevenue: asNumber(range30.arrStart, range30.pledgedArrStart) / 12,
       totalViews: asNumber(range30.totalViewsStart),
     },
+    previousByRange,
     trend: [...uniqueTrend.values()],
     campaigns,
-    notesSummary,
+    notesSummary: summarizeNotes(notes, existingSnapshot?.notesSummary?.statsThrottled),
     notes,
   };
+
+  return { snapshot, context: { base, rawCampaigns, previousCampaigns, previousNotes, fullRefresh } };
+}
+
+// FASE DE DETALLE. Lo caro: detalle por publicación, feed completo de notas y
+// la cola de `note_stats`. Se ejecuta después de haber persistido y pintado la
+// fase rápida, e informa por `onProgress` para que la interfaz diga en qué va.
+export async function enrichSnapshot(core, publication, { onProgress = () => {} } = {}) {
+  const { snapshot, context } = core;
+  const { base, rawCampaigns, previousCampaigns, previousNotes, fullRefresh } = context;
+
+  // Detalle de publicaciones: los 12 más recientes más los que aún no lo tienen.
+  const postsToRefresh = rawCampaigns.filter((row, index) => index < 12 || !previousCampaigns.get(campaignId(row, index))?.detailAvailable);
+  onProgress({ step: "Detalle de publicaciones", done: 0, total: postsToRefresh.length });
+  let detailsDone = 0;
+  const postDetailResults = await mapWithConcurrency(postsToRefresh, 3, async (row, index) => {
+    try {
+      return await requestJson(`${base}/post_management/detail/${campaignId(row, index)}?offset=0&limit=1`);
+    } finally {
+      detailsDone += 1;
+      if (detailsDone % 4 === 0 || detailsDone === postsToRefresh.length) {
+        onProgress({ step: "Detalle de publicaciones", done: detailsDone, total: postsToRefresh.length });
+      }
+    }
+  });
+  const detailById = new Map(postsToRefresh.map((row, index) => [campaignId(row, index), postDetailResults[index]]));
+  const campaigns = buildCampaigns(rawCampaigns, detailById, previousCampaigns);
+
+  // Feed de notas: se para en cuanto una página entera ya es conocida, salvo en
+  // el refresco completo semanal.
+  onProgress({ step: "Historial de notas", done: 0, total: 0 });
+  let feedItems = [];
+  try {
+    feedItems = await getAllProfileFeedItems(publication.userId, {
+      knownIds: new Set(previousNotes.keys()),
+      fullRefresh,
+    });
+  } catch {
+    // El feed es una fuente más: si falla, se conservan las notas guardadas.
+  }
+  // Unión: las notas de esta pasada traen contadores públicos frescos; las que
+  // no volvieron a aparecer (porque paramos antes) se conservan intactas.
+  const merged = new Map(previousNotes);
+  for (const note of buildNotes(feedItems, publication)) {
+    merged.set(String(note.id), { ...merged.get(String(note.id)), ...note });
+  }
+  let notes = [...merged.values()].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+
+  const notesToRefresh = notes.filter((note, index) => {
+    if (index < 12) return true;
+    const previous = previousNotes.get(String(note.id))?.stats;
+    if (previous?.available) return false;
+    return Math.max(0, Number(previous?.attempts) || 0) < NOTE_STATS_MAX_ATTEMPTS;
+  });
+  onProgress({ step: "Estadísticas de notas", done: 0, total: notesToRefresh.length });
+  const { results: refreshedById, throttled } = await collectNoteStats(notesToRefresh, {
+    onProgress: (done) => onProgress({ step: "Estadísticas de notas", done, total: notesToRefresh.length }),
+  });
+  notes = notes.map((note) => ({
+    ...note,
+    stats: resolveNoteStats(note, refreshedById.get(String(note.id)), previousNotes.get(String(note.id))?.stats, throttled),
+  }));
+
+  return {
+    ...snapshot,
+    metrics: { ...snapshot.metrics, clickRate: weightedRate(campaigns, "clicked") },
+    campaigns,
+    notesSummary: summarizeNotes(notes, throttled),
+    notes,
+  };
+}
+
+export async function getPublicationSnapshot(publication, existingSnapshot) {
+  const core = await getCoreSnapshot(publication, existingSnapshot);
+  return enrichSnapshot(core, publication);
 }

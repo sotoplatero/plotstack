@@ -138,8 +138,9 @@
             </div>
             <button class="sync-button" id="sync-button" type="button">
               <svg aria-hidden="true"><use href="#icon-refresh"></use></svg>
-              <span>Sincronizar</span>
+              <span id="sync-label">Sincronizar</span>
             </button>
+            <p class="sync-progress" id="sync-progress" role="status" aria-live="polite" hidden></p>
           </div>
         </header>
 
@@ -165,6 +166,12 @@
                 <p class="metric-value" id="metric-click-rate">—</p>
                 <p class="delta" id="delta-click-rate">—</p>
                 <div class="paid-note"><span id="click-basis">—</span></div>
+              </article>
+              <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
+                <div class="card-label"><span>Vistas</span><span class="period-badge">30 días · fijo</span></div>
+                <p class="metric-value" id="metric-views">—</p>
+                <p class="delta" id="delta-views">—</p>
+                <div class="paid-note"><span>Lecturas en web y app que cuenta Substack</span></div>
               </article>
               <article class="metric-card reveal" data-goto="audiencia" data-sensitive="paid" role="link" tabindex="0" hidden>
                 <div class="card-label"><span>Suscriptores de pago</span><span class="metric-glyph">↗</span></div>
@@ -300,7 +307,7 @@
 
             <section class="panel chart-panel reveal" id="churn-panel">
               <div class="panel-header">
-                <div><h2>Altas y bajas</h2></div>
+                <div><h2>Altas y bajas</h2><div class="chart-legend"><span></span>Altas<span class="is-secondary"></span>Bajas</div></div>
                 <span class="period-badge" id="churn-net">—</span>
               </div>
               <div class="audience-totals" id="churn-kpis"></div>
@@ -314,7 +321,7 @@
 
             <section class="panel chart-panel reveal" id="paid-churn-panel" data-sensitive="paid" hidden>
               <div class="panel-header">
-                <div><h2>Altas y bajas de pago</h2></div>
+                <div><h2>Altas y bajas de pago</h2><div class="chart-legend"><span></span>Altas<span class="is-secondary"></span>Bajas</div></div>
                 <span class="period-badge" id="paid-churn-net">—</span>
               </div>
               <div class="chart-wrap">
@@ -338,6 +345,17 @@
                 <div><span>Comentarios</span><strong id="notes-comments">—</strong></div>
                 <div><span>Restacks</span><strong id="notes-restacks">—</strong></div>
                 <div><span>Impresiones</span><strong id="notes-impressions">—</strong></div>
+                <div><span>Visitas al perfil</span><strong id="notes-profile-visits">—</strong></div>
+                <div><span>Clics a enlaces</span><strong id="notes-link-clicks">—</strong></div>
+              </div>
+              <div class="notes-reach">
+                <p class="retention-label">Dónde se ven tus notas</p>
+                <div class="engagement-bar" id="notes-surfaces-bar"></div>
+                <div class="engagement-legend" id="notes-surfaces-legend"></div>
+                <p class="retention-label">Quién las ve</p>
+                <div class="engagement-bar" id="notes-audience-bar"></div>
+                <div class="engagement-legend" id="notes-audience-legend"></div>
+                <p class="panel-copy" id="notes-reach-note" hidden></p>
               </div>
               <p class="panel-copy" id="notes-insight" hidden></p>
             </section>
@@ -418,7 +436,7 @@
 
             <section class="panel chart-panel reveal" id="posts-rate-panel">
               <div class="panel-header">
-                <div><h2>Apertura y CTR por envío</h2><p class="panel-copy">Solo envíos con destinatarios. Línea continua: apertura · discontinua: CTR.</p></div>
+                <div><h2>Apertura y CTR por envío</h2><div class="chart-legend"><span></span>Apertura<span class="is-secondary"></span>CTR</div><p class="panel-copy">Solo envíos con destinatarios.</p></div>
                 <span class="period-badge" id="posts-rate-median">—</span>
               </div>
               <div class="chart-wrap">

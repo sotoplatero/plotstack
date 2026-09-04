@@ -95,10 +95,25 @@ export function normalizeAudienceLocation(payload) {
   })).filter((row) => row.code && row.value > 0).sort((a, b) => b.value - a.value);
 }
 
+// Suma las claves PRESENTES, en vez de quedarse con la primera finita. Con
+// `asNumber(new_free, new_paid)` una fila `{new_free: 0, new_paid: 3}` devolvía
+// 0: el 0 medido de gratuitos tapaba las tres altas de pago. Los alias solo se
+// consultan si ninguna clave principal viene en la fila (ausencia ≠ cero).
+const sumPresent = (row, keys, fallbackKeys = []) => {
+  const present = keys.filter((key) => row?.[key] !== undefined && row?.[key] !== null);
+  const chosen = present.length ? present : fallbackKeys.filter((key) => row?.[key] !== undefined && row?.[key] !== null);
+  let total = 0;
+  for (const key of chosen) {
+    const value = Number(row[key]);
+    if (Number.isFinite(value)) total += value;
+  }
+  return total;
+};
+
 export function normalizeSubscriberGrowth(payload = {}) {
   const daily = rowsFrom(payload, ["subscriberGrowth"]).map((row) => {
-    const gained = asNumber(row?.new_free, row?.new_paid, row?.new_subscribers, row?.new);
-    const losses = asNumber(row?.num_unsubs, row?.num_expirations, row?.unsubscribes, row?.cancellations_finalized);
+    const gained = sumPresent(row, ["new_free", "new_paid"], ["new_subscribers", "new"]);
+    const losses = sumPresent(row, ["num_unsubs", "num_expirations"], ["unsubscribes", "cancellations_finalized"]);
     return { date: isoDay(text(row?.dt, row?.date)), new: gained, losses, net: gained - losses };
   }).filter((row) => row.date).sort((a, b) => a.date.localeCompare(b.date));
   const totals = daily.reduce((sum, row) => ({
@@ -109,6 +124,23 @@ export function normalizeSubscriberGrowth(payload = {}) {
   return { daily, totals };
 }
 
+// Un punto de una cohorte: mes desde el alta y tasa. Se aceptan las dos formas
+// observables (fila con `months_since_subscription`/`rate`, o número suelto cuya
+// posición es el mes) y **nada más**: una forma desconocida devuelve `[]`, que
+// es más honesto que interpretar mal la matriz.
+const cohortPoints = (values) => {
+  if (!Array.isArray(values)) return [];
+  return values.map((value, index) => {
+    if (value && typeof value === "object") {
+      const month = asNumber(value.months_since_subscription, value.month, index);
+      const rate = Number(value.rate ?? value.value);
+      return Number.isFinite(rate) ? { month, rate } : null;
+    }
+    const rate = Number(value);
+    return Number.isFinite(rate) ? { month: index, rate } : null;
+  }).filter(Boolean).sort((a, b) => a.month - b.month);
+};
+
 export function normalizeRetention(payload = {}) {
   const rates = rowsFrom(payload.summary || payload, ["rates"]).map((row) => ({
     month: asNumber(row?.months_since_subscription, row?.month),
@@ -116,7 +148,12 @@ export function normalizeRetention(payload = {}) {
     comparison: Number(row?.comparison),
   })).filter((row) => row.month >= 0 && Number.isFinite(row.rate));
   const raw = payload.cohorts ?? payload.cohortStats ?? {};
-  const cohorts = Array.isArray(raw) ? raw : Object.entries(raw).map(([cohort, values]) => ({ cohort, values }));
+  const entries = Array.isArray(raw)
+    ? raw.map((row, index) => [text(row?.cohort, row?.name, row?.month) || String(index), row?.values ?? row?.rates ?? row])
+    : Object.entries(raw);
+  const cohorts = entries
+    .map(([cohort, values]) => ({ cohort: String(cohort), points: cohortPoints(values) }))
+    .filter((row) => row.points.length);
   return { cohorts, rates };
 }
 
@@ -190,6 +227,11 @@ const isPaidRow = (row) => asNumber(row?.total_revenue_generated) > 0
   || PAID_INTERVALS.has(String(row?.subscription_interval || "").toLowerCase());
 
 export async function getSubscriberTimeline(base, { maxPages = SUBSCRIBER_MAX_PAGES } = {}) {
+  // Conteos agregados de la primera página, para que la fuente `audience` no
+  // repita la misma petición con `limit: 1`. Se copian SOLO `count` y
+  // `chartCounts`: el payload crudo trae emails y nombres, y de esta función no
+  // sale PII (lo guarda un test).
+  let audienceCounts = null;
   const byDay = new Map();
   const composition = { paid: 0, founding: 0, gift: 0, comp: 0, freeTrial: 0 };
   const byInterval = new Map();
@@ -207,6 +249,7 @@ export async function getSubscriberTimeline(base, { maxPages = SUBSCRIBER_MAX_PA
         offset: page * SUBSCRIBER_PAGE_SIZE,
       },
     });
+    if (page === 0) audienceCounts = { count: asNumber(payload?.count), chartCounts: payload?.chartCounts };
     total = asNumber(payload?.count, total);
     const rows = Array.isArray(payload?.subscribers) ? payload.subscribers : [];
     pages += 1;
@@ -247,6 +290,7 @@ export async function getSubscriberTimeline(base, { maxPages = SUBSCRIBER_MAX_PA
     total,
     counted,
     pages,
+    audienceCounts,
     // Truncar pierde las altas más antiguas, no las recientes: la API ordena desc.
     partial: Boolean(total) && counted < total,
     daily,
@@ -295,8 +339,10 @@ export async function getExtendedAnalytics(publication) {
     return { ...(cohorts || {}), summary };
   };
 
+  // `audience` NO es una fuente propia: sus conteos (`chartCounts`) vienen en la
+  // primera página de `subscriber-stats`, que `subscriberTimeline` ya pide. La
+  // petición con `limit: 1` era un duplicado exacto en cada sincronización.
   const sources = [
-    { key: "audience", label: "Audiencia", request: () => requestJson(`${base}/subscriber-stats`, { method: "POST", json: { filters: { order_by_desc_nulls_last: "subscription_created_at" }, limit: 1, offset: 0 } }), normalize: normalizeAudience },
     { key: "subscriberTimeline", label: "Altas por día", request: () => getSubscriberTimeline(base), normalize: normalizeSubscriberTimeline },
     { key: "growthSources", label: "Fuentes de crecimiento", request: () => requestJson(`${base}/publication/stats/growth/sources?from_date=${from}&to_date=${to}&order_by=users&order_direction=desc`), normalize: normalizeGrowthSources },
     { key: "followerTimeseries", label: "Histórico de seguidores", request: () => requestJson(`${base}/publication/stats/followers/timeseries?from=${encodeURIComponent(fromIso)}`), normalize: normalizeTimeseries },
@@ -309,14 +355,28 @@ export async function getExtendedAnalytics(publication) {
 
   const settled = await Promise.allSettled(sources.map((source) => source.request()));
   const data = {};
+  const raw = {};
   const coverage = settled.map((result, index) => {
     const source = sources[index];
     if (result.status === "rejected") {
       data[source.key] = source.normalize({});
       return { key: source.key, label: source.label, status: "unavailable", records: 0, error: result.reason?.message || "No disponible" };
     }
+    raw[source.key] = result.value;
     data[source.key] = source.normalize(result.value);
     return { key: source.key, label: source.label, status: "ready", records: recordCount(data[source.key]), error: "" };
+  });
+
+  // Los conteos agregados salen de la primera página que ya trajo la timeline:
+  // `audienceCounts` es la copia PII-free de `count` y `chartCounts`.
+  data.audience = normalizeAudience(raw.subscriberTimeline?.audienceCounts || {});
+  const timelineCoverage = coverage.find((row) => row.key === "subscriberTimeline");
+  coverage.unshift({
+    key: "audience",
+    label: "Audiencia",
+    status: timelineCoverage?.status === "ready" ? "ready" : "unavailable",
+    records: recordCount(data.audience),
+    error: timelineCoverage?.status === "ready" ? "" : timelineCoverage?.error || "No disponible",
   });
 
   return {

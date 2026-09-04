@@ -11,6 +11,7 @@ import {
   getOwnOpenRateMedian,
   getPublicationEngagement,
   getRateWindows,
+  isFractionScale,
   normalizeSnapshot,
   parseDay,
 } from "../src/shared/analytics.js";
@@ -30,6 +31,7 @@ import {
 const SNAPSHOT_KEY = "plotstack.snapshot";
 const CONNECTION_KEY = "plotstack.connection";
 const ANALYTICS_KEY = "plotstack.analytics";
+const PROGRESS_KEY = "plotstack.progress";
 const VIEW_KEY = "plotstack.view";
 const VIEWS = ["resumen", "audiencia", "crecimiento", "notas", "publicaciones", "cobertura"];
 const RANGE_KEY = "plotstack.days";
@@ -44,6 +46,7 @@ const state = {
   snapshot: null,
   connection: null,
   analytics: null,
+  progress: null,
   days: 30,
   rangeExcluded: { notes: 0, campaigns: 0 },
   view: "resumen",
@@ -186,6 +189,7 @@ async function selectPublication(publication, button) {
     state.connection = response.connection;
     state.analytics = response.analytics || null;
     showDashboard();
+    renderProgress();
   } catch (error) {
     setConnectionStatus(error.message || "No se pudo sincronizar.", true);
     $("#connect-content").hidden = false;
@@ -198,12 +202,12 @@ async function selectPublication(publication, button) {
 // Los deltas de snapshot comparan contra la sincronización anterior, no contra
 // "el periodo anterior": esa magnitud depende de cuándo sincronizaste, no del
 // rango elegido, y el copy tiene que decirlo. `null` = no hay con qué comparar.
-function deltaMarkup(value, suffix, versus) {
+function deltaMarkup(value, suffix, versus, format) {
   const sign = value > 0 ? "+" : "";
-  return `${sign}${decimal(value)}${suffix} ${versus}`;
+  return `${sign}${format(value)}${suffix} ${versus}`.trim();
 }
 
-function setDelta(selector, value, { suffix = "%", versus = "vs. periodo anterior", missing = "Sin valor anterior para comparar" } = {}) {
+function setDelta(selector, value, { suffix = "%", versus = "vs. periodo anterior", missing = "Sin valor anterior para comparar", format = decimal } = {}) {
   const element = $(selector);
   if (value === null || value === undefined) {
     element.className = "delta";
@@ -211,7 +215,7 @@ function setDelta(selector, value, { suffix = "%", versus = "vs. periodo anterio
     element.textContent = missing;
     return;
   }
-  element.textContent = deltaMarkup(value, suffix, versus);
+  element.textContent = deltaMarkup(value, suffix, versus, format);
   element.classList.toggle("is-positive", value > 0);
   element.style.color = value < 0 ? "var(--danger)" : "";
 }
@@ -239,9 +243,33 @@ function setRateDelta(selector, windows, key = "openRate") {
   setDelta(selector, now - before, { suffix: " pts" });
 }
 
+// Copy del delta de audiencia según de dónde salió la base. Nombrar la base es
+// parte del dato: "+3,2% vs. hace 7 días" y "+3,2% vs. hace 90 días" son
+// afirmaciones distintas, y con "Todo" la referencia es la primera captura
+// local, no un arranque que dé Substack.
+function comparisonCopy(comparison) {
+  if (comparison?.basis === "range") {
+    return {
+      versus: `vs. hace ${comparison.days} días`,
+      missing: `Sin base de hace ${comparison.days} días para comparar`,
+    };
+  }
+  if (comparison?.basis === "history") {
+    return {
+      versus: `desde ${shortDate(comparison.sinceDate)}`,
+      missing: "Sin histórico anterior para comparar",
+    };
+  }
+  return { versus: "", missing: "Substack no dio base para comparar este rango" };
+}
+
 function renderMetrics(snapshot, analytics) {
   const { metrics } = snapshot;
-  const derived = getDerivedMetrics(snapshot);
+  const derived = getDerivedMetrics(snapshot, state.days);
+  // El delta de audiencia compara contra el arranque de la MISMA ventana que
+  // marca el selector, y el copy lo dice. Antes decía "vs. sincronización
+  // anterior" mientras la base era siempre la de 30 días.
+  const versusRange = comparisonCopy(derived.comparison);
   const versusSync = { versus: "vs. sincronización anterior", missing: "Sin sincronización anterior para comparar" };
   $("#metric-subscribers").textContent = formatCompactNumber(metrics.subscribers);
   // La apertura se calcula sobre la ventana activa, igual que el CTR. Sin
@@ -250,12 +278,22 @@ function renderMetrics(snapshot, analytics) {
   const windows = getRateWindows(snapshot, state.days);
   const openNow = windows.current.openRate;
   $("#metric-open-rate").textContent = openNow === null ? "Sin dato" : formatPercent(openNow);
+  // Vistas: la única métrica de tráfico que publica Substack. Su ventana es la
+  // fija de 30 días del endpoint, así que la tarjeta lo declara en vez de
+  // fingir que obedece al selector, y el delta va en unidades, no en puntos.
+  $("#metric-views").textContent = formatCompactNumber(metrics.totalViews);
+  setDelta("#delta-views", metrics.viewsDelta || null, {
+    suffix: "",
+    versus: "vs. los 30 días anteriores",
+    missing: "Sin variación de vistas publicada",
+    format: formatCompactNumber,
+  });
   $("#metric-paid").textContent = formatCompactNumber(metrics.paidSubscribers);
   $("#paid-conversion").textContent = formatPercent(derived.paidConversion);
   $("#metric-revenue").textContent = formatCurrency(metrics.monthlyRevenue);
-  setDelta("#delta-subscribers", derived.subscriberGrowth, versusSync);
+  setDelta("#delta-subscribers", derived.subscriberGrowth, versusRange);
   setRateDelta("#delta-open-rate", windows);
-  setDelta("#delta-paid", derived.paidGrowth, versusSync);
+  setDelta("#delta-paid", derived.paidGrowth, versusRange);
   setDelta("#delta-revenue", derived.revenueGrowth, versusSync);
 
   // La barra se escala contra la mediana propia, no contra un 42% inventado.
@@ -291,6 +329,59 @@ function renderMetrics(snapshot, analytics) {
   }
 }
 
+// Tooltip de cursor. El `<title>` nativo de cada punto tarda un segundo en
+// aparecer y no existe en táctil, así que la lectura de un gráfico dependía de
+// acertarle a un círculo de 3 px. Aquí basta acercarse en el eje X.
+//
+// El estado vive en un WeakMap por SVG y los listeners se enganchan UNA vez:
+// los SVG son nodos estáticos del HTML y `replaceChildren` no los sustituye, así
+// que volver a engancharlos en cada render acumularía manejadores.
+const chartHovers = new WeakMap();
+
+function attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel, formatValue }) {
+  const wrap = svg.parentNode;
+  if (!wrap) return;
+  let tooltip = wrap.querySelector?.(".chart-tooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "chart-tooltip";
+    tooltip.hidden = true;
+    wrap.append(tooltip);
+  }
+  const previous = chartHovers.get(svg);
+  chartHovers.set(svg, { points, xOf, primaryLabel, secondaryLabel, formatValue, tooltip });
+  if (previous) return;
+
+  const geometryWidth = () => svg.getBoundingClientRect?.()?.width || 0;
+  svg.addEventListener("pointermove", (event) => {
+    const hover = chartHovers.get(svg);
+    if (!hover?.points?.length) return;
+    const bounds = svg.getBoundingClientRect?.();
+    if (!bounds?.width) return;
+    // El SVG se dibuja en su propio viewBox: hay que pasar el píxel del ratón a
+    // esas coordenadas antes de comparar con las posiciones de los puntos.
+    const scale = (Number(svg.getAttribute("viewBox")?.split(" ")[2]) || bounds.width) / bounds.width;
+    const target = (event.clientX - bounds.left) * scale;
+    let closest = 0;
+    for (let index = 1; index < hover.points.length; index += 1) {
+      if (Math.abs(hover.xOf(index) - target) < Math.abs(hover.xOf(closest) - target)) closest = index;
+    }
+    const point = hover.points[closest];
+    const lines = [axisDate(point.date), `${hover.primaryLabel}: ${hover.formatValue(point.value)}`];
+    if (Number.isFinite(point.secondary)) lines.push(`${hover.secondaryLabel}: ${hover.formatValue(point.secondary)}`);
+    hover.tooltip.textContent = lines.join(" · ");
+    hover.tooltip.hidden = false;
+    const ratio = geometryWidth() ? (hover.xOf(closest) / scale) / geometryWidth() : 0;
+    hover.tooltip.style.left = `${Math.round(ratio * 100)}%`;
+    // Cerca del borde derecho el tooltip se ancla al final para no desbordar.
+    hover.tooltip.style.transform = ratio > 0.7 ? "translateX(-100%)" : "translateX(-50%)";
+  });
+  svg.addEventListener("pointerleave", () => {
+    const hover = chartHovers.get(svg);
+    if (hover) hover.tooltip.hidden = true;
+  });
+}
+
 function chartGeometry(svg, { fallbackHeight, minHeight }) {
   const bounds = svg.getBoundingClientRect?.() || {};
   const width = Math.max(320, Math.round(bounds.width || 820));
@@ -301,7 +392,7 @@ function chartGeometry(svg, { fallbackHeight, minHeight }) {
 }
 
 function drawLineChart(svg, points, gradientId, options = {}) {
-  const { baselineZero = false, secondaryLabel = "", events = [], formatValue = formatCompactNumber } = options;
+  const { baselineZero = false, secondaryLabel = "", primaryLabel = "Valor", events = [], formatValue = formatCompactNumber } = options;
   svg.replaceChildren();
   if (points.length < 2) return false;
   const { width, height, left, right, top, bottom } = chartGeometry(svg, { fallbackHeight: 270, minHeight: 180 });
@@ -401,6 +492,7 @@ function drawLineChart(svg, points, gradientId, options = {}) {
     }
   }
   appendAxisLabels(svg, points, { height, bottom }, x);
+  attachChartTooltip(svg, points, x, { primaryLabel, secondaryLabel: secondaryLabel || "Secundario", formatValue });
   return true;
 }
 
@@ -426,7 +518,7 @@ function appendAxisLabels(svg, points, geometry, x) {
   });
 }
 
-function drawBarChart(svg, points, { secondaryLabel = "" } = {}) {
+function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = "Valor", formatValue = formatCompactNumber } = {}) {
   if (!svg) return false;
   svg.replaceChildren();
   if (!points.length) return false;
@@ -474,7 +566,9 @@ function drawBarChart(svg, points, { secondaryLabel = "" } = {}) {
   peak.setAttribute("class", "chart-label");
   peak.textContent = formatCompactNumber(max);
   svg.append(peak);
-  appendAxisLabels(svg, points, { height, bottom }, (index) => left + index * slot + slot / 2);
+  const xOf = (index) => left + index * slot + slot / 2;
+  appendAxisLabels(svg, points, { height, bottom }, xOf);
+  attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel: secondaryLabel || "Secundario", formatValue });
   return true;
 }
 
@@ -595,7 +689,7 @@ function renderChart(snapshot, analytics) {
     $("#growth-chart"),
     points.map((point) => ({ date: point.date, value: point.subscribers })),
     "area-gradient",
-    { events: eventos },
+    { events: eventos, primaryLabel: "Suscriptores" },
   );
   $("#chart-empty").hidden = drawn;
   if (!drawn) return;
@@ -670,7 +764,7 @@ function renderAudience(snapshot, analytics) {
   }));
 
   const windowed = windowedSubscriberDaily(analytics);
-  const cumulative = drawLineChart($("#audience-chart"), windowed.map((point) => ({ date: point.date, value: point.cumulative })), "audience-gradient");
+  const cumulative = drawLineChart($("#audience-chart"), windowed.map((point) => ({ date: point.date, value: point.cumulative })), "audience-gradient", { primaryLabel: "Suscriptores acumulados" });
   $("#audience-empty").hidden = cumulative;
 
   const note = $("#audience-note");
@@ -687,7 +781,7 @@ function renderAudience(snapshot, analytics) {
 
   const followerHistory = audience?.followers?.history || [];
   const followers = withinRange(followerHistory, (point) => point.date).kept;
-  const followersDrawn = drawLineChart($("#followers-chart"), followers, "audience-gradient");
+  const followersDrawn = drawLineChart($("#followers-chart"), followers, "audience-gradient", { primaryLabel: "Seguidores" });
   $("#followers-empty").hidden = followersDrawn;
   const followerDelta = followers.length > 1 ? followers.at(-1).value - followers[0].value : null;
   $("#followers-change").textContent = followerDelta === null
@@ -729,32 +823,24 @@ function renderComposition(analytics) {
   ], "Substack no devolvió la composición de la suscripción.");
 }
 
-// Distribución de actividad (rating 0-5 de Substack agregado en tres tramos):
-// mejor señal de salud de la lista que el total a secas.
-function renderEngagement(analytics) {
-  const timeline = analytics?.audience?.timeline;
-  const engagement = timeline?.engagement || {};
-  const segments = [
-    ["alta", "Actividad alta", engagement.alta || 0],
-    ["baja", "Actividad baja", engagement.baja || 0],
-    ["inactiva", "Inactivos", engagement.inactiva || 0],
-  ];
-  const total = segments.reduce((sum, [, , value]) => sum + value, 0);
-  const bar = $("#engagement-bar");
-  const legend = $("#engagement-legend");
-  const note = $("#engagement-note");
+// Barra apilada + leyenda. Un cero SÍ se pinta en la leyenda (es una medición),
+// pero no ocupa ancho en la barra. Sin ningún valor el bloque entero desaparece
+// en vez de dibujar una barra vacía que parecería un reparto medido.
+// `segments`: [claveDeColor, etiqueta en español, valor].
+function renderStackedBar(bar, legend, segments, emptyCopy) {
+  const total = segments.reduce((sum, [, , value]) => sum + safeValue(value), 0);
   if (!total) {
     bar.hidden = true;
     bar.replaceChildren();
-    note.hidden = true;
-    return emptyMessage(legend, "Substack no devolvió la puntuación de actividad.", "coverage-empty");
+    emptyMessage(legend, emptyCopy, "coverage-empty");
+    return false;
   }
   bar.hidden = false;
-  bar.replaceChildren(...segments.map(([key, label, value]) => {
+  bar.replaceChildren(...segments.filter(([, , value]) => safeValue(value) > 0).map(([key, label, value]) => {
     const segment = document.createElement("i");
     segment.className = `is-${key}`;
-    segment.style.width = `${(value / total) * 100}%`;
-    segment.title = `${label}: ${formatCompactNumber(value)} (${formatPercent((value / total) * 100)})`;
+    segment.style.width = `${(safeValue(value) / total) * 100}%`;
+    segment.title = `${label}: ${formatCompactNumber(value)} (${formatPercent((safeValue(value) / total) * 100)})`;
     return segment;
   }));
   legend.replaceChildren(...segments.map(([, label, value]) => {
@@ -764,7 +850,23 @@ function renderEngagement(analytics) {
     item.append(name, number);
     return item;
   }));
-  if (timeline?.partial) {
+  return true;
+}
+
+const safeValue = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+
+// Distribución de actividad (rating 0-5 de Substack agregado en tres tramos):
+// mejor señal de salud de la lista que el total a secas.
+function renderEngagement(analytics) {
+  const timeline = analytics?.audience?.timeline;
+  const engagement = timeline?.engagement || {};
+  const note = $("#engagement-note");
+  const drawn = renderStackedBar($("#engagement-bar"), $("#engagement-legend"), [
+    ["alta", "Actividad alta", engagement.alta || 0],
+    ["baja", "Actividad baja", engagement.baja || 0],
+    ["inactiva", "Inactivos", engagement.inactiva || 0],
+  ], "Substack no devolvió la puntuación de actividad.");
+  if (drawn && timeline?.partial) {
     note.textContent = `Calculado sobre ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} suscriptores: Substack pagina de más reciente a más antiguo.`;
     note.hidden = false;
   } else note.hidden = true;
@@ -784,7 +886,7 @@ function renderRetention(container, retention, label) {
   heading.className = "retention-label";
   heading.textContent = label;
   container.append(heading);
-  const isFraction = rates.every((row) => row.rate <= 1);
+  const isFraction = isFractionScale(rates.map((row) => row.rate));
   for (const rate of rates) {
     const row = document.createElement("div");
     const month = document.createElement("span"); month.textContent = `${rate.month} ${rate.month === 1 ? "mes" : "meses"}`;
@@ -792,6 +894,60 @@ function renderRetention(container, retention, label) {
     row.append(month, value);
     container.append(row);
   }
+  renderCohorts(container, retention?.cohorts || []);
+}
+
+// Matriz cohorte × mes. `normalizeRetention` la guardaba desde el principio y
+// nadie la pintaba: solo se veían las tasas medias. Con una sola cohorte no hay
+// comparación que hacer, así que no se dibuja. La unidad se decide sobre TODAS
+// las celdas juntas, igual que las tasas medias.
+function renderCohorts(container, cohorts) {
+  const withPoints = cohorts.filter((cohort) => cohort.points?.length);
+  if (withPoints.length < 2) return;
+  const allRates = withPoints.flatMap((cohort) => cohort.points.map((point) => point.rate));
+  const isFraction = isFractionScale(allRates);
+  const asPercent = (rate) => (isFraction ? rate * 100 : rate);
+  const months = [...new Set(withPoints.flatMap((cohort) => cohort.points.map((point) => point.month)))]
+    .sort((a, b) => a - b)
+    .slice(0, 12);
+
+  const heading = document.createElement("p");
+  heading.className = "retention-label";
+  heading.textContent = "Por cohorte de alta";
+  const grid = document.createElement("div");
+  grid.className = "cohort-grid";
+  grid.style.gridTemplateColumns = `auto repeat(${months.length}, 1fr)`;
+
+  const corner = document.createElement("small");
+  corner.textContent = "Alta";
+  grid.append(corner);
+  for (const month of months) {
+    const label = document.createElement("small");
+    label.textContent = `M${month}`;
+    grid.append(label);
+  }
+  for (const cohort of withPoints.slice(-12)) {
+    const name = document.createElement("small");
+    name.className = "cohort-name";
+    name.textContent = cohort.cohort;
+    grid.append(name);
+    const byMonth = new Map(cohort.points.map((point) => [point.month, point.rate]));
+    for (const month of months) {
+      const cell = document.createElement("i");
+      cell.className = "cohort-cell";
+      const rate = byMonth.get(month);
+      // Un mes sin medición no es un 0%: queda vacío y lo dice el tooltip.
+      if (rate === undefined) {
+        cell.classList.add("is-empty");
+        cell.title = `${cohort.cohort} · mes ${month} · sin dato`;
+      } else {
+        cell.style.opacity = String(0.2 + Math.min(1, asPercent(rate) / 100) * 0.8);
+        cell.title = `${cohort.cohort} · mes ${month} · ${formatPercent(asPercent(rate))}`;
+      }
+      grid.append(cell);
+    }
+  }
+  container.append(heading, grid);
 }
 
 function renderSourcesTable(analytics) {
@@ -967,7 +1123,7 @@ function renderChurn(snapshot, analytics) {
   const dibujado = drawBarChart(
     $("#churn-chart"),
     serieContinua.map((point) => ({ date: point.date, value: point.altas, secondary: point.bajas })),
-    { secondaryLabel: "bajas" },
+    { primaryLabel: "Altas", secondaryLabel: "Bajas" },
   );
   $("#churn-empty").hidden = dibujado;
   $("#churn-basis").textContent = growthDaily.length
@@ -997,12 +1153,28 @@ function renderPaidChurn(analytics) {
   const drawn = drawBarChart(
     $("#paid-churn-chart"),
     serie.map((point) => ({ date: point.date, value: point.new, secondary: point.losses })),
-    { secondaryLabel: "bajas" },
+    { primaryLabel: "Altas de pago", secondaryLabel: "Bajas de pago" },
   );
   $("#paid-churn-empty").hidden = drawn;
 }
 
-function renderCoverage(analytics) {
+// Una fila de Cobertura. `records` solo se pinta cuando hay algo que contar.
+function coverageRow({ label, meta = "", status, statusCopy, title = "" }) {
+  const row = document.createElement("div");
+  row.className = `coverage-item is-${status}`;
+  const name = document.createElement("span");
+  name.textContent = label;
+  const detail = document.createElement("span");
+  detail.className = "coverage-records";
+  detail.textContent = meta;
+  const state = document.createElement("strong");
+  state.textContent = statusCopy;
+  state.title = title;
+  row.append(name, detail, state);
+  return row;
+}
+
+function renderCoverage(analytics, snapshot) {
   const coverage = analytics?.coverage || [];
   const ready = coverage.filter((source) => source.status === "ready").length;
   $("#coverage-ready").textContent = formatCompactNumber(ready);
@@ -1013,20 +1185,77 @@ function renderCoverage(analytics) {
 
   const list = $("#coverage-list");
   list.replaceChildren();
-  if (!coverage.length) return emptyMessage(list, "Sincroniza de nuevo para comprobar las fuentes ampliadas.", "coverage-empty");
+
+  // Cobertura del SNAPSHOT CENTRAL, que hasta ahora no aparecía: el detalle por
+  // publicación y los cuatro estados de la cola de `note_stats` ya se calculan
+  // en cada sync y solo se veían nota a nota en la tabla.
+  const summary = snapshot?.notesSummary;
+  const campaigns = snapshot?.campaigns || [];
+  if (campaigns.length || summary?.total) {
+    const heading = document.createElement("p");
+    heading.className = "retention-label";
+    heading.textContent = "Snapshot principal";
+    list.append(heading);
+    if (campaigns.length) {
+      const conDetalle = campaigns.filter((campaign) => campaign.detailAvailable).length;
+      list.append(coverageRow({
+        label: "Detalle por publicación",
+        meta: `${conDetalle}/${campaigns.length} publicaciones`,
+        status: conDetalle === campaigns.length ? "ready" : "pending",
+        statusCopy: conDetalle === campaigns.length ? "Completo" : "Parcial",
+        title: "Se refrescan las 12 más recientes y las que aún no tienen métricas.",
+      }));
+    }
+    if (summary?.total) {
+      // Los cuatro estados tienen copy distinto porque significan cosas
+      // distintas: "aplazada por el límite" no es "Substack no las da".
+      const partes = [
+        `${summary.detailAvailable} con datos`,
+        summary.detailPending ? `${summary.detailPending} en proceso` : "",
+        summary.detailUnavailable ? `${summary.detailUnavailable} sin datos` : "",
+      ].filter(Boolean);
+      list.append(coverageRow({
+        label: "Estadísticas por nota",
+        meta: `${partes.join(" · ")} de ${summary.total}`,
+        status: summary.statsThrottled || summary.detailUnavailable ? "pending" : summary.detailAvailable ? "ready" : "unavailable",
+        statusCopy: summary.statsThrottled ? "Aplazado" : summary.detailAvailable === summary.total ? "Completo" : "Parcial",
+        title: summary.statsThrottled ? NOTE_STATE_COPY.throttled : "",
+      }));
+    }
+  }
+
+  // Progreso en curso: si el service worker sigue en la fase de detalle, esta
+  // vista es el sitio donde mirarlo.
+  if (state.progress && state.progress.phase !== "done") {
+    const { done = 0, total = 0 } = state.progress.detail || {};
+    list.append(coverageRow({
+      label: "Sincronización en curso",
+      meta: total > 0 ? `${state.progress.step} ${done}/${total}` : state.progress.step,
+      status: state.progress.phase === "error" ? "unavailable" : "pending",
+      statusCopy: state.progress.phase === "error" ? "Interrumpida" : "En marcha",
+      title: state.progress.error || "",
+    }));
+  }
+
+  if (!coverage.length) {
+    const empty = document.createElement("p");
+    empty.className = "coverage-empty";
+    empty.textContent = "Sincroniza de nuevo para comprobar las fuentes ampliadas.";
+    list.append(empty);
+    return;
+  }
+  const heading = document.createElement("p");
+  heading.className = "retention-label";
+  heading.textContent = "Fuentes ampliadas";
+  list.append(heading);
   coverage.forEach((source) => {
-    const row = document.createElement("div");
-    row.className = `coverage-item is-${source.status}`;
-    const label = document.createElement("span");
-    label.textContent = source.label;
-    const meta = document.createElement("span");
-    meta.className = "coverage-records";
-    meta.textContent = source.status === "ready" ? `${formatCompactNumber(source.records || 0)} registros` : "";
-    const status = document.createElement("strong");
-    status.textContent = source.status === "ready" ? "Disponible" : "No disponible";
-    status.title = source.error || "";
-    row.append(label, meta, status);
-    list.append(row);
+    list.append(coverageRow({
+      label: source.label,
+      meta: source.status === "ready" ? `${formatCompactNumber(source.records || 0)} registros` : "",
+      status: source.status,
+      statusCopy: source.status === "ready" ? "Disponible" : "No disponible",
+      title: source.error || "",
+    }));
   });
 }
 
@@ -1228,6 +1457,8 @@ function renderPostRates(campaigns, ownMedian) {
     .sort((a, b) => a.date.localeCompare(b.date));
   const drawn = drawLineChart($("#posts-rate-chart"), points, "rates-gradient", {
     baselineZero: true,
+    primaryLabel: "Apertura",
+    secondaryLabel: "CTR",
     formatValue: (value) => formatPercent(value),
   });
   $("#posts-rate-empty").hidden = drawn;
@@ -1266,7 +1497,54 @@ function renderNotesOverview(snapshot) {
     ["#notes-comments", analytics.total.replies],
     ["#notes-restacks", analytics.total.restacks],
     ["#notes-impressions", analytics.total.impressions],
+    // Dos señales de intención que Substack ya devolvía y se sumaban solo al
+    // total: un clic a enlace o una visita al perfil valen más que un like.
+    ["#notes-profile-visits", analytics.total.profileVisits],
+    ["#notes-link-clicks", analytics.total.linkClicks],
   ].forEach(([selector, value]) => { $(selector).textContent = formatCompactNumber(value); });
+  renderNotesReach(analytics);
+}
+
+// Etiquetas en español escritas AQUÍ. Las claves de `note_stats` son las de la
+// API ("Profile page", "Unconnected"): iterarlas colaría inglés crudo en una
+// interfaz en español, que es el fallo que la lista blanca de rejillas evitó.
+const NOTE_SURFACE_LABELS = [
+  ["s1", "Feed", "Feed"],
+  ["s2", "Notifications", "Notificaciones"],
+  ["s3", "Profile page", "Perfil"],
+  ["s4", "Permalinks", "Enlaces directos"],
+  ["s5", "Notes", "Pestaña Notas"],
+  ["s6", "Search", "Búsqueda"],
+  ["s7", "Other", "Otros"],
+];
+const NOTE_AUDIENCE_LABELS = [
+  ["alta", "Subscribers", "Suscriptores"],
+  ["baja", "Followers", "Seguidores"],
+  ["inactiva", "Unconnected", "Sin conexión"],
+];
+
+// Desgloses que `note_stats` sí devuelve y nadie pintaba: por dónde llega el
+// alcance y a quién. "Sin conexión" es el dato que dice si sales de tu burbuja.
+function renderNotesReach(analytics) {
+  const surfaces = renderStackedBar(
+    $("#notes-surfaces-bar"),
+    $("#notes-surfaces-legend"),
+    NOTE_SURFACE_LABELS.map(([key, apiKey, label]) => [key, label, analytics.surfaces?.[apiKey] || 0]),
+    "Ninguna nota del periodo tiene desglose de superficies.",
+  );
+  const audience = renderStackedBar(
+    $("#notes-audience-bar"),
+    $("#notes-audience-legend"),
+    NOTE_AUDIENCE_LABELS.map(([key, apiKey, label]) => [key, label, analytics.audience?.[apiKey] || 0]),
+    "Ninguna nota del periodo tiene desglose de audiencia.",
+  );
+  const note = $("#notes-reach-note");
+  // Estos desgloses solo existen en las notas con detalle: hay que decir sobre
+  // cuántas de cuántas se está sumando, no dar el total como si fuera de todas.
+  if ((surfaces || audience) && analytics.ranked.length) {
+    note.textContent = `Sumado sobre ${analytics.detailedCount} de ${analytics.ranked.length} notas: las que no tienen estadísticas quedan fuera, no cuentan como cero.`;
+    note.hidden = false;
+  } else note.hidden = true;
 }
 
 function renderCadenceTable(content) {
@@ -1313,6 +1591,7 @@ function renderAttribution(content) {
   const drawn = drawBarChart(
     $("#attribution-chart"),
     serie.map((point) => ({ date: point.date, value: point.freeSubscribers })),
+    { primaryLabel: "Altas atribuidas" },
   );
   $("#attribution-empty").hidden = drawn;
   $("#attribution-coverage").textContent = attribution && attribution.totalNotes
@@ -1414,7 +1693,7 @@ const VIEW_RENDERERS = {
     renderNotesOverview(snapshot); renderCadenceTable(rangedContent); renderAttribution(rangedContent); renderNotesTable(snapshot);
   },
   publicaciones: (snapshot) => { renderCampaigns(snapshot); },
-  cobertura: () => renderCoverage(state.analytics),
+  cobertura: (snapshot) => renderCoverage(state.analytics, snapshot),
 };
 
 function syncRangeButtons() {
@@ -1438,7 +1717,11 @@ function setView(view) {
 
 function renderDashboard() {
   if (!state.snapshot) return;
-  const snapshot = normalizeSnapshot(state.snapshot);
+  // `state.snapshot` ya se guarda normalizado en cada punto de entrada (arranque,
+  // sync y `storage.onChanged`). Volver a normalizarlo aquí recorría campañas y
+  // notas otra vez en cada clic de rango, y los seis helpers de abajo lo
+  // repetían por su cuenta.
+  const snapshot = state.snapshot;
   // El análisis de contenido lo calcula solo la vista Notas, con su rango.
   // Calcularlo aquí para todas las vistas era trabajo doble sin consumidor.
   $("#source-name").textContent = snapshot.publication;
@@ -1539,6 +1822,10 @@ export async function runCapture({ target, destination, label = "" }) {
   }
 }
 
+// La sincronización responde al terminar la fase rápida: el dashboard pinta ya
+// y el detalle por publicación y por nota sigue en el service worker. El
+// resultado de esa segunda fase llega por `chrome.storage.onChanged`, no
+// esperando aquí, porque puede tardar minutos con un historial largo.
 async function sync() {
   const button = $("#sync-button");
   button.disabled = true;
@@ -1550,13 +1837,72 @@ async function sync() {
     state.connection = response.connection;
     state.analytics = response.analytics || null;
     renderDashboard();
-    showToast("Datos actualizados desde Substack.");
+    if (!response.detailPending) showToast("Datos actualizados desde Substack.");
   } catch (error) {
     showToast(error.message || "No se pudo sincronizar.");
-  } finally {
+    button.disabled = false;
+    button.classList.remove("is-loading");
+    return;
+  }
+  // Con detalle pendiente, el botón lo reactiva `renderProgress` al ver la fase
+  // final: reactivarlo aquí invitaría a lanzar otra sincronización encima.
+  if (!state.progress || state.progress.phase === "done" || state.progress.phase === "error") {
     button.disabled = false;
     button.classList.remove("is-loading");
   }
+}
+
+const PROGRESS_ACTIVE = new Set(["core", "detail"]);
+
+// Estado visible de la sincronización. Sin esto, una primera carga con cientos
+// de notas dejaba el icono girando sin decir en qué iba ni cuánto quedaba.
+function renderProgress() {
+  const progress = state.progress;
+  const label = $("#sync-progress");
+  const button = $("#sync-button");
+  const active = PROGRESS_ACTIVE.has(progress?.phase);
+  button.disabled = active;
+  button.classList.toggle("is-loading", active);
+  $("#sync-label").textContent = active ? "Sincronizando" : "Sincronizar";
+  if (!progress || progress.phase === "done") {
+    label.hidden = true;
+    label.textContent = "";
+    label.classList.remove("is-error");
+    return;
+  }
+  label.hidden = false;
+  label.classList.toggle("is-error", progress.phase === "error");
+  if (progress.phase === "error") {
+    label.textContent = progress.error || "La sincronización no terminó.";
+    return;
+  }
+  const { done = 0, total = 0 } = progress.detail || {};
+  // El contador solo aparece cuando hay un total real: "0/0" no informa de nada.
+  label.textContent = total > 0 ? `${progress.step} ${done}/${total}` : progress.step;
+}
+
+// Actualización en vivo: la fase de detalle escribe el snapshot desde el service
+// worker, así que el dashboard tiene que repintarse sin que el usuario toque
+// nada. Se re-renderiza la vista activa; los nodos con listeners no se recrean.
+function onStorageChanged(changes, area) {
+  if (area && area !== "local") return;
+  let repintar = false;
+  if (changes?.[SNAPSHOT_KEY]?.newValue) {
+    state.snapshot = normalizeSnapshot(changes[SNAPSHOT_KEY].newValue);
+    repintar = true;
+  }
+  if (changes?.[ANALYTICS_KEY]?.newValue) {
+    state.analytics = changes[ANALYTICS_KEY].newValue;
+    repintar = true;
+  }
+  if (changes?.[PROGRESS_KEY]) {
+    const anterior = state.progress?.phase;
+    state.progress = changes[PROGRESS_KEY].newValue || null;
+    renderProgress();
+    if (anterior === "detail" && state.progress?.phase === "done") showToast("Datos actualizados desde Substack.");
+    if (state.progress?.phase === "error" && anterior) showToast(state.progress.error || "La sincronización no terminó.");
+  }
+  if (repintar && state.snapshot) renderDashboard();
 }
 
 function downloadCsv(rows, filename) {
@@ -1585,14 +1931,14 @@ function exportCsv() {
     ["Vistas", "views"], ["Reacciones", "reactions"], ["Comentarios", "comments"],
     ["Shares", "shares"], ["Altas", "signups"], ["Altas D1", "signupsWithin1Day"],
   ];
-  const campaigns = withCtor(normalizeSnapshot(state.snapshot).campaigns);
+  const campaigns = withCtor(state.snapshot.campaigns);
   const rows = [CSV_COLUMNS.map(([label]) => label), ...campaigns.map((item) => CSV_COLUMNS.map(([, key]) => item[key]))];
   downloadCsv(rows, `plotstack-${state.connection?.publication?.subdomain || "metricas"}.csv`);
 }
 
 // Ausencia = celda vacía, nunca un 0: una nota sin detalle no midió nada.
 function exportNotesCsv() {
-  const notes = normalizeSnapshot(state.snapshot).notes;
+  const notes = state.snapshot.notes;
   if (!notes.length) return showToast("No hay notas para exportar.");
   const header = ["Nota", "Fecha", "Likes", "Comentarios", "Restacks", "Interacciones", "Impresiones", "Ratio interacción (%)", "Altas gratuitas", "Estado detalle"];
   const rows = [header, ...notes.map((note) => {
@@ -1697,15 +2043,15 @@ function bindEvents() {
   });
   $("#notes-search").addEventListener("input", (event) => {
     state.notesSearch = event.target.value;
-    renderNotesTable(normalizeSnapshot(state.snapshot));
+    renderNotesTable(state.snapshot);
   });
   $("#notes-sort").addEventListener("change", (event) => {
     state.notesSort = event.target.value;
-    renderNotesTable(normalizeSnapshot(state.snapshot));
+    renderNotesTable(state.snapshot);
   });
   $("#posts-search").addEventListener("input", (event) => {
     state.postsSearch = event.target.value;
-    renderCampaigns(normalizeSnapshot(state.snapshot));
+    renderCampaigns(state.snapshot);
   });
   $$("[data-days]").forEach((button) => button.addEventListener("click", () => {
     state.days = button.dataset.days === "all" ? ALL_TIME : Number(button.dataset.days);
@@ -1736,14 +2082,19 @@ async function initialize() {
   else if (storedRange && Number.isFinite(Number(storedRange))) state.days = Number(storedRange);
   bindEvents();
   syncRangeButtons();
-  const stored = await chrome.storage.local.get([SNAPSHOT_KEY, CONNECTION_KEY, ANALYTICS_KEY]);
+  // El service worker sigue sincronizando aunque el dashboard estuviera
+  // cerrado, así que hay que engancharse a sus cambios antes de leer nada.
+  chrome.storage.onChanged?.addListener(onStorageChanged);
+  const stored = await chrome.storage.local.get([SNAPSHOT_KEY, CONNECTION_KEY, ANALYTICS_KEY, PROGRESS_KEY]);
   if (stored[SNAPSHOT_KEY] && stored[CONNECTION_KEY]) {
     state.snapshot = normalizeSnapshot(stored[SNAPSHOT_KEY]);
     state.connection = stored[CONNECTION_KEY];
     state.analytics = stored[ANALYTICS_KEY] || null;
+    state.progress = stored[PROGRESS_KEY] || null;
     $("#onboarding").hidden = true;
     $("#dashboard-shell").hidden = false;
     setView(state.view);
+    renderProgress();
   } else showOnboarding();
 }
 

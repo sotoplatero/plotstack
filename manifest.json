@@ -6,7 +6,7 @@
   "description": "Tus métricas de newsletter, ordenadas en un solo dashboard local.",
   "homepage_url": "https://github.com/sotoplatero/plotstack",
   "minimum_chrome_version": "111",
-  "permissions": ["storage", "tabs", "cookies", "downloads", "clipboardWrite"],
+  "permissions": ["storage", "tabs", "cookies", "downloads", "clipboardWrite", "alarms"],
   "host_permissions": ["https://substack.com/*", "https://*.substack.com/*"],
   "background": {
     "service_worker": "src/background.js",

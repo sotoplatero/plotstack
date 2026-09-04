@@ -18,9 +18,30 @@ const cleanMetricSet = (metrics = {}) => ({
   followers: Math.max(0, Math.round(safeNumber(metrics.followers))),
   appSubscribers: Math.max(0, Math.round(safeNumber(metrics.appSubscribers))),
   appSubscribersLast30Days: Math.max(0, Math.round(safeNumber(metrics.appSubscribersLast30Days))),
-  // Puede ser negativo: es una variación, no un contador.
+  // Pueden ser negativos: son variaciones, no contadores.
   openRateDiff: safeNumber(metrics.openRateDiff),
+  viewsDelta: safeNumber(metrics.viewsDelta),
 });
+
+// Rangos con base de comparación propia. Solo estos tres: son los que
+// `summary-v2?range=N` sabe responder. Un rango ausente significa que Substack
+// no dio ese arranque, no que valga cero.
+export const COMPARABLE_RANGES = ["7", "30", "90"];
+
+const cleanPreviousByRange = (input = {}) => {
+  const clean = {};
+  for (const days of COMPARABLE_RANGES) {
+    const row = input?.[days];
+    if (!row) continue;
+    const subscribers = Math.max(0, Math.round(safeNumber(row.subscribers)));
+    if (subscribers <= 0) continue;
+    clean[days] = {
+      subscribers,
+      paidSubscribers: Math.max(0, Math.round(safeNumber(row.paidSubscribers))),
+    };
+  }
+  return clean;
+};
 
 const cleanNotesSummary = (summary = {}) => ({
   total: Math.max(0, Math.round(safeNumber(summary.total))),
@@ -159,6 +180,7 @@ export function normalizeSnapshot(input = {}) {
     sourceUrl: String(input.sourceUrl || ""),
     metrics: cleanMetricSet(input.metrics),
     previous: cleanMetricSet(input.previous),
+    previousByRange: cleanPreviousByRange(input.previousByRange),
     trend,
     campaigns,
     notesSummary: cleanNotesSummary(input.notesSummary),
@@ -300,6 +322,16 @@ export function getRateWindows(snapshot, days = 30, now = Date.now()) {
 // Fecha civil compartida: "2026-06-10" es un día, no la medianoche UTC. Con
 // `new Date("2026-06-10")` directo, en zonas negativas el día retrocede uno.
 export const parseDay = (value) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? `${value}T00:00:00` : value);
+
+// La unidad de una serie de tasas se decide sobre TODAS sus tasas juntas, nunca
+// por fila: con la heurística por fila, un 1% real (rate = 1 en escala
+// porcentual) se pintaba como 100%. Si todas las finitas son ≤ 1, es fracción.
+// Vive aquí, en la capa compartida, para que el dashboard no tenga que importar
+// un proveedor de red solo por una decisión de formato.
+export const isFractionScale = (values) => {
+  const finite = values.filter((value) => Number.isFinite(value));
+  return finite.length > 0 && finite.every((value) => value <= 1);
+};
 
 // Sin denominador no hay cociente: `null`, nunca Infinity/NaN (se corrompen en
 // chrome.storage y se renderizarían como "∞").
@@ -452,15 +484,42 @@ export function getTrendSeries(snapshot, metric = "subscribers", days = 30) {
   }));
 }
 
-export function getDerivedMetrics(snapshot) {
+// Base de comparación para el rango activo. `range` = arranque que Substack da
+// para esa ventana; `history` = el punto más antiguo del histórico local (única
+// base posible con "Todo"); `none` = no hay con qué comparar, y entonces los
+// deltas son `null` en vez de un porcentaje inventado.
+export function getComparisonBase(snapshot, days = 30) {
+  const { previousByRange, previous, trend } = normalizeSnapshot(snapshot);
+  if (Number.isFinite(days)) {
+    // `previous` ES el arranque de 30 días, así que sirve de base para ese
+    // rango: mantiene el delta vivo en snapshots guardados antes de que
+    // existiera `previousByRange`, sin extenderlo a 7D ni 90D, donde sería la
+    // ventana equivocada con la etiqueta correcta.
+    const row = previousByRange[String(days)]
+      || (days === 30 && previous.subscribers > 0 ? { subscribers: previous.subscribers, paidSubscribers: previous.paidSubscribers } : null);
+    return row
+      ? { basis: "range", days, sinceDate: "", subscribers: row.subscribers, paidSubscribers: row.paidSubscribers }
+      : { basis: "none", days, sinceDate: "", subscribers: 0, paidSubscribers: 0 };
+  }
+  // `trend` viene ordenado ascendente. El último punto es la captura de hoy: no
+  // sirve como base de sí mismo.
+  const oldest = trend.length > 1 ? trend[0] : null;
+  return oldest
+    ? { basis: "history", days, sinceDate: oldest.date, subscribers: oldest.subscribers, paidSubscribers: oldest.paidSubscribers }
+    : { basis: "none", days, sinceDate: "", subscribers: 0, paidSubscribers: 0 };
+}
+
+export function getDerivedMetrics(snapshot, days = 30) {
   const { metrics, previous } = normalizeSnapshot(snapshot);
   // `null` cuando no hay valor anterior: fabricar un +100% sobre un cero previo
   // es inventarse el dato. El renderer dice "sin comparación", no un número.
   const change = (current, prior) => (prior > 0 ? ((current - prior) / prior) * 100 : null);
+  const base = getComparisonBase(snapshot, days);
 
   return {
-    subscriberGrowth: change(metrics.subscribers, previous.subscribers),
-    paidGrowth: change(metrics.paidSubscribers, previous.paidSubscribers),
+    comparison: base,
+    subscriberGrowth: change(metrics.subscribers, base.subscribers),
+    paidGrowth: change(metrics.paidSubscribers, base.paidSubscribers),
     // Substack ya publica la variación en `summary.openRateDiff`. Derivarla de
     // `previous.openRate` daba siempre 0, porque ese campo era una copia de
     // `metrics.openRate`. Si el diff no llega, se cae a la resta.

@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectNoteStats, noteStatsKey, getAllProfileFeedItems, getAllPublishedPosts, getProfile, getPublicationSnapshot, mapCampaign, mapNote, normalizeNoteStats, NOTE_STATS_MAX_ATTEMPTS, resolveNoteStats } from "../src/providers/substack-api.js";
+import { collectNoteStats, configureRequestLimiter, enrichSnapshot, getCoreSnapshot, noteStatsKey, getAllProfileFeedItems, getAllPublishedPosts, getProfile, getPublicationSnapshot, mapCampaign, mapNote, normalizeNoteStats, NOTE_STATS_MAX_ATTEMPTS, requestJson, resolveNoteStats } from "../src/providers/substack-api.js";
+
+// Los tests no esperan el hueco entre peticiones del limitador: sin esto cada
+// suite pagaría 60 ms por llamada.
+configureRequestLimiter({ concurrency: 4, gapMs: 0 });
 
 const jsonResponse = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
@@ -73,6 +77,12 @@ test("getPublicationSnapshot maps summary, range, and campaign statistics", asyn
     assert.equal(snapshot.notes[0].stats.results.freeSubscribers, 13);
     assert.ok(snapshot.trend.length >= 3);
     assert.equal(snapshot.trend.at(-1).followers, 321);
+    // Una base por rango, para que el delta compare contra la ventana que el
+    // selector marca y no siempre contra hace 30 días.
+    assert.deepEqual(Object.keys(snapshot.previousByRange).sort(), ["30", "7", "90"]);
+    assert.equal(snapshot.previousByRange["7"].subscribers, 1170);
+    assert.equal(snapshot.previousByRange["90"].subscribers, 900);
+    assert.equal(snapshot.previousByRange["30"].paidSubscribers, 50);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -116,11 +126,23 @@ test("mapCampaign preserves the full per-post analytics shape", () => {
   const campaign = mapCampaign({ id: 12, title: "Edición", stats: { delivered: 100, opened: 40, open_rate: 0.4, clicked: 5, click_through_rate: 0.125, views: 130, shares: 3, signups: 2, unsubscribes_within_1_day: 1 } }, 0);
   assert.equal(campaign.delivered, 100);
   assert.equal(campaign.openRate, 40);
-  assert.equal(campaign.clickRate, 12.5);
+  // CTR = clics / ENTREGADOS, el mismo denominador que `weightedRate` y
+  // `getRateWindows`. El `click_through_rate: 0.125` de este payload es
+  // 5/40, o sea CTOR: tomarlo tal cual daba 12,5% por envío contra un 5%
+  // agregado. El cociente manda; la clave de tasa es solo respaldo.
+  assert.equal(campaign.clickRate, 5);
   assert.equal(campaign.views, 130);
   assert.equal(campaign.signups, 2);
   assert.equal(campaign.unsubscribesWithin1Day, 1);
   assert.equal(campaign.detailAvailable, true);
+});
+
+test("rateFrom usa la tasa de la API tal cual y no multiplica por cien un 0,8%", () => {
+  // Sin entregados no hay cociente, así que manda la clave de tasa. Substack la
+  // da en porcentaje: un 0,8% real se convertía en 80% con la heurística "≤1".
+  const campaign = mapCampaign({ id: 3, title: "Aviso", open_rate: 0.8, click_through_rate: 0.2 }, 0);
+  assert.equal(campaign.openRate, 0.8);
+  assert.equal(campaign.clickRate, 0.2);
 });
 
 test("mapNote reads the public Notes engagement shape", () => {
@@ -293,6 +315,150 @@ test("getPublicationSnapshot conserva los seguidores si el perfil no los trae", 
       { metrics: { followers: 150 } },
     );
     assert.equal(conFresco.metrics.followers, 162, "el valor fresco manda");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("el limitador global mantiene un tope de peticiones en vuelo", async () => {
+  const originalFetch = globalThis.fetch;
+  configureRequestLimiter({ concurrency: 4, gapMs: 0 });
+  let enVuelo = 0;
+  let pico = 0;
+  globalThis.fetch = async () => {
+    enVuelo += 1;
+    pico = Math.max(pico, enVuelo);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    enVuelo -= 1;
+    return jsonResponse({ ok: true });
+  };
+  try {
+    await Promise.all(Array.from({ length: 20 }, (_, index) => requestJson(`https://substack.com/api/v1/x/${index}`)));
+    assert.ok(pico <= 4, `nunca mas de 4 peticiones simultaneas, hubo ${pico}`);
+    assert.ok(pico > 1, "el limitador no debe serializarlo todo");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("el limitador libera la cola aunque una peticion falle", async () => {
+  const originalFetch = globalThis.fetch;
+  configureRequestLimiter({ concurrency: 2, gapMs: 0 });
+  globalThis.fetch = async (url) => (url.endsWith("3") ? jsonResponse({}, 500) : jsonResponse({ ok: true }));
+  try {
+    const resultados = await Promise.allSettled(
+      Array.from({ length: 8 }, (_, index) => requestJson(`https://substack.com/api/v1/x/${index}`)),
+    );
+    assert.equal(resultados.filter((r) => r.status === "rejected").length, 1);
+    assert.equal(resultados.filter((r) => r.status === "fulfilled").length, 7, "un 500 no puede bloquear la cola");
+  } finally {
+    configureRequestLimiter({ concurrency: 4, gapMs: 0 });
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("los paginadores paran cuando una pagina entera ya esta en el snapshot", async () => {
+  const originalFetch = globalThis.fetch;
+  configureRequestLimiter({ concurrency: 4, gapMs: 0 });
+  const pagina = (ids, cursor) => jsonResponse({
+    items: ids.map((id) => ({ type: "comment", entity_key: `c-${id}`, comment: { id, user_id: 7 } })),
+    nextCursor: cursor,
+  });
+  let llamadas = 0;
+  globalThis.fetch = async (url) => {
+    llamadas += 1;
+    if (!url.includes("cursor=")) return pagina([101, 102], "p2");
+    if (url.includes("cursor=p2")) return pagina([201, 202], "p3");
+    return pagina([301, 302], "");
+  };
+  try {
+    // La pagina 2 son notas ya conocidas: lo que queda detras tambien lo esta.
+    const conocidas = await getAllProfileFeedItems(7, { knownIds: new Set(["c-201", "c-202"]) });
+    assert.equal(llamadas, 2, "debe parar tras la primera pagina integramente conocida");
+    assert.equal(conocidas.length, 4);
+
+    llamadas = 0;
+    const completo = await getAllProfileFeedItems(7, { knownIds: new Set(["c-201", "c-202"]), fullRefresh: true });
+    assert.equal(llamadas, 3, "el refresco completo recorre todo el historial");
+    assert.equal(completo.length, 6);
+
+    llamadas = 0;
+    await getAllProfileFeedItems(7, {});
+    assert.equal(llamadas, 3, "sin ids conocidos no hay parada incremental");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("getCoreSnapshot no pide ni un detalle y conserva lo ya medido", async () => {
+  const originalFetch = globalThis.fetch;
+  configureRequestLimiter({ concurrency: 4, gapMs: 0 });
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(url);
+    if (url.includes("summary-v2?range=30")) return jsonResponse({ totalSubscribersEnd: 300, totalSubscribersStart: 250 });
+    if (url.endsWith("/publish-dashboard/summary")) return jsonResponse({ totalEmail: 300, openRate: 41, views: 900, viewsDelta: -120 });
+    if (url.includes("post_management/published")) return jsonResponse({ posts: [{ id: 9, title: "Nueva", post_date: "2026-09-01" }] });
+    return jsonResponse({});
+  };
+  try {
+    const previo = {
+      capturedAt: new Date().toISOString(),
+      campaigns: [{ id: "9", title: "Nueva", delivered: 200, opened: 100, openRate: 50, clicked: 10, detailAvailable: true }],
+      notes: [{ id: "5", body: "Guardada", date: "2026-08-01", stats: { available: true, interactions: { total: 12 } } }],
+    };
+    const { snapshot, context } = await getCoreSnapshot({ name: "Carta", subdomain: "carta", userId: 7 }, previo);
+    assert.equal(urls.some((url) => url.includes("post_management/detail")), false, "la fase rapida no pide detalles");
+    assert.equal(urls.some((url) => url.includes("note_stats")), false);
+    assert.equal(urls.some((url) => url.includes("reader/feed/profile")), false);
+    assert.equal(snapshot.metrics.subscribers, 300);
+    assert.equal(snapshot.metrics.totalViews, 900);
+    assert.equal(snapshot.metrics.viewsDelta, -120, "la variacion de vistas puede ser negativa");
+    assert.equal(snapshot.campaigns[0].openRate, 50, "el detalle anterior se conserva sin pedirlo otra vez");
+    assert.equal(snapshot.notes.length, 1, "las notas guardadas se muestran hasta que el detalle las refresque");
+    assert.equal(snapshot.notesSummary.total, 1);
+    assert.equal(context.rawCampaigns.length, 1, "el contexto lleva las filas crudas para la fase de detalle");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("enrichSnapshot anade detalle y no pierde notas de paginas que no se releyeron", async () => {
+  const originalFetch = globalThis.fetch;
+  configureRequestLimiter({ concurrency: 4, gapMs: 0 });
+  globalThis.fetch = async (url) => {
+    if (url.includes("summary-v2?range=30")) return jsonResponse({ totalSubscribersEnd: 300, totalSubscribersStart: 250 });
+    if (url.endsWith("/publish-dashboard/summary")) return jsonResponse({ totalEmail: 300, openRate: 41 });
+    if (url.includes("post_management/published")) return jsonResponse({ posts: [{ id: 9, title: "Nueva", post_date: "2026-09-01" }] });
+    if (url.includes("post_management/detail/9")) return jsonResponse({ posts: [{ id: 9, stats: { delivered: 400, opened: 200, clicked: 20 } }] });
+    if (url.includes("reader/feed/profile")) {
+      return jsonResponse({ items: [
+        { type: "comment", entity_key: "c-7", comment: { id: 7, user_id: 7, body: "Fresca", date: "2026-09-02", reaction_count: 4 } },
+      ] });
+    }
+    if (url.includes("note_stats/c-7")) {
+      return jsonResponse({ cards: [{ cardId: "interactions", headers: [{ title: "Interactions", value: 30 }] }] });
+    }
+    return jsonResponse({});
+  };
+  try {
+    const publicacion = { name: "Carta", subdomain: "carta", userId: 7, userHandle: "ada" };
+    const previo = {
+      capturedAt: new Date().toISOString(),
+      notes: [{ id: "5", body: "Antigua", date: "2026-08-01", stats: { available: true, interactions: { total: 12 } } }],
+    };
+    const core = await getCoreSnapshot(publicacion, previo);
+    const pasos = [];
+    const snapshot = await enrichSnapshot(core, publicacion, { onProgress: (info) => pasos.push(info.step) });
+    assert.equal(snapshot.campaigns[0].openRate, 50, "el detalle recien pedido manda");
+    assert.equal(snapshot.metrics.clickRate, 5, "el CTR agregado se recalcula con el detalle");
+    assert.deepEqual(snapshot.notes.map((note) => note.id), ["7", "5"], "orden por fecha descendente y sin perder la antigua");
+    assert.equal(snapshot.notes[0].stats.interactions.total, 30);
+    assert.equal(snapshot.notes[1].stats.interactions.total, 12, "una nota que no volvio a aparecer conserva su detalle");
+    assert.ok(
+      pasos.includes("Detalle de publicaciones") && pasos.includes("Estadísticas de notas"),
+      `el progreso tiene que nombrar sus fases: ${pasos.join(", ")}`,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
