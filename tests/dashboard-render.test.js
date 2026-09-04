@@ -331,7 +331,10 @@ test("Notas no pinta ceros donde no hubo medición y muestra la atribución", as
   assert.equal(celdas.at(-1), "—", "altas sin detalle es ausencia");
   assert.ok($$("#attribution-chart .chart-bar").length > 0, "faltan las barras de altas atribuidas a notas");
   assert.match($("#attribution-coverage").textContent, /2 de 3/, "la cobertura declara sobre qué se sostiene la serie");
-  assert.ok($$("#cadence-heatmap .heatmap-row.is-buckets").length >= 7, "la cadencia se agrega por tramos, no por 24 horas");
+  // Calendario estilo GitHub: una celda por día, columnas por semana.
+  assert.ok($$("#cadence-heatmap .calendar-grid").length === 1, "falta el calendario de cadencia");
+  assert.ok($$("#cadence-heatmap .calendar-cell.is-level-4").length >= 1, "algún día tiene que marcar el máximo");
+  assert.ok($$("#cadence-heatmap .calendar-legend").length === 1, "la escala necesita leyenda");
 });
 
 test("Audiencia pinta la actividad de la lista y la composición nace oculta", async () => {
@@ -665,4 +668,50 @@ test("un analytics guardado con el esquema anterior no vacia el panel de adquisi
   listener({ "plotstack.analytics": { newValue: original } }, "local");
   await settle(4);
   assert.equal(/Sincroniza/.test($("#acquisition-period").textContent), false);
+});
+
+test("el listado de notas se pagina de 25 en 25 y se reinicia al buscar", async () => {
+  await arrancar();
+  await verVista("notas");
+  await rango("all");
+  // Con las tres notas del fixture no hay nada que paginar.
+  assert.equal($("#notes-pager").hidden, true);
+
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.snapshot"];
+  const muchas = Array.from({ length: 30 }, (_, index) => ({
+    id: `p${index}`,
+    body: `Nota número ${index}`,
+    date: `2026-08-${String((index % 28) + 1).padStart(2, "0")}T10:00:00Z`,
+    reactions: 30 - index,
+    stats: { available: false },
+  }));
+  listener({ "plotstack.snapshot": { newValue: { ...original, notes: muchas } } }, "local");
+  await settle(4);
+
+  assert.equal($("#notes-pager").hidden, false);
+  assert.equal($$("#notes-table-body tr").length, 25, "primera página: 25 filas");
+  assert.match($("#notes-pager-status").textContent, /1–25 de 30/);
+  assert.equal($("#notes-pager-prev").disabled, true);
+  assert.equal($("#notes-pager-next").disabled, false);
+
+  $("#notes-pager-next").click();
+  await settle(2);
+  assert.equal($$("#notes-table-body tr").length, 5, "segunda página: las 5 restantes");
+  assert.match($("#notes-pager-status").textContent, /26–30 de 30/);
+  assert.equal($("#notes-pager-next").disabled, true);
+
+  // Buscar vuelve a la primera página: seguir en la segunda con un filtro que
+  // deja menos de 25 resultados dejaría la tabla vacía.
+  $("#notes-search").value = "número 2";
+  $("#notes-search").dispatchEvent({ type: "input", target: $("#notes-search") });
+  await settle(2);
+  assert.ok($$("#notes-table-body tr").length >= 1, "la búsqueda no puede dejar la tabla vacía por estar en otra página");
+  assert.equal($("#notes-pager").hidden, true, "con menos de una página el paginador se esconde");
+
+  $("#notes-search").value = "";
+  $("#notes-search").dispatchEvent({ type: "input", target: $("#notes-search") });
+  listener({ "plotstack.snapshot": { newValue: original } }, "local");
+  await settle(4);
+  assert.equal($$("#notes-table-body tr").length, 3, "el fixture queda restaurado");
 });

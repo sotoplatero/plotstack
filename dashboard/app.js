@@ -60,6 +60,7 @@ const state = {
   view: "resumen",
   notesSearch: "",
   notesSort: "interactions",
+  notesPage: 0,
   postsSearch: "",
   postsSort: { key: "date", direction: "desc" },
   sensitive: { paid: false, revenue: false },
@@ -612,55 +613,95 @@ const NOTE_STATE_COPY = {
   ready: "",
 };
 
-const HOUR_BUCKET_ORDER = ["night", "morning", "afternoon", "evening"];
 const HOUR_BUCKET_LABELS = { night: "Madrugada (0-6)", morning: "Mañana (6-12)", afternoon: "Tarde (12-18)", evening: "Noche (18-24)" };
 
 // La cadencia es un recuento, asi que la intensidad codifica notas publicadas.
 // Las interacciones van en el tooltip, y "sin estadisticas" no es "cero".
 // Rejilla 7x4 por tramos: 168 celdas horarias con decenas de notas eran un
 // tablero casi vacío en el que la señal no se veía.
-function renderCadenceHeatmap(container, cadence) {
+const WEEKDAY_ROWS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+// Nivel de intensidad 1-4 sobre el máximo del periodo. Cuatro escalones, como
+// GitHub: con más, los días de una y dos notas se vuelven indistinguibles.
+const calendarLevel = (notes, max) => {
+  if (!notes) return 0;
+  if (max <= 1) return 4;
+  return Math.max(1, Math.ceil((notes / max) * 4));
+};
+
+// Calendario estilo GitHub: columnas por semana, filas por día de la semana, una
+// celda por día. La rejilla por tramos horarios que había antes concentraba la
+// señal pero perdía el "cuándo", que es lo que responde un calendario.
+function renderCadenceCalendar(container, calendar) {
   if (!container) return;
   container.replaceChildren();
-  const buckets = cadence?.buckets || [];
-  if (!buckets.length || !cadence.datedNotes) {
-    return emptyMessage(container, "No hay notas con fecha para construir la cadencia.", "coverage-empty");
+  const weeks = calendar?.weeks || [];
+  if (!weeks.length || !calendar.datedNotes) {
+    return emptyMessage(container, "No hay notas con fecha para construir el calendario.", "coverage-empty");
   }
-  const byKey = new Map(buckets.map((cell) => [`${cell.day}:${cell.bucket}`, cell]));
-  const max = Math.max(1, cadence.maxBucketNotes);
+  const columns = weeks.length;
+  const grid = document.createElement("div");
+  grid.className = "calendar-grid";
+  grid.style.gridTemplateColumns = `34px repeat(${columns}, 1fr)`;
 
-  const header = document.createElement("div");
-  header.className = "heatmap-row is-header is-buckets";
-  header.append(document.createElement("span"));
-  for (const bucket of HOUR_BUCKET_ORDER) {
+  // Fila de meses: una etiqueta donde cambia el mes, alineada a su columna.
+  grid.append(document.createElement("span"));
+  const monthAt = new Map((calendar.months || []).map((entry) => [entry.column, entry.month]));
+  for (let column = 0; column < columns; column += 1) {
     const label = document.createElement("small");
-    label.textContent = HOUR_BUCKET_LABELS[bucket];
-    header.append(label);
+    const month = monthAt.get(column);
+    if (month) label.textContent = MONTH_SHORT[Number(month.slice(5, 7)) - 1];
+    grid.append(label);
   }
-  container.append(header);
 
-  for (const day of WEEK_ORDER) {
-    const row = document.createElement("div");
-    row.className = "heatmap-row is-buckets";
+  for (let weekday = 0; weekday < 7; weekday += 1) {
     const name = document.createElement("span");
-    name.textContent = DAY_NAMES[day];
-    row.append(name);
-    for (const bucket of HOUR_BUCKET_ORDER) {
-      const cell = byKey.get(`${day}:${bucket}`) || { notes: 0, scoredNotes: 0, medianInteractions: null };
+    // Solo lunes, miércoles y viernes rotulados, como GitHub: siete etiquetas
+    // en 11 px de alto se pisan.
+    name.textContent = weekday % 2 === 0 ? WEEKDAY_ROWS[weekday] : "";
+    grid.append(name);
+    for (const week of weeks) {
+      const cell = week.find((day) => day.weekday === weekday);
       const box = document.createElement("i");
-      box.className = "heatmap-cell";
-      if (cell.notes) {
-        box.style.opacity = String(0.22 + (cell.notes / max) * 0.78);
-        box.classList.add("is-filled");
-        const detail = cell.medianInteractions === null
+      box.className = "calendar-cell";
+      if (!cell) {
+        box.classList.add("is-outside");
+        grid.append(box);
+        continue;
+      }
+      box.classList.add(`is-level-${calendarLevel(cell.notes, calendar.maxNotes)}`);
+      const detail = cell.notes
+        ? cell.medianInteractions === null
           ? "sin estadísticas"
-          : `mediana ${decimal(cell.medianInteractions)} interacciones (${cell.scoredNotes}/${cell.notes} con detalle)`;
-        box.title = `${DAY_NAMES[day]} · ${HOUR_BUCKET_LABELS[bucket]} · ${cell.notes} ${cell.notes === 1 ? "nota" : "notas"} · ${detail}`;
-      } else box.title = `${DAY_NAMES[day]} · ${HOUR_BUCKET_LABELS[bucket]} · sin notas`;
-      row.append(box);
+          : `mediana ${decimal(cell.medianInteractions)} interacciones (${cell.scoredNotes}/${cell.notes} con detalle)`
+        : "sin notas";
+      box.title = `${shortDate(cell.date)} · ${cell.notes} ${cell.notes === 1 ? "nota" : "notas"} · ${detail}`;
+      grid.append(box);
     }
-    container.append(row);
   }
+  container.append(grid);
+
+  const legend = document.createElement("div");
+  legend.className = "calendar-legend";
+  const less = document.createElement("small");
+  less.textContent = "Menos";
+  legend.append(less);
+  for (let level = 0; level <= 4; level += 1) {
+    const swatch = document.createElement("i");
+    swatch.className = `calendar-cell is-level-${level}`;
+    legend.append(swatch);
+  }
+  const more = document.createElement("small");
+  more.textContent = "Más";
+  legend.append(more);
+  if (calendar.truncatedWeeks) {
+    const note = document.createElement("small");
+    note.className = "calendar-truncated";
+    note.textContent = `Se muestran las últimas ${weeks.length} semanas; ${calendar.truncatedWeeks} anteriores quedan fuera.`;
+    legend.append(note);
+  }
+  container.append(legend);
 }
 
 // Sin fallback fuera de rango: si el periodo no tiene ≥2 puntos, el gráfico
@@ -1774,7 +1815,7 @@ function renderNotesReach(analytics) {
 }
 
 function renderCadenceTable(content) {
-  renderCadenceHeatmap($("#cadence-heatmap"), content?.cadence);
+  renderCadenceCalendar($("#cadence-heatmap"), content?.calendar);
   const busiest = content?.cadence?.busiestBucket;
   $("#cadence-summary").textContent = busiest
     ? `${DAY_NAMES[busiest.day]} · ${HOUR_BUCKET_LABELS[busiest.bucket]}`
@@ -1828,6 +1869,19 @@ function renderAttribution(content) {
     : "Substack solo atribuye altas a las notas con estadísticas de detalle.";
 }
 
+const NOTES_PAGE_SIZE = 25;
+
+function renderNotesPager(total, totalPages) {
+  const pager = $("#notes-pager");
+  if (!pager) return;
+  pager.hidden = totalPages <= 1;
+  const from = total ? state.notesPage * NOTES_PAGE_SIZE + 1 : 0;
+  const to = Math.min(total, (state.notesPage + 1) * NOTES_PAGE_SIZE);
+  $("#notes-pager-status").textContent = total ? `${from}–${to} de ${total} notas` : "";
+  $("#notes-pager-prev").disabled = state.notesPage <= 0;
+  $("#notes-pager-next").disabled = state.notesPage >= totalPages - 1;
+}
+
 function renderNotesTable(snapshot) {
   const ranged = withinRange(snapshot.notes, (note) => note.date);
   state.rangeExcluded.notes = ranged.excluded;
@@ -1856,9 +1910,17 @@ function renderNotesTable(snapshot) {
   if (!notes.length) {
     const row = document.createElement("tr"); const cell = document.createElement("td");
     cell.colSpan = 10; cell.textContent = search ? "Ninguna nota coincide con la búsqueda." : `No hay notas en ${rangeLabel()}.`;
-    row.append(cell); body.append(row); return;
+    row.append(cell); body.append(row);
+    renderNotesPager(0, 0);
+    return;
   }
-  notes.forEach((note) => {
+  // Paginado: un historial de cientos de notas en una sola tabla era ilegible y
+  // lento de pintar. El orden y la búsqueda se aplican ANTES de cortar.
+  const totalPages = Math.max(1, Math.ceil(notes.length / NOTES_PAGE_SIZE));
+  state.notesPage = clamp(state.notesPage, 0, totalPages - 1);
+  const pageNotes = notes.slice(state.notesPage * NOTES_PAGE_SIZE, (state.notesPage + 1) * NOTES_PAGE_SIZE);
+  renderNotesPager(notes.length, totalPages);
+  pageNotes.forEach((note) => {
     const row = document.createElement("tr");
     const title = document.createElement("td");
     const titleNode = note.url ? document.createElement("a") : document.createElement("span");
@@ -2269,10 +2331,20 @@ function bindEvents() {
   });
   $("#notes-search").addEventListener("input", (event) => {
     state.notesSearch = event.target.value;
+    state.notesPage = 0;
     renderNotesTable(state.snapshot);
   });
   $("#notes-sort").addEventListener("change", (event) => {
     state.notesSort = event.target.value;
+    state.notesPage = 0;
+    renderNotesTable(state.snapshot);
+  });
+  $("#notes-pager-prev").addEventListener("click", () => {
+    state.notesPage = Math.max(0, state.notesPage - 1);
+    renderNotesTable(state.snapshot);
+  });
+  $("#notes-pager-next").addEventListener("click", () => {
+    state.notesPage += 1;
     renderNotesTable(state.snapshot);
   });
   $("#posts-search").addEventListener("input", (event) => {
@@ -2281,6 +2353,7 @@ function bindEvents() {
   });
   $$("[data-days]").forEach((button) => button.addEventListener("click", () => {
     state.days = button.dataset.days === "all" ? ALL_TIME : Number(button.dataset.days);
+    state.notesPage = 0;
     localStorage.setItem(RANGE_KEY, button.dataset.days);
     syncRangeButtons();
     renderDashboard();

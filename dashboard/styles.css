@@ -416,3 +416,23 @@ td.is-below-median { color: var(--danger); }
 #network-panel .engagement-bar { margin-top: 18px; }
 #discovery-panel .audience-totals { margin-bottom: 16px; }
 #discovery-panel .source-list, #posts-section-list { margin-top: 4px; }
+
+/* Calendario de cadencia estilo GitHub: una celda por dia, columnas por semana.
+   Cuatro escalones de intensidad; con mas, uno y dos se confunden. */
+.calendar-grid { display: grid; gap: 3px; align-items: center; margin: 14px 0 10px; }
+.calendar-grid > span { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.calendar-grid > small { color: var(--muted); font-size: 8px; height: 12px; }
+.calendar-cell { display: block; aspect-ratio: 1; min-width: 6px; border-radius: 2px; background: var(--line); }
+.calendar-cell.is-outside { background: transparent; }
+.calendar-cell.is-level-1 { background: var(--accent); opacity: .3; }
+.calendar-cell.is-level-2 { background: var(--accent); opacity: .55; }
+.calendar-cell.is-level-3 { background: var(--accent); opacity: .8; }
+.calendar-cell.is-level-4 { background: var(--accent); opacity: 1; }
+.calendar-legend { display: flex; align-items: center; gap: 4px; margin-bottom: 20px; color: var(--muted); font-size: 8px; }
+.calendar-legend .calendar-cell { width: 10px; aspect-ratio: 1; }
+.calendar-legend small { text-transform: uppercase; letter-spacing: .06em; }
+.calendar-legend .calendar-truncated { margin-left: auto; text-transform: none; letter-spacing: 0; }
+
+/* Paginador del listado de notas. */
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 27px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+.pager .text-button:disabled { opacity: .35; cursor: default; }
