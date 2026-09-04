@@ -251,7 +251,7 @@ disponible; es una nota sin datos.
 | Ruta | Código | Nota |
 |---|---|---|
 | `publication/stats/payment_pledges` | **400** | Sin parámetros conocidos |
-| `publication/stats/network_attribution` | **500** | Error del servidor |
+| `publication/stats/network_attribution` | ~~500~~ | **Corregido el 4 sep 2026: responde 200 con `time_window` e `is_subscribed`.** Ver el barrido del panel más abajo |
 | `recommendations/stats/to` | **400** | El dato equivalente está en `growth/sources` → `children` |
 | `note_stats/{id}` sin `c-` | **400** | Exige el prefijo; ver sección arriba |
 
@@ -315,3 +315,79 @@ traen dato. Las columnas de la tabla se eligieron con esta tabla, no a ojo.
 - `/publish/stats` redirige a `/publish/stats/network` en esta cuenta; no expone
   un endpoint de serie de suscriptores.
 - **Forma de `payment_pledges`**: bloqueada por el 400 descrito arriba.
+
+## Barrido del panel `/publish/stats` — 4 sep 2026
+
+Capturado pestaña por pestaña con la pestaña Network sobre la sesión real. El
+panel tiene **once** pestañas (Red, Audiencia, Retención, Compartir,
+Referencias, Notes, Tráfico, Publicaciones, Cancelaciones, Surveys, Ingresos);
+PlotStack solo cubría lo que alimentan tres de ellas.
+
+### `network_attribution` NO responde 500: faltaban los parámetros
+
+```
+GET publication/stats/network_attribution            -> 500
+GET .../network_attribution?time_window=90+days&is_subscribed=false -> 200
+```
+
+```json
+{ "rows": [{ "label": "Substack App", "subs_count": 80,
+             "pct_time_window_total": 0.70, "criteria": 1,
+             "time_window": "90 days", "is_subscribed": false,
+             "data_updated_at": "2026-09-04T01:30:20.196Z" }],
+  "total": 114 }
+```
+
+Es el donut "Efecto de red": qué parte de la audiencia llega por la red de
+Substack (App, otras publicaciones, cuentas existentes) y qué parte es propia.
+La tabla de "endpoints que fallan" de este documento estaba equivocada: el 500
+lo provocaba llamarlo sin `time_window`.
+
+### Tráfico: la serie diaria de vistas que faltaba
+
+```
+GET publication/stats/publication_traffic/30d_views      -> {views30d, viewsDelta30d}
+GET publication/stats/publication_traffic/timeseries?from=&to=&category
+    -> Array de pares ["2026/06/11", n]  (83 puntos en el rango de 3 meses)
+GET publication/stats/visitor_sources?from_date=&to_date=&offset=&limit=&order_by=views&order_direction=desc
+    -> { rows: [{ source, source_category, views, users, free_signup, subscribed }], total }
+```
+
+`visitor_sources` **no** es `growth/sources`: trae `views` y `users` además de
+altas, acepta rango de fechas (frente al periodo fijo de 12 meses del otro) y
+permite calcular conversión visita → alta por fuente.
+
+### Veredicto comparativo que Substack publica
+
+```
+GET publication/stats/paid_subscriber_growth/summary?is_subscribed=false
+{ "growth_rate": 0.407407, "period_length": 30, "total_new_subs": 36,
+  "num_expirations": -3, "comparison_outcome": "above_average",
+  "period": "last 30 days" }
+```
+
+`comparison_outcome` es una comparación **contra otras publicaciones** que no se
+puede derivar de datos propios. `num_expirations` viene negativo aquí.
+
+### Solapamiento de audiencia
+
+```
+GET publication/stats/audience_insights/overlap?limit=6
+-> [{ percentOverlap: "0.39", pub: { …objeto de publicación completo… }}]
+```
+
+Qué porcentaje de tu audiencia comparte cada otra publicación. Del objeto `pub`
+solo hacen falta `name` y `subdomain`: el resto es configuración ajena.
+
+### Otros endpoints observados
+
+| Ruta | Forma | Nota |
+|---|---|---|
+| `publication/stats/unsubscribes/timeseries?from=&to=&granularity=day` | `{rows: []}` | Existe y responde 200, pero **vacío** en esta publicación incluso a un año. La forma de cada fila queda sin confirmar: no se mapea |
+| `publication/stats/unsubscribes?offset=&limit=&from=&to=` | lista | Trae PII de cada baja. **No se captura** |
+| `publication/stats/email_stats/30d_open_rate` | `{openRate, openRateDiff}` | La apertura de 30 días con su variación, ya calculada por Substack |
+| `publication/stats/subscriber_notes?limit=20` | `{noteAndUserData: [], summary: {count, hasMore}}` | Vacío aquí; el dato equivalente ya está en `note_stats` |
+| `publication/stats/referrals/summary` | `{gifts_sent, gifts_accepted, gifts_converted}` | Solo programa de regalos |
+| `publication/stats/referrals/leaderboard?order_by=num_gifts_accepted` | lista | Idem |
+| `publication/post-tag` | `[{id, publication_id, name, slug, hidden}]` | **Secciones/etiquetas de la publicación.** Permite cortar el rendimiento por sección |
+| `publication/stats/reader-referrals?to=&offset=&limit=&order_by=visitors` | lista | Pestaña Compartir |

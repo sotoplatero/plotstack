@@ -123,8 +123,8 @@ API**. No se implementan a medias ni se rellenan con estimaciones.
 | Serie diaria de suscriptores totales | `emails/timeseries` podría serla, pero su semántica no está confirmada y no se mapea hasta capturar el payload. La curva actual enumera solo a los suscriptores **actuales**: tiene sesgo de superviviente y nunca baja |
 | Total de bajas por publicación | Solo hay `unsubscribes_within_1_day` y `disables_within_1_day`: la ventana de 24 h tras cada envío. El total diario sí llega por `paid_subscriber_growth` |
 | Seguidores o ingresos por nota | `note_stats` no trae esas tarjetas. Intentarlo por título de item colaba el desglose de audiencia como si fueran seguidores ganados |
-| Atribución de red | `network_attribution` responde **500** |
 | Recomendaciones | `recommendations/stats/to` responde **400**. El dato equivalente está dentro de `growth/sources` → `children` |
+| Serie de bajas por día | `unsubscribes/timeseries` existe y responde 200, pero devuelve `{rows: []}` incluso a un año en esta publicación: la forma de cada fila sigue sin confirmar. El total diario ya llega por `paid_subscriber_growth` |
 | Actividad de pagos | `payment_pledges` responde **400** sin parámetros conocidos |
 | Serie de ARR | `arr/timeseries` existe y responde 200, pero devuelve `[]` sin ingresos: la forma de cada elemento sigue sin confirmar. Irrelevante mientras no haya vista de ingresos |
 | Curva de apertura y país | Solo en el ZIP del export oficial, no en la API. Ver `substack-payloads-observados.md` |
