@@ -993,8 +993,18 @@ function renderCohorts(container, cohorts) {
 // Clave de ventana para las fuentes que Substack agrega en servidor. Se piden
 // las cuatro en cada sync porque sus totales NO son recortables en cliente: el
 // endpoint devuelve un unico punto agregado por fuente, no una serie diaria.
+const RANGE_KEYS = ["7", "30", "90", "all"];
 const rangeKey = () => (state.days === ALL_TIME ? "all" : String(state.days));
-const byRange = (source) => (source && !Array.isArray(source) ? source[rangeKey()] : null) || null;
+// Un `analytics` guardado ANTES de que estas fuentes se indexaran por ventana
+// trae la forma plana. Vaciar el panel por eso seria tratar "guardado con el
+// esquema anterior" como "Substack no devolvio nada", que es justo lo que
+// prohibe la regla de que un fallo parcial nunca es cero. Se muestra lo que
+// hay hasta la siguiente sincronizacion.
+const isRanged = (source) => Boolean(source) && !Array.isArray(source) && RANGE_KEYS.some((key) => key in source);
+const byRange = (source) => {
+  if (!source || Array.isArray(source)) return null;
+  return isRanged(source) ? source[rangeKey()] || null : source;
+};
 
 function renderSourcesTable(analytics) {
   const growth = byRange(analytics?.growth?.sources);
@@ -1011,8 +1021,12 @@ function renderSourcesTable(analytics) {
     : "Substack no devolvió atribución para este periodo.";
   // Ya NO es de periodo fijo: el endpoint acepta `from_date`/`to_date` y la
   // sincronizacion pide una ventana por cada opcion del selector. El badge decia
-  // "· fijo" por una limitacion nuestra, no de la API.
-  $("#acquisition-period").textContent = rangeLabel();
+  // "· fijo" por una limitacion nuestra, no de la API. Con datos guardados por
+  // una version anterior el badge lo dice, en vez de etiquetar 12 meses con el
+  // nombre del rango elegido.
+  $("#acquisition-period").textContent = isRanged(analytics?.growth?.sources)
+    ? rangeLabel()
+    : "Sincroniza para aplicar el rango";
 
   const body = $("#sources-body");
   body.replaceChildren();

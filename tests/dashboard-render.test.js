@@ -647,3 +647,22 @@ test("Notas dice que superficie convierte y cuanto sales de tu burbuja", async (
   assert.match(nota, /no te sigue ni te lee/);
   assert.match(nota, /estimadas/, "el reparto por superficie es proporcional y hay que declararlo");
 });
+
+test("un analytics guardado con el esquema anterior no vacia el panel de adquisicion", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.analytics"];
+  // Forma plana, previa a indexar por ventana: es lo que tiene quien actualiza
+  // la extension y abre el dashboard antes de sincronizar.
+  listener({ "plotstack.analytics": { newValue: {
+    ...original,
+    growth: { ...original.growth, sources: { totals: { visitors: 900, subscribers: 75, revenue: 0 }, sources: [{ id: "s", label: "Substack", visitors: 900, subscribers: 75, series: [] }] } },
+  } } }, "local");
+  await settle(4);
+  assert.match($("#acquisition-leader").textContent, /Substack lidera/, "se muestra lo guardado, no un panel vacio");
+  assert.match($("#acquisition-period").textContent, /Sincroniza/, "y el badge dice que el rango aun no aplica");
+  listener({ "plotstack.analytics": { newValue: original } }, "local");
+  await settle(4);
+  assert.equal(/Sincroniza/.test($("#acquisition-period").textContent), false);
+});
