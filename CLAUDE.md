@@ -43,7 +43,7 @@ dashboard/app.js  --chrome.runtime.sendMessage-->  src/background.js
 
 - **`src/background.js`** — único punto que toca la red y el almacenamiento. Gestiona conexión, sincronización y desconexión. Persiste **cuatro** claves: `plotstack.snapshot`, `plotstack.connection`, `plotstack.analytics` y `plotstack.progress`. Orquesta las dos fases (responde tras la rápida, sigue con la de detalle sin bloquear), garantiza **un solo sync en vuelo** (`syncInFlight`) y registra la alarma diaria `plotstack-daily` (permiso `alarms`).
 - **`src/providers/substack-api.js`** — partido en dos: `getCoreSnapshot()` trae escalares y listas (summary/summary-v2/email_stats/posts) y devuelve un snapshot ya pintable más un `context` en memoria con las filas crudas; `enrichSnapshot()` resuelve lo caro (detalle por post, feed de notas, cola de `note_stats`) e informa por `onProgress`. `getPublicationSnapshot()` sigue existiendo como composición de las dos. **Todas** las peticiones pasan por un limitador único de 4 simultáneas con 60 ms de hueco (`configureRequestLimiter` lo desactiva en tests).
-- **`src/providers/substack-extended.js`** — **nueve** claves de datos con **ocho** peticiones: `subscriberTimeline`, `growthSources`, `followerTimeseries`, `audienceLocation`, `freeSubscriberGrowth`, `paidSubscriberGrowth`, `freeRetention`, `paidRetention`, y `audience`, que **no tiene petición propia**: sus conteos salen de `audienceCounts`, la copia sin PII (`count` + `chartCounts`) que devuelve la primera página de la timeline. Pedirlo aparte con `limit: 1` era un duplicado exacto en cada sync. Se retiraron seis (red 500, recomendaciones 400, payment_pledges 400, planes, inventario y exportaciones) porque no alimentaban ningún renderer. **Una fuente sin consumidor no se sincroniza.** Cada una tiene `request` + `normalize`; se ejecutan con `Promise.allSettled` y producen un array `coverage` que el dashboard muestra en el panel **Cobertura**.
+- **`src/providers/substack-extended.js`** — catorce claves de datos. Tres de ellas (`growthSources`, `visitorSources`, `networkAttribution`) se piden **una vez por ventana del selector** (7/30/90/todo): Substack las agrega en servidor y devuelve un único punto por fuente, así que sus totales no se pueden recortar en cliente. `trafficTimeseries` sí es diaria y basta una petición. Claves originales: `subscriberTimeline`, `growthSources`, `followerTimeseries`, `audienceLocation`, `freeSubscriberGrowth`, `paidSubscriberGrowth`, `freeRetention`, `paidRetention`, y `audience`, que **no tiene petición propia**: sus conteos salen de `audienceCounts`, la copia sin PII (`count` + `chartCounts`) que devuelve la primera página de la timeline. Pedirlo aparte con `limit: 1` era un duplicado exacto en cada sync. Se retiraron seis (red 500, recomendaciones 400, payment_pledges 400, planes, inventario y exportaciones) porque no alimentaban ningún renderer. **Una fuente sin consumidor no se sincroniza.** Cada una tiene `request` + `normalize`; se ejecutan con `Promise.allSettled` y producen un array `coverage` que el dashboard muestra en el panel **Cobertura**.
 - **`src/shared/analytics.js`** — capa de saneado y formato, compartida entre service worker y dashboard (importada por ruta relativa `../src/shared/`). `normalizeSnapshot()` define el esquema persistido; los formatters usan locale `es-ES`.
 - **`src/shared/content-analytics.js`** — módulo puro, sin red y sin persistencia. **`getContentFindings()` y la tabla de rasgos se retiraron de la interfaz** (el análisis por medianas no era útil con pocas notas; se sustituirá por IA). Siguen exportadas y con tests, pero **ningún renderer las consume**. Lo que el dashboard sí usa, a través de la fachada `getContentAnalytics()`: `getCadenceHeatmap` (que además de las 168 celdas horarias expone `buckets`, la rejilla 7×4 por tramos que es la que se pinta; las medianas de tramo salen de los valores crudos, nunca de re-derivar medianas) y `getNoteAttributionTimeline` (panel "Altas atribuidas a notas" de la vista Notas).
 - **`dashboard/`** — página completa (no popup), DOM manual sin framework. `app.js` mantiene `state` en memoria y despacha **una sola vista** por render.
@@ -62,10 +62,10 @@ solo, sin recrear los nodos con listeners. **Sin vista de ingresos: se retiró p
 toda métrica monetaria.** La activa se persiste en `localStorage` bajo
 `plotstack.view`, y el rango temporal bajo `plotstack.days` (`"all"` = `Infinity`,
 que nunca llega a `chrome.storage` porque un no finito se corrompe al guardarse).
-El selector de rango lo aplican todas las vistas menos Cobertura, con una
-excepción declarada: el panel de fuentes de adquisición usa el periodo fijo de
-12 meses del endpoint y su badge lo dice (`· fijo`) en vez de fingir que
-obedece al selector.
+El selector de rango lo aplican todas las vistas menos Cobertura, **sin
+excepciones**. El panel de fuentes de adquisición llevaba un badge `· fijo`
+porque siempre pedíamos 12 meses; `growth/sources` acepta `from_date`/`to_date`,
+así que ahora se sincroniza una ventana por opción del selector.
 
 Resumen es deliberadamente corto: suscriptores, apertura, CTR, vistas y
 crecimiento.
@@ -128,6 +128,22 @@ listeners quedarían colgando.
 - **La cola de `note_stats` tiene que converger.** Una nota sin detalle acumula `stats.attempts` y deja de reintentarse en `NOTE_STATS_MAX_ATTEMPTS`; el primer 429 que sobrevive al backoff corta la cola completa (`collectNoteStats` devuelve `throttled`) en lugar de seguir insistiendo. Un corte por límite **no** gasta intentos: no es culpa de la nota. Los cuatro estados de `stats.fetchState` (`ready`, `pending`, `throttled`, `unavailable`) tienen copy distinto en la UI, porque "en proceso" aplicado a una nota de hace dos años es mentira.
 - **`note_stats` exige el id con prefijo `c-`** (`noteStatsKey()`). Con el número pelado responde 400 en todas las notas. Sus tarjetas se leen por **`cardId`**, y el emparejamiento por título es **dentro de una sola tarjeta**: recorrer todas hacía que `followers` cazara el item `Followers` del desglose de audiencia (impresiones vistas por seguidores) y lo reportara como seguidores ganados. **`note_stats` no devuelve seguidores ni ingresos por nota.**
 - **Suma las claves presentes, no la primera finita.** `normalizeSubscriberGrowth` usa `sumPresent`: con `asNumber(new_free, new_paid)` una fila `{new_free: 0, new_paid: 3}` devolvía 0, porque el cero medido de gratuitos tapaba las altas de pago. Los alias solo se consultan si ninguna clave principal viene en la fila.
+
+- **`network_attribution` exige `time_window`.** Sin parámetros responde 500, y
+  eso hizo creer durante meses que la ruta estaba rota. Valores observados:
+  `7 days`, `30 days`, `90 days`, `all time`. Y su `total` es el **número de
+  filas**, no de suscriptores: el total real se suma de `subs_count`.
+
+- **`visitor_sources` puede devolver `free_signup: null`.** Las filas de email lo
+  hacen. `null` no es cero altas: la celda va en guion y la conversión es `null`.
+
+- **El reparto de altas por superficie de nota es una ESTIMACIÓN.** `note_stats`
+  da impresiones por superficie y altas de la nota entera, nunca altas por
+  superficie. `getSurfaceYield` reparte en proporción a las impresiones y la
+  interfaz declara que son estimadas. No lo conviertas en una medición.
+
+- **Las secciones viajan en la fila del post** (`section_name`), así que el corte
+  por sección no necesita `publication/post-tag` ni ninguna petición nueva.
 
 - **`chartCounts` de `subscriber-stats` es UN punto agregado, no una serie.** Sus claves son nombres de campo, no fechas. La serie diaria de altas se reconstruye agregando `subscription_created_at` de cada fila con `getSubscriberTimeline`, que descarta email, nombre y foto en memoria y solo devuelve conteos por día. Ver `docs/product/substack-payloads-observados.md`.
 - **Ninguna clave cruda de la API llega a la interfaz.** No hay volcados genéricos de objetos: las rejillas de cifras se construyen con `renderLabelledGrid`, que recibe pares `[etiqueta en español, valor]` escritos en el renderer. El volcado anterior (`renderStatGrid` + `STAT_LABELS`) pintaba `drafts` en inglés y booleanos de control como `publishedIsCapped: false`. Si añades una rejilla, escribe las etiquetas; no itereres el payload.

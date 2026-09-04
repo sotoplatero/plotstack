@@ -408,3 +408,11 @@ td.is-below-median { color: var(--danger); }
 
 /* Tooltip de cursor: el <title> nativo tarda un segundo y no existe en tactil. */
 .chart-tooltip { position: absolute; top: 4px; padding: 6px 9px; background: var(--ink-soft); border: 1px solid var(--line); color: var(--paper); font-size: 10px; white-space: nowrap; pointer-events: none; z-index: 3; }
+
+/* Paneles nuevos de Crecimiento y Publicaciones. Reutilizan .panel, .source-list
+   y .engagement-bar: nada de layout propio por seccion. */
+#traffic-panel .table-wrap { margin: 0 -27px; }
+#traffic-panel .audience-totals { margin-bottom: 18px; }
+#network-panel .engagement-bar { margin-top: 18px; }
+#discovery-panel .audience-totals { margin-bottom: 16px; }
+#discovery-panel .source-list, #posts-section-list { margin-top: 4px; }

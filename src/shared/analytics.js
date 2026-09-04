@@ -128,6 +128,7 @@ export function normalizeSnapshot(input = {}) {
         slug: String(campaign?.slug || ""),
         audience: String(campaign?.audience || ""),
         type: String(campaign?.type || ""),
+        section: String(campaign?.section || ""),
         wordcount: Math.max(0, Math.round(safeNumber(campaign?.wordcount))),
         date: String(campaign?.date || ""),
         status: String(campaign?.status || "Enviado"),
@@ -473,6 +474,175 @@ export function getChannelAttribution(snapshot = {}, days = 30, now = Date.now()
       scoredPieces: scoredNotes.length,
       perPiece: ratio(noteSignups, scoredNotes.length),
     },
+  };
+}
+
+// Corte de publicaciones por SECCION. Mismo criterio ponderado que los demas
+// cortes: Sigma abrieron / Sigma entregados, nunca media de tasas. Los posts sin
+// seccion se agrupan aparte en vez de descartarse: "sin seccion" es un grupo
+// real, y en muchas publicaciones es el unico.
+export function getCampaignSections(campaigns = []) {
+  const sent = campaigns.filter((campaign) => safeNumber(campaign.delivered) > 0);
+  const groups = new Map();
+  for (const campaign of sent) {
+    const key = String(campaign.section || "").trim() || "Sin sección";
+    const bucket = groups.get(key) || [];
+    bucket.push(campaign);
+    groups.set(key, bucket);
+  }
+  return [...groups.entries()].map(([section, rows]) => {
+    const delivered = rows.reduce((sum, row) => sum + safeNumber(row.delivered), 0);
+    const opened = rows.reduce((sum, row) => sum + safeNumber(row.opened), 0);
+    return {
+      section,
+      posts: rows.length,
+      delivered,
+      openRate: ratio(opened, delivered) === null ? null : ratio(opened, delivered) * 100,
+      scarce: rows.length < MIN_CUT_N,
+    };
+  }).sort((a, b) => (b.openRate ?? -1) - (a.openRate ?? -1));
+}
+
+// Vistas por entrega. Mayor que 1 significa que la pieza vive FUERA del correo:
+// web, app, recomendaciones. Es la pregunta que los dos numeros ya guardados
+// respondian por separado y nadie cruzaba. `null` sin envio: no hay denominador.
+export const viewsPerDelivery = (campaign) => ratio(safeNumber(campaign?.views), safeNumber(campaign?.delivered));
+
+// Reparto de las publicaciones entre las que dependen del correo y las que se
+// descubren fuera. El umbral es 1 vista por entrega, no un percentil inventado:
+// por debajo, cada entrega genero menos de una lectura.
+export function getDiscoveryMix(campaigns = []) {
+  const measured = campaigns
+    .map((campaign) => ({ campaign, ratio: viewsPerDelivery(campaign) }))
+    .filter((row) => row.ratio !== null);
+  if (!measured.length) return { state: "nodata", posts: 0, beyondEmail: 0, emailBound: 0, median: null, top: [] };
+  const values = measured.map((row) => row.ratio).sort((a, b) => a - b);
+  const middle = Math.floor(values.length / 2);
+  return {
+    state: "evidence",
+    posts: measured.length,
+    beyondEmail: measured.filter((row) => row.ratio > 1).length,
+    emailBound: measured.filter((row) => row.ratio <= 1).length,
+    median: values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2,
+    top: [...measured].sort((a, b) => b.ratio - a.ratio).slice(0, 3)
+      .map((row) => ({ title: row.campaign.title, date: row.campaign.date, ratio: row.ratio })),
+  };
+}
+
+// Altas medias en dias CON publicacion frente a dias sin ella. Las dos series
+// ya existian: fechas de envio y altas por dia. La comparacion es lo que faltaba.
+// Solo cuenta dias dentro del rango de la serie de altas: fuera de el no hay
+// medicion, y un dia sin fila de altas dentro del rango es un cero medido.
+export function getPublishingRhythm(snapshot = {}, dailySignups = [], days = 30, now = Date.now()) {
+  const serie = dailySignups.filter((point) => point && point.date);
+  if (!serie.length) return { state: "nodata", publishDays: 0, quietDays: 0, onPublish: null, onQuiet: null, lift: null };
+  const desde = Number.isFinite(days) ? now - days * 86400000 : -Infinity;
+  const enRango = serie.filter((point) => parseDay(point.date).getTime() >= desde);
+  if (!enRango.length) return { state: "nodata", publishDays: 0, quietDays: 0, onPublish: null, onQuiet: null, lift: null };
+
+  const fechas = new Set();
+  for (const campaign of normalizeSnapshot(snapshot).campaigns) {
+    const day = String(campaign.date || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) fechas.add(day);
+  }
+  const conPublicacion = [];
+  const sinPublicacion = [];
+  for (const point of enRango) {
+    const altas = safeNumber(point.new ?? point.signups);
+    (fechas.has(String(point.date).slice(0, 10)) ? conPublicacion : sinPublicacion).push(altas);
+  }
+  const media = (rows) => (rows.length ? rows.reduce((sum, value) => sum + value, 0) / rows.length : null);
+  const onPublish = media(conPublicacion);
+  const onQuiet = media(sinPublicacion);
+  return {
+    // Con un solo dia de publicacion la media es ese dia: se declara escaso.
+    state: conPublicacion.length >= MIN_CUT_N && sinPublicacion.length >= MIN_CUT_N ? "evidence" : "insufficient",
+    publishDays: conPublicacion.length,
+    quietDays: sinPublicacion.length,
+    onPublish,
+    onQuiet,
+    // Cuantas veces mas altas trae un dia de publicacion. `null` si no hay base.
+    lift: onPublish === null || onQuiet === null ? null : ratio(onPublish, onQuiet),
+  };
+}
+
+// Concentracion: que parte del total viene de las `top` primeras filas. Dice si
+// el crecimiento depende de un solo canal. `null` sin total medido.
+export function getConcentration(rows = [], valueOf = (row) => row.value, top = 3) {
+  const values = rows.map((row) => safeNumber(valueOf(row))).filter((value) => value > 0).sort((a, b) => b - a);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (!total) return { share: null, total: 0, counted: 0, top: 0 };
+  const head = values.slice(0, top).reduce((sum, value) => sum + value, 0);
+  return { share: (head / total) * 100, total, counted: values.length, top: Math.min(top, values.length) };
+}
+
+// Que superficie CONVIERTE, no cual da mas alcance. Substack reparte las
+// impresiones de cada nota entre Feed, Notificaciones, Perfil, etc., pero solo
+// da las altas de la nota entera, no por superficie. Asi que la conversion por
+// superficie no se puede medir: lo que si se puede es repartir las altas de
+// cada nota en proporcion a sus impresiones por superficie, y decirlo.
+//
+// Solo entran notas con detalle Y con impresiones: sin denominador no hay
+// reparto, y una nota sin estadisticas no aporta ceros.
+export function getSurfaceYield(notes = [], surfaceKeys = NOTE_SURFACE_KEYS) {
+  const totals = Object.fromEntries(surfaceKeys.map((key) => [key, { impressions: 0, signups: 0 }]));
+  let scoredNotes = 0;
+  for (const note of notes) {
+    const stats = note?.stats;
+    if (!stats?.available) continue;
+    const impressions = safeNumber(stats.reach?.impressions);
+    const surfaceTotal = surfaceKeys.reduce((sum, key) => sum + safeNumber(stats.surfaces?.[key]), 0);
+    if (impressions <= 0 || surfaceTotal <= 0) continue;
+    scoredNotes += 1;
+    const signups = safeNumber(stats.results?.freeSubscribers);
+    for (const key of surfaceKeys) {
+      const share = safeNumber(stats.surfaces?.[key]) / surfaceTotal;
+      totals[key].impressions += safeNumber(stats.surfaces?.[key]);
+      totals[key].signups += signups * share;
+    }
+  }
+  const rows = surfaceKeys.map((key) => {
+    const bucket = totals[key];
+    const per1000 = ratio(bucket.signups, bucket.impressions);
+    return {
+      surface: key,
+      impressions: Math.round(bucket.impressions),
+      signups: bucket.signups,
+      // Altas por cada mil impresiones. `null` sin impresiones medidas.
+      per1000: per1000 === null ? null : per1000 * 1000,
+    };
+  }).filter((row) => row.impressions > 0);
+  return {
+    rows: rows.sort((a, b) => (b.per1000 ?? -1) - (a.per1000 ?? -1)),
+    scoredNotes,
+    // El reparto es proporcional, no medido: la interfaz TIENE que decirlo.
+    estimated: true,
+  };
+}
+
+// Cuanto sales de tu burbuja. `Unconnected` son impresiones de gente que no te
+// sigue ni te lee: la unica senal de alcance nuevo que da `note_stats`.
+export function getReachBeyondBubble(notes = []) {
+  let unconnected = 0;
+  let known = 0;
+  let scoredNotes = 0;
+  for (const note of notes) {
+    const audience = note?.stats?.available ? note.stats.audience : null;
+    if (!audience) continue;
+    const fuera = safeNumber(audience.Unconnected);
+    const dentro = safeNumber(audience.Subscribers) + safeNumber(audience.Followers);
+    if (fuera + dentro <= 0) continue;
+    scoredNotes += 1;
+    unconnected += fuera;
+    known += dentro;
+  }
+  const share = ratio(unconnected, unconnected + known);
+  return {
+    unconnected,
+    known,
+    scoredNotes,
+    // `null` sin ninguna nota medida: no es un 0% de alcance nuevo.
+    share: share === null ? null : share * 100,
   };
 }
 

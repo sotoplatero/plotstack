@@ -4,6 +4,10 @@ import {
   formatCompactNumber,
   formatPercent,
   getCampaignCuts,
+  getCampaignSections,
+  getConcentration,
+  getDiscoveryMix,
+  getPublishingRhythm,
   getCampaignDiagnosis,
   getChannelAttribution,
   getComparisonBase,
@@ -13,8 +17,11 @@ import {
   getOwnOpenRateMedian,
   getPublicationEngagement,
   getRateWindows,
+  getReachBeyondBubble,
+  getSurfaceYield,
   getTrendSeries,
   normalizeSnapshot,
+  viewsPerDelivery,
 } from "../src/shared/analytics.js";
 import { weightedRate } from "../src/providers/substack-api.js";
 
@@ -280,4 +287,131 @@ test("getOwnOpenRateMedian sustituye al benchmark inventado del 42%", () => {
   ]};
   assert.equal(getOwnOpenRateMedian(snapshot), 40);
   assert.equal(getOwnOpenRateMedian({ campaigns: [] }), null, "sin publicaciones no hay referencia");
+});
+
+test("getCampaignSections pondera por entregados y agrupa los posts sin seccion", () => {
+  const cortes = getCampaignSections([
+    { section: "Carpetas", delivered: 1000, opened: 500 },
+    { section: "Carpetas", delivered: 100, opened: 90 },
+    { section: "", delivered: 500, opened: 100 },
+    // Sin entregas no es una apertura del 0%: es que no se envio.
+    { section: "Carpetas", delivered: 0, opened: 0 },
+  ]);
+  const carpetas = cortes.find((row) => row.section === "Carpetas");
+  assert.equal(carpetas.posts, 2, "el post sin envio queda fuera");
+  // Ponderado: 590/1100 = 53,6%. La media de tasas daria 95%.
+  assert.equal(Math.round(carpetas.openRate * 10) / 10, 53.6);
+  const sinSeccion = cortes.find((row) => row.section === "Sin sección");
+  assert.equal(sinSeccion.posts, 1);
+  assert.equal(sinSeccion.scarce, true, "un solo envio es muestra escasa");
+});
+
+test("viewsPerDelivery cruza dos cifras que ya se guardaban por separado", () => {
+  // Mas de una vista por entrega: la pieza vive fuera del correo.
+  assert.equal(viewsPerDelivery({ views: 1192, delivered: 100 }), 11.92);
+  assert.equal(viewsPerDelivery({ views: 20, delivered: 100 }), 0.2);
+  assert.equal(viewsPerDelivery({ views: 500, delivered: 0 }), null, "sin envio no hay cociente");
+});
+
+test("getDiscoveryMix separa lo que se descubre fuera del correo", () => {
+  const mezcla = getDiscoveryMix([
+    { title: "Viral", views: 1192, delivered: 100 },
+    { title: "Normal", views: 150, delivered: 100 },
+    { title: "Solo correo", views: 20, delivered: 100 },
+    { title: "Sin envio", views: 900, delivered: 0 },
+  ]);
+  assert.equal(mezcla.state, "evidence");
+  assert.equal(mezcla.posts, 3, "el post sin envio no entra: no tiene denominador");
+  assert.equal(mezcla.beyondEmail, 2);
+  assert.equal(mezcla.emailBound, 1);
+  assert.equal(mezcla.median, 1.5);
+  assert.equal(mezcla.top[0].title, "Viral");
+  assert.equal(getDiscoveryMix([]).state, "nodata");
+});
+
+test("getPublishingRhythm compara dias con publicacion contra dias en silencio", () => {
+  const now = new Date("2026-08-21T12:00:00Z").getTime();
+  const snapshot = { campaigns: [
+    { id: "1", date: "2026-08-20", delivered: 10 },
+    { id: "2", date: "2026-08-14", delivered: 10 },
+    { id: "3", date: "2026-08-08", delivered: 10 },
+  ] };
+  const altas = [
+    { date: "2026-08-08", signups: 12 },
+    { date: "2026-08-09", signups: 2 },
+    { date: "2026-08-10", signups: 1 },
+    { date: "2026-08-14", signups: 9 },
+    { date: "2026-08-15", signups: 3 },
+    { date: "2026-08-20", signups: 15 },
+  ];
+  const ritmo = getPublishingRhythm(snapshot, altas, 30, now);
+  assert.equal(ritmo.state, "evidence");
+  assert.equal(ritmo.publishDays, 3);
+  assert.equal(ritmo.quietDays, 3);
+  assert.equal(ritmo.onPublish, 12, "(12+9+15)/3");
+  assert.equal(ritmo.onQuiet, 2, "(2+1+3)/3");
+  assert.equal(ritmo.lift, 6, "un dia de publicacion trae 6 veces mas altas");
+  // Con pocos dias medidos la media es anecdota: se declara, no se oculta.
+  assert.equal(getPublishingRhythm(snapshot, altas.slice(0, 2), 30, now).state, "insufficient");
+  assert.equal(getPublishingRhythm(snapshot, [], 30, now).state, "nodata");
+});
+
+test("getConcentration dice si el crecimiento depende de un solo canal", () => {
+  const fuentes = [{ value: 80 }, { value: 10 }, { value: 6 }, { value: 4 }];
+  const conc = getConcentration(fuentes);
+  assert.equal(Math.round(conc.share), 96, "las tres primeras concentran el 96%");
+  assert.equal(conc.total, 100);
+  assert.equal(conc.counted, 4);
+  // Sin total medido no se inventa un porcentaje.
+  assert.equal(getConcentration([]).share, null);
+  assert.equal(getConcentration([{ value: 0 }]).share, null);
+});
+
+test("getSurfaceYield reparte las altas en proporcion y lo declara estimado", () => {
+  const notas = normalizeSnapshot({
+    notes: [
+      {
+        id: "1",
+        stats: {
+          available: true,
+          reach: { impressions: 1000 },
+          results: { freeSubscribers: 10 },
+          surfaces: { Feed: 800, Notifications: 200 },
+        },
+      },
+      // Sin detalle: no aporta ceros al reparto.
+      { id: "2", stats: { available: false } },
+      // Con detalle pero sin impresiones: sin denominador no hay reparto.
+      { id: "3", stats: { available: true, reach: { impressions: 0 }, results: { freeSubscribers: 5 }, surfaces: { Feed: 10 } } },
+    ],
+  }).notes;
+  const rendimiento = getSurfaceYield(notas);
+  assert.equal(rendimiento.scoredNotes, 1);
+  assert.equal(rendimiento.estimated, true, "el reparto es proporcional, no medido");
+  const feed = rendimiento.rows.find((row) => row.surface === "Feed");
+  const notif = rendimiento.rows.find((row) => row.surface === "Notifications");
+  assert.equal(feed.impressions, 800);
+  // 10 altas x 0,8 = 8 sobre 800 impresiones = 10 por millar.
+  assert.equal(Math.round(feed.per1000 * 100) / 100, 10);
+  assert.equal(Math.round(notif.per1000 * 100) / 100, 10);
+  // Las superficies sin impresiones no se listan como cero.
+  assert.equal(rendimiento.rows.some((row) => row.surface === "Search"), false);
+  assert.deepEqual(getSurfaceYield([]).rows, []);
+});
+
+test("getReachBeyondBubble mide el alcance fuera de tu audiencia", () => {
+  const notas = normalizeSnapshot({
+    notes: [
+      { id: "1", stats: { available: true, audience: { Subscribers: 100, Followers: 300, Unconnected: 600 } } },
+      { id: "2", stats: { available: true, audience: { Subscribers: 50, Followers: 50, Unconnected: 900 } } },
+      { id: "3", stats: { available: false, audience: { Unconnected: 9999 } } },
+    ],
+  }).notes;
+  const burbuja = getReachBeyondBubble(notas);
+  assert.equal(burbuja.scoredNotes, 2, "una nota sin detalle no cuenta");
+  assert.equal(burbuja.unconnected, 1500);
+  assert.equal(burbuja.known, 500);
+  assert.equal(burbuja.share, 75);
+  // Sin ninguna nota medida no hay 0% de alcance nuevo: no hay dato.
+  assert.equal(getReachBeyondBubble([]).share, null);
 });

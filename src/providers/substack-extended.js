@@ -157,6 +157,87 @@ export function normalizeRetention(payload = {}) {
   return { cohorts, rates };
 }
 
+// Ventanas que `network_attribution` reconoce, observadas una por una. "1 year"
+// responde 200 pero con cero filas: no es un valor valido, solo no falla.
+export const NETWORK_WINDOWS = { 7: "7 days", 30: "30 days", 90: "90 days", all: "all time" };
+
+// Reparto entre la red de Substack y la audiencia propia. `total` del payload es
+// el NUMERO DE FILAS, no de suscriptores: el total real se suma de `subs_count`
+// (comprobado contra el donut del panel, 114 con cuatro filas).
+export function normalizeNetworkAttribution(payload = {}) {
+  const rows = rowsFrom(payload, ["rows"]).map((row) => ({
+    label: text(row?.label, row?.name, "Sin identificar"),
+    subscribers: asNumber(row?.subs_count, row?.subscribers),
+    // Viene en fraccion 0-1. Se guarda tal cual y el renderer decide.
+    share: Number(row?.pct_time_window_total),
+  })).filter((row) => row.label && row.subscribers > 0);
+  return {
+    rows: rows.sort((a, b) => b.subscribers - a.subscribers),
+    total: rows.reduce((sum, row) => sum + row.subscribers, 0),
+    updatedAt: text(payload?.rows?.[0]?.data_updated_at),
+  };
+}
+
+// Trafico por fuente con su conversion. NO es `growth/sources`: trae vistas y
+// visitantes unicos, acepta rango, y `free_signup`/`subscribed` pueden venir
+// **null** (las filas de email), que no es lo mismo que cero altas medidas.
+export function normalizeVisitorSources(payload = {}) {
+  const rows = rowsFrom(payload, ["rows"]).map((row) => {
+    const users = asNumber(row?.users);
+    const freeSignups = row?.free_signup === null || row?.free_signup === undefined ? null : asNumber(row.free_signup);
+    return {
+      source: text(row?.source, "sin identificar"),
+      category: text(row?.source_category, "Otros"),
+      views: asNumber(row?.views),
+      users,
+      freeSignups,
+      paidSignups: row?.subscribed === null || row?.subscribed === undefined ? null : asNumber(row.subscribed),
+      // Sin altas medidas no hay conversion: `null`, nunca 0%.
+      conversion: freeSignups === null || users <= 0 ? null : (freeSignups / users) * 100,
+    };
+  }).filter((row) => row.views > 0 || row.users > 0);
+  const totals = rows.reduce((sum, row) => ({
+    views: sum.views + row.views,
+    users: sum.users + row.users,
+    freeSignups: sum.freeSignups + (row.freeSignups || 0),
+  }), { views: 0, users: 0, freeSignups: 0 });
+  return { rows: rows.sort((a, b) => b.views - a.views), totals };
+}
+
+// Veredicto que publica Substack comparando con otras publicaciones. No se puede
+// derivar de datos propios, asi que o llega o no existe: nada de estimarlo.
+export const COMPARISON_COPY = {
+  above_average: "Por encima de la media de Substack",
+  average: "En la media de Substack",
+  below_average: "Por debajo de la media de Substack",
+};
+
+export function normalizeGrowthBenchmark(payload = {}) {
+  const outcome = text(payload?.comparison_outcome);
+  return {
+    // `growth_rate` viene en fraccion (0.407407 = 40,7%).
+    growthRate: Number.isFinite(Number(payload?.growth_rate)) ? Number(payload.growth_rate) * 100 : null,
+    periodDays: asNumber(payload?.period_length),
+    newSubscribers: asNumber(payload?.total_new_subs),
+    // Observado en negativo: se guarda su magnitud, que es lo que significa.
+    expirations: Math.abs(asNumber(payload?.num_expirations)),
+    outcome,
+    outcomeCopy: COMPARISON_COPY[outcome] || "",
+  };
+}
+
+// Publicaciones que comparten audiencia contigo. Del objeto `pub` solo se
+// guardan nombre y subdominio: el resto es configuracion ajena entera.
+export function normalizeAudienceOverlap(payload) {
+  return rowsFrom(payload).map((row) => ({
+    name: text(row?.pub?.name, row?.name, "Sin nombre"),
+    subdomain: text(row?.pub?.subdomain, row?.subdomain),
+    // Fraccion 0-1 servida como cadena.
+    share: Number(row?.percentOverlap),
+  })).filter((row) => Number.isFinite(row.share) && row.share > 0)
+    .sort((a, b) => b.share - a.share);
+}
+
 // `chartCounts` es un ÚNICO punto agregado, no una serie ni un mapa de fechas.
 // Verificado en docs/product/substack-payloads-observados.md. Tratar sus claves
 // como fechas fabrica puntos falsos en cero, que es lo que hacía antes.
@@ -302,6 +383,11 @@ export async function getSubscriberTimeline(base, { maxPages = SUBSCRIBER_MAX_PA
 
 const recordCount = (value) => {
   if (Array.isArray(value)) return value.length;
+  // Fuentes indexadas por ventana: se cuenta la mas amplia, que es la que
+  // resume mejor si la fuente trajo algo.
+  if (value && typeof value === "object" && (value.all || value["90"])) {
+    return recordCount(value.all || value["90"]);
+  }
   if (Array.isArray(value?.rows)) return value.rows.length;
   if (Array.isArray(value?.items)) return value.items.length;
   if (Array.isArray(value?.sources)) return value.sources.length;
@@ -342,9 +428,84 @@ export async function getExtendedAnalytics(publication) {
   // `audience` NO es una fuente propia: sus conteos (`chartCounts`) vienen en la
   // primera página de `subscriber-stats`, que `subscriberTimeline` ya pide. La
   // petición con `limit: 1` era un duplicado exacto en cada sincronización.
+  // Ventanas del selector del dashboard. `growth/sources` y `visitor_sources`
+  // agregan en servidor y **no** devuelven serie diaria por fuente, asi que sus
+  // totales no se pueden recortar en cliente: hay que pedir cada ventana. El
+  // panel de adquisicion llevaba un badge "· fijo" que no era un limite de la
+  // API, sino consecuencia de pedir siempre 12 meses.
+  const RANGE_DAYS = { 7: 7, 30: 30, 90: 90, all: 365 };
+  const dayBefore = (days) => {
+    const date = new Date(endDate);
+    date.setUTCDate(date.getUTCDate() - days);
+    return date.toISOString().slice(0, 10);
+  };
+  const byRange = (request, normalize) => async () => {
+    const entries = await Promise.all(Object.entries(RANGE_DAYS).map(async ([key, days]) => {
+      try {
+        return [key, normalize(await request(dayBefore(days), to))];
+      } catch {
+        // Una ventana caida no invalida las demas.
+        return [key, normalize({})];
+      }
+    }));
+    return Object.fromEntries(entries);
+  };
+
   const sources = [
     { key: "subscriberTimeline", label: "Altas por día", request: () => getSubscriberTimeline(base), normalize: normalizeSubscriberTimeline },
-    { key: "growthSources", label: "Fuentes de crecimiento", request: () => requestJson(`${base}/publication/stats/growth/sources?from_date=${from}&to_date=${to}&order_by=users&order_direction=desc`), normalize: normalizeGrowthSources },
+    {
+      key: "growthSources",
+      label: "Fuentes de crecimiento",
+      request: byRange(
+        (desde, hasta) => requestJson(`${base}/publication/stats/growth/sources?from_date=${desde}&to_date=${hasta}&order_by=users&order_direction=desc`),
+        normalizeGrowthSources,
+      ),
+      normalize: (value) => value,
+    },
+    {
+      key: "visitorSources",
+      label: "Fuentes de tráfico",
+      request: byRange(
+        (desde, hasta) => requestJson(`${base}/publication/stats/visitor_sources?from_date=${desde}&to_date=${hasta}&offset=0&limit=20&order_by=views&order_direction=desc`),
+        normalizeVisitorSources,
+      ),
+      normalize: (value) => value,
+    },
+    {
+      key: "networkAttribution",
+      label: "Efecto de red",
+      request: async () => {
+        const entries = await Promise.all(Object.entries(NETWORK_WINDOWS).map(async ([key, window]) => {
+          try {
+            return [key, normalizeNetworkAttribution(await requestJson(`${base}/publication/stats/network_attribution?time_window=${encodeURIComponent(window)}&is_subscribed=false`))];
+          } catch {
+            return [key, normalizeNetworkAttribution({})];
+          }
+        }));
+        return Object.fromEntries(entries);
+      },
+      normalize: (value) => value,
+    },
+    {
+      key: "trafficTimeseries",
+      label: "Visitas por día",
+      // Esta SI es diaria, asi que basta una peticion de 12 meses y el
+      // dashboard recorta por fecha como con las demas series.
+      request: () => requestJson(`${base}/publication/stats/publication_traffic/timeseries?from=${from}&to=${to}&category`),
+      normalize: normalizeTimeseries,
+    },
+    {
+      key: "growthBenchmark",
+      label: "Comparación con Substack",
+      request: () => requestJson(`${base}/publication/stats/paid_subscriber_growth/summary?is_subscribed=false`),
+      normalize: normalizeGrowthBenchmark,
+    },
+    {
+      key: "audienceOverlap",
+      label: "Solapamiento de audiencia",
+      request: () => requestJson(`${base}/publication/stats/audience_insights/overlap?limit=6`),
+      normalize: normalizeAudienceOverlap,
+    },
     { key: "followerTimeseries", label: "Histórico de seguidores", request: () => requestJson(`${base}/publication/stats/followers/timeseries?from=${encodeURIComponent(fromIso)}`), normalize: normalizeTimeseries },
     { key: "audienceLocation", label: "Ubicación de la audiencia", request: locationRequest, normalize: (payload) => ({ rows: normalizeAudienceLocation(payload.rows), totals: payload.totals || {} }) },
     { key: "freeSubscriberGrowth", label: "Altas y bajas gratuitas", request: () => requestJson(`${base}/publication/stats/paid_subscriber_growth?${growthQuery}&is_subscribed=false`), normalize: normalizeSubscriberGrowth },
@@ -389,8 +550,19 @@ export async function getExtendedAnalytics(publication) {
       timeline: data.subscriberTimeline,
       followers: { history: data.followerTimeseries, total: data.followerTimeseries.at(-1)?.value || 0 },
       location: data.audienceLocation,
+      overlap: data.audienceOverlap,
     },
-    growth: { sources: data.growthSources, subscribers: { free: data.freeSubscriberGrowth, paid: data.paidSubscriberGrowth } },
+    // `sources`, `visitors` y `network` van indexados por ventana ("7", "30",
+    // "90", "all"): el dashboard elige la del selector en vez de mostrar 12
+    // meses con la etiqueta del rango elegido.
+    growth: {
+      sources: data.growthSources,
+      visitors: data.visitorSources,
+      network: data.networkAttribution,
+      benchmark: data.growthBenchmark,
+      subscribers: { free: data.freeSubscriberGrowth, paid: data.paidSubscriberGrowth },
+    },
+    traffic: { daily: data.trafficTimeseries },
     retention: { free: data.freeRetention, paid: data.paidRetention },
   };
 }

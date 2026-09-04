@@ -342,12 +342,18 @@ test("Audiencia pinta la actividad de la lista y la composición nace oculta", a
   assert.equal($("#composition-panel").hidden, true, "la composición describe la base de pago: sensible");
 });
 
-test("Crecimiento declara el periodo fijo de fuentes y añade la tasa de bajas", async () => {
+test("Crecimiento aplica el rango a las fuentes y añade la tasa de bajas", async () => {
   await arrancar();
   await verVista("crecimiento");
   await rango("all");
-  assert.match($("#acquisition-period").textContent, /fijo/,
-    "el panel de fuentes es de periodo fijo y tiene que declararlo");
+  // `growth/sources` acepta from_date/to_date: el badge "· fijo" reflejaba una
+  // limitación nuestra, no de la API, y la sincronización pide una ventana por
+  // cada opción del selector.
+  assert.equal(/fijo/.test($("#acquisition-period").textContent), false);
+  assert.match($("#acquisition-period").textContent, /histórico|días/);
+  await rango("7");
+  assert.match($("#acquisition-period").textContent, /7 días/);
+  await rango("all");
   assert.equal($("#paid-churn-panel").hidden, true, "el churn de pago nace oculto");
   assert.match($("#churn-kpis").textContent, /Tasa de bajas/);
 });
@@ -568,4 +574,76 @@ test("Audiencia pinta la matriz de retencion por cohorte", async () => {
   assert.ok(celdas.some((celda) => celda.classList.contains("is-empty")),
     "un mes sin dato no puede pintarse como una retencion medida");
   assert.match($("#retention-list").textContent, /Por cohorte de alta/);
+});
+
+test("Crecimiento pinta visitas, sus fuentes y la concentracion", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  await rango("all");
+  assert.ok($$("#traffic-chart .chart-line").length > 0, "falta la serie diaria de visitas");
+  assert.match($("#traffic-total").textContent, /visitas/);
+  const filas = $$("#visitor-sources-body tr");
+  assert.equal(filas.length, 2);
+  // `free_signup` null no es cero altas: la celda va en guion, no en 0.
+  assert.match(filas[1].textContent, /—/);
+  assert.match($("#traffic-kpis").textContent, /Visitantes/);
+  assert.match($("#traffic-note").textContent, /concentran/);
+});
+
+test("Crecimiento reparte la audiencia entre la red de Substack y la propia", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  await rango("all");
+  assert.equal($("#network-bar").hidden, false);
+  assert.equal($$("#network-bar i").length, 3);
+  assert.match($("#network-legend").textContent, /Substack App/);
+  assert.match($("#network-total").textContent, /114/);
+});
+
+test("el panel de altas y bajas compara dias con envio y cita el veredicto de Substack", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  await rango("all");
+  assert.match($("#churn-kpis").textContent, /Altas en día de envío/);
+  const nota = $("#channels-note").textContent;
+  assert.match(nota, /media de Substack/, "el veredicto comparativo no se puede derivar de datos propios");
+  assert.match(nota, /40,7%/);
+});
+
+test("Audiencia lista las publicaciones que comparten lectores", async () => {
+  await arrancar();
+  await verVista("audiencia");
+  assert.match($("#overlap-list").textContent, /Mafia IA/);
+  assert.match($("#overlap-list").textContent, /39,0%/);
+});
+
+test("el panel de Seguidores superpone los suscriptores para ver la divergencia", async () => {
+  await arrancar();
+  await verVista("audiencia");
+  await rango("all");
+  assert.ok($$("#followers-chart .chart-line").length > 0);
+  assert.ok($$("#followers-chart .chart-line-secondary").length > 0, "falta la segunda serie");
+  // La curva de Audiencia NO cambia: la comparte el Resumen y meterle una
+  // serie mayor le cambiaba la escala.
+  assert.equal($$("#audience-chart .chart-line-secondary").length, 0);
+});
+
+test("Publicaciones separa lo que se lee fuera del correo y corta por seccion", async () => {
+  await arrancar();
+  await verVista("publicaciones");
+  assert.match($("#discovery-kpis").textContent, /Se leen fuera del correo/);
+  assert.match($("#discovery-median").textContent, /vistas por entrega/);
+  assert.match($("#discovery-list").textContent, /×/);
+  assert.match($("#posts-section-list").textContent, /Carpetas|Sin sección/);
+});
+
+test("Notas dice que superficie convierte y cuanto sales de tu burbuja", async () => {
+  await arrancar();
+  await verVista("notas");
+  await rango("all");
+  assert.match($("#notes-surface-yield").textContent, /Feed/);
+  assert.match($("#notes-surface-yield").textContent, /1\.000/);
+  const nota = $("#notes-reach-note").textContent;
+  assert.match(nota, /no te sigue ni te lee/);
+  assert.match(nota, /estimadas/, "el reparto por superficie es proporcional y hay que declararlo");
 });

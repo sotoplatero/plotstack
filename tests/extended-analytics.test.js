@@ -10,6 +10,10 @@ import {
   getSubscriberTimeline,
   normalizeGrowthSources,
   normalizeGrowthEvents,
+  normalizeNetworkAttribution,
+  normalizeVisitorSources,
+  normalizeGrowthBenchmark,
+  normalizeAudienceOverlap,
 } from "../src/providers/substack-extended.js";
 
 const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
@@ -102,7 +106,9 @@ test("getExtendedAnalytics aisla fallos y descarta la PII de suscriptores", asyn
   try {
     const analytics = await getExtendedAnalytics({ subdomain: "carta" });
     assert.equal(analytics.audience.total, 713);
-    assert.equal(analytics.growth.sources.totals.subscribers, 27);
+    // Las fuentes van por ventana: el selector del dashboard elige cual.
+    assert.equal(analytics.growth.sources["30"].totals.subscribers, 27);
+    assert.deepEqual(Object.keys(analytics.growth.sources).sort(), ["30", "7", "90", "all"]);
     assert.equal(analytics.audience.followers.history[0].value, 700);
     assert.equal(analytics.audience.location.rows[0].code, "ES");
     assert.equal(analytics.growth.subscribers.free.totals.net, 2);
@@ -114,13 +120,18 @@ test("getExtendedAnalytics aisla fallos y descarta la PII de suscriptores", asyn
     // (network_attribution 500, recommendations 400, payment_pledges 400,
     // pledges/plans, post_management/counts y publication_export) ya no se piden.
     assert.deepEqual(analytics.coverage.map((row) => row.key),
-      ["audience", "subscriberTimeline", "growthSources", "followerTimeseries", "audienceLocation", "freeSubscriberGrowth", "paidSubscriberGrowth", "freeRetention", "paidRetention"]);
+      ["audience", "subscriberTimeline", "growthSources", "visitorSources", "networkAttribution", "trafficTimeseries", "growthBenchmark", "audienceOverlap", "followerTimeseries", "audienceLocation", "freeSubscriberGrowth", "paidSubscriberGrowth", "freeRetention", "paidRetention"]);
     assert.equal(requests.some((item) => item.url.includes("growth/events")), false, "la lista editorial duplicada ya no se pide");
-    for (const ruta of ["network_attribution", "recommendations/stats", "payment_pledges", "pledges/plans", "post_management/counts", "publication_export"]) {
+    // `network_attribution` vuelve, pero SIEMPRE con `time_window`: sin el
+    // responde 500, que es lo que hizo creer que la ruta estaba rota.
+    const red = requests.filter((item) => item.url.includes("network_attribution"));
+    assert.equal(red.length, 4, "una peticion por ventana del selector");
+    assert.equal(red.every((item) => item.url.includes("time_window=")), true);
+    for (const ruta of ["recommendations/stats", "payment_pledges", "pledges/plans", "post_management/counts", "publication_export"]) {
       assert.equal(requests.some((item) => item.url.includes(ruta)), false, `${ruta} ya no se pide`);
     }
     assert.deepEqual(Object.keys(analytics).sort(),
-      ["audience", "coverage", "growth", "period", "retention", "syncedAt", "version"]);
+      ["audience", "coverage", "growth", "period", "retention", "syncedAt", "traffic", "version"]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -295,4 +306,72 @@ test("la fuente audience no repite la peticion que ya hizo la timeline", async (
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("normalizeNetworkAttribution suma los suscriptores, porque `total` es el numero de filas", () => {
+  // Payload real: total = 4 filas, pero el donut del panel dice 114.
+  const red = normalizeNetworkAttribution({
+    total: 4,
+    rows: [
+      { label: "Substack App", subs_count: 80, pct_time_window_total: 0.7017, data_updated_at: "2026-09-04T01:30:20.196Z" },
+      { label: "Other Substack Network", subs_count: 6, pct_time_window_total: 0.0526 },
+      { label: "Substack existing accounts", subs_count: 24, pct_time_window_total: 0.2105 },
+      { label: "Imported accounts", subs_count: 4, pct_time_window_total: 0.035 },
+    ],
+  });
+  assert.equal(red.total, 114, "tomar `total` del payload daria 4 suscriptores");
+  assert.equal(red.rows[0].label, "Substack App");
+  assert.equal(red.rows[0].subscribers, 80);
+  assert.equal(red.updatedAt, "2026-09-04T01:30:20.196Z");
+  assert.deepEqual(normalizeNetworkAttribution({}), { rows: [], total: 0, updatedAt: "" });
+});
+
+test("normalizeVisitorSources no confunde un null de altas con cero altas", () => {
+  const fuentes = normalizeVisitorSources({
+    total: 23,
+    rows: [
+      { source: "direct to app", source_category: "Direct", views: 892, users: 272, free_signup: 8, subscribed: 0 },
+      // Las filas de email vienen con null: no se midieron altas ahi.
+      { source: "email opens", source_category: "Email", views: 122, users: 90, free_signup: null, subscribed: null },
+    ],
+  });
+  assert.equal(fuentes.rows[0].views, 892);
+  assert.equal(fuentes.rows[0].users, 272);
+  assert.equal(Math.round(fuentes.rows[0].conversion * 100) / 100, 2.94);
+  assert.equal(fuentes.rows[1].freeSignups, null, "null no es 0: no se midio");
+  assert.equal(fuentes.rows[1].conversion, null, "sin altas medidas no hay conversion");
+  assert.equal(fuentes.totals.views, 1014);
+  assert.equal(fuentes.totals.freeSignups, 8, "el null no suma como cero");
+});
+
+test("normalizeGrowthBenchmark pasa la tasa a porcentaje y traduce el veredicto", () => {
+  const marca = normalizeGrowthBenchmark({
+    growth_rate: 0.407407,
+    period_length: 30,
+    total_new_subs: 36,
+    num_expirations: -3,
+    comparison_outcome: "above_average",
+    period: "last 30 days",
+  });
+  assert.equal(Math.round(marca.growthRate * 10) / 10, 40.7);
+  assert.equal(marca.periodDays, 30);
+  assert.equal(marca.newSubscribers, 36);
+  assert.equal(marca.expirations, 3, "el payload lo da en negativo");
+  assert.match(marca.outcomeCopy, /media de Substack/);
+  // Sin veredicto no se inventa uno.
+  assert.equal(normalizeGrowthBenchmark({}).outcomeCopy, "");
+  assert.equal(normalizeGrowthBenchmark({}).growthRate, null);
+});
+
+test("normalizeAudienceOverlap se queda con el nombre y tira la configuracion ajena", () => {
+  const solape = normalizeAudienceOverlap([
+    { percentOverlap: "0.39", pub: { name: "Mafia IA", subdomain: "aimafia", copyright: "Ai Mafia Club", author_id: 1, stripe_user_id: "acct_x" } },
+    { percentOverlap: "0.19", pub: { name: "How to AI", subdomain: "ruben" } },
+    { percentOverlap: "0", pub: { name: "Sin solape", subdomain: "nada" } },
+  ]);
+  assert.deepEqual(solape, [
+    { name: "Mafia IA", subdomain: "aimafia", share: 0.39 },
+    { name: "How to AI", subdomain: "ruben", share: 0.19 },
+  ]);
+  assert.equal(JSON.stringify(solape).includes("stripe"), false, "no viaja la configuracion de la otra publicacion");
 });

@@ -21,14 +21,18 @@ Para la forma exacta de cada payload, ver
    `localStorage`. Durante la captura de PNG se fuerzan a oculto.
 2. **Audiencia** — total, seguidores de la cuenta, lectores en la app, altas
    diarias reconstruidas, composición por intervalo, actividad, países y
-   retención (tasas medias más la matriz cohorte × mes).
-3. **Crecimiento** — fuentes de adquisición con su desglose anidado, altas y
-   bajas, y las publicaciones del periodo.
+   retención (tasas medias más la matriz cohorte × mes) y las publicaciones que
+   comparten lectores contigo. El panel de Seguidores superpone los suscriptores
+   para que la divergencia entre seguir y suscribirse se vea.
+3. **Crecimiento** — visitas diarias y sus fuentes con conversión, efecto de red,
+   fuentes de adquisición con su desglose anidado, y altas y bajas con la
+   comparación entre días con envío y sin él. **Todo obedece al selector**: el
+   badge "· fijo" desapareció porque la ventana fija era autoimpuesta.
 4. **Notas** — cabecera agregada (con visitas al perfil y clics a enlaces),
    desglose de alcance por superficie y por audiencia, cadencia por tramos,
    altas atribuidas y tabla por nota con el detalle de `note_stats`.
-5. **Publicaciones** — tabla ordenable y buscable, volumen de envío y cortes por
-   día y longitud. **No filtra por rango**: es histórico completo.
+5. **Publicaciones** — tabla ordenable y buscable, correo frente a
+   descubrimiento, y cortes por día, longitud y sección. **No filtra por rango**: es histórico completo.
 6. **Cobertura** — estado del snapshot principal (detalle por publicación y los
    cuatro estados de la cola de notas), progreso de la sincronización en curso, y
    estado de cada fuente ampliada con sus registros y errores parciales.
@@ -60,14 +64,19 @@ válido para pintar; la de detalle sigue en el service worker y actualiza
 | `/api/v1/reader/feed/profile/{user_id}` | Historial de notas propias, con parada incremental |
 | `/api/v1/note_stats/c-{comment_id}` | Detalle por nota. **El prefijo `c-` es obligatorio** |
 
-`getExtendedAnalytics` (fase rápida, ocho peticiones y nueve claves, todas con
-consumidor en la interfaz):
+`getExtendedAnalytics` (fase rápida, catorce claves, todas con consumidor en la
+interfaz):
 
 | Clave | Fuente | Uso |
 |---|---|---|
 | `subscriberTimeline` | `POST /api/v1/subscriber-stats` paginado | Serie diaria de altas desde `subscription_created_at`. `limit` máx. 100 |
 | `audience` | *(sin petición propia)* | Conteos de `chartCounts` de la primera página de la timeline |
-| `growthSources` | `/api/v1/publication/stats/growth/sources` | Fuentes con desglose en `children`. Hoy se pide con 12 meses fijos, pero **el endpoint acepta `from_date`/`to_date`**: la ventana fija es autoimpuesta |
+| `growthSources` | `/api/v1/publication/stats/growth/sources` | Fuentes con desglose en `children`. **Una petición por ventana del selector** (7/30/90/365): sus totales se agregan en servidor y no son recortables en cliente |
+| `visitorSources` | `/api/v1/publication/stats/visitor_sources` | Vistas, visitantes y altas por fuente, con su conversión. Una petición por ventana |
+| `networkAttribution` | `/api/v1/publication/stats/network_attribution` | Reparto entre la red de Substack y la audiencia propia. Exige `time_window`; una petición por ventana |
+| `trafficTimeseries` | `/api/v1/publication/stats/publication_traffic/timeseries` | Serie **diaria** de visitas, así que basta una petición y el dashboard recorta por fecha |
+| `growthBenchmark` | `/api/v1/publication/stats/paid_subscriber_growth/summary` | `comparison_outcome`: comparación contra otras publicaciones que no se puede derivar de datos propios |
+| `audienceOverlap` | `/api/v1/publication/stats/audience_insights/overlap` | Publicaciones que comparten lectores. Solo se guardan nombre y subdominio |
 | `followerTimeseries` | `/api/v1/publication/stats/followers/timeseries` | Evolución real de seguidores |
 | `audienceLocation` | `/api/v1/publication/stats/audience_insights/location` (+ `/total`) | Países de las altas gratuitas |
 | `freeSubscriberGrowth` | `/api/v1/publication/stats/paid_subscriber_growth?is_subscribed=false` | Altas, bajas y neto diarios |
@@ -112,6 +121,18 @@ histórico es la única base de comparación del rango "Todo".
   Perfil…) y por audiencia (suscriptores, seguidores, sin conexión), solo sobre
   las notas con detalle y declarando la cobertura.
 - Retención por cohorte de alta, con la unidad decidida sobre todas las celdas.
+- **Vistas por entrega** por publicación: por encima de 1, la pieza se lee más
+  allá de la bandeja. Cruza dos cifras que ya se guardaban por separado.
+- **Altas en días con envío frente a días en silencio**, con el múltiplo entre
+  ambas y su estado de muestra.
+- **Concentración** de las visitas en las tres fuentes principales.
+- **Rendimiento por sección**, ponderado. La sección viaja en la propia fila del
+  post (`section_name`), así que no necesita ninguna petición nueva.
+- **Qué superficie convierte** en Notas: las altas de cada nota se reparten en
+  proporción a sus impresiones por superficie. Es una estimación y la interfaz
+  lo dice, porque Substack solo atribuye altas a la nota entera.
+- **Alcance fuera de la burbuja**: qué parte de las impresiones llega a gente que
+  no te sigue ni te lee.
 
 ## Lo que NO se puede hacer, y por qué
 
@@ -120,11 +141,12 @@ API**. No se implementan a medias ni se rellenan con estimaciones.
 
 | Falta | Motivo |
 |---|---|
+| Serie de bajas por día | `unsubscribes/timeseries` responde 200 pero `{rows: []}` incluso a un año: la forma de cada fila sigue sin observarse. El total diario ya llega por `paid_subscriber_growth` |
+| Área apilada de fuentes en el tiempo | `growth/partial-timeseries` es un **POST** y su cuerpo no se pudo capturar. Adivinar el esquema de un POST es exactamente lo que prohíbe la regla de no inventar endpoints |
 | Serie diaria de suscriptores totales | `emails/timeseries` podría serla, pero su semántica no está confirmada y no se mapea hasta capturar el payload. La curva actual enumera solo a los suscriptores **actuales**: tiene sesgo de superviviente y nunca baja |
 | Total de bajas por publicación | Solo hay `unsubscribes_within_1_day` y `disables_within_1_day`: la ventana de 24 h tras cada envío. El total diario sí llega por `paid_subscriber_growth` |
 | Seguidores o ingresos por nota | `note_stats` no trae esas tarjetas. Intentarlo por título de item colaba el desglose de audiencia como si fueran seguidores ganados |
 | Recomendaciones | `recommendations/stats/to` responde **400**. El dato equivalente está dentro de `growth/sources` → `children` |
-| Serie de bajas por día | `unsubscribes/timeseries` existe y responde 200, pero devuelve `{rows: []}` incluso a un año en esta publicación: la forma de cada fila sigue sin confirmar. El total diario ya llega por `paid_subscriber_growth` |
 | Actividad de pagos | `payment_pledges` responde **400** sin parámetros conocidos |
 | Serie de ARR | `arr/timeseries` existe y responde 200, pero devuelve `[]` sin ingresos: la forma de cada elemento sigue sin confirmar. Irrelevante mientras no haya vista de ingresos |
 | Curva de apertura y país | Solo en el ZIP del export oficial, no en la API. Ver `substack-payloads-observados.md` |

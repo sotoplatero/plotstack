@@ -29,7 +29,7 @@ globalThis.chrome = {
             { date: "2026-08-21", subscribers: 2840, paidSubscribers: 184, followers: 3900 },
           ],
           campaigns: [
-            { id: "1", title: "La semana que cambió el producto", date: "2026-08-20", delivered: 2800, opened: 1390, clicked: 182, openRate: 49.6, clickRate: 6.5, views: 2100, reactions: 91, comments: 18, shares: 27, signupsWithin1Day: 36 },
+            { id: "1", title: "La semana que cambió el producto", date: "2026-08-20", section: "Carpetas", delivered: 2800, opened: 1390, clicked: 182, openRate: 49.6, clickRate: 6.5, views: 6100, reactions: 91, comments: 18, shares: 27, signupsWithin1Day: 36 },
             { id: "2", title: "Notas desde el borde", date: "2026-08-12", delivered: 2760, opened: 1264, clicked: 201, openRate: 45.8, clickRate: 7.3, views: 1890, reactions: 78, comments: 12, shares: 19, signupsWithin1Day: 24 },
           ],
           notes: [
@@ -48,11 +48,18 @@ globalThis.chrome = {
               { date: "2026-08-10", value: 3825 },
               { date: "2026-08-21", value: 3900 },
             ] },
+            overlap: [
+              { name: "Mafia IA", subdomain: "aimafia", share: 0.39 },
+              { name: "How to AI", subdomain: "ruben", share: 0.19 },
+            ],
             location: { rows: [{ code: "ES", value: 43 }, { code: "MX", value: 16 }, { code: "CO", value: 8 }], totals: { global: { locations: 19 } } },
             timeline: {
               total: 2840,
               counted: 2840,
               daily: [
+                { date: "2026-07-23", signups: 6, paidSignups: 0, cumulative: 2710 },
+                { date: "2026-08-01", signups: 9, paidSignups: 1, cumulative: 2764 },
+                { date: "2026-08-10", signups: 7, paidSignups: 0, cumulative: 2801 },
                 { date: "2026-08-18", signups: 11, paidSignups: 1, cumulative: 2807 },
                 { date: "2026-08-19", signups: 8, paidSignups: 0, cumulative: 2815 },
                 { date: "2026-08-20", signups: 16, paidSignups: 2, cumulative: 2831 },
@@ -64,7 +71,39 @@ globalThis.chrome = {
             },
           },
           growth: {
-            sources: { totals: { visitors: 9200, subscribers: 130, revenue: 0 }, sources: [] },
+            sources: {
+              7: { totals: { visitors: 900, subscribers: 12, revenue: 0 }, sources: [] },
+              30: { totals: { visitors: 3200, subscribers: 46, revenue: 0 }, sources: [] },
+              90: { totals: { visitors: 7000, subscribers: 98, revenue: 0 }, sources: [] },
+              all: { totals: { visitors: 9200, subscribers: 130, revenue: 0 }, sources: [] },
+            },
+            visitors: {
+              7: { rows: [], totals: { views: 0, users: 0, freeSignups: 0 } },
+              30: { rows: [], totals: { views: 0, users: 0, freeSignups: 0 } },
+              90: { rows: [], totals: { views: 0, users: 0, freeSignups: 0 } },
+              all: {
+                rows: [
+                  { source: "direct to app", category: "Direct", views: 892, users: 272, freeSignups: 8, paidSignups: 0, conversion: 2.94 },
+                  { source: "email opens", category: "Email", views: 122, users: 90, freeSignups: null, paidSignups: null, conversion: null },
+                ],
+                totals: { views: 1014, users: 362, freeSignups: 8 },
+              },
+            },
+            network: {
+              7: { rows: [], total: 0, updatedAt: "" },
+              30: { rows: [], total: 0, updatedAt: "" },
+              90: { rows: [], total: 0, updatedAt: "" },
+              all: {
+                rows: [
+                  { label: "Substack App", subscribers: 80, share: 0.7 },
+                  { label: "Substack existing accounts", subscribers: 24, share: 0.21 },
+                  { label: "Imported accounts", subscribers: 10, share: 0.09 },
+                ],
+                total: 114,
+                updatedAt: "2026-09-04T01:30:20.196Z",
+              },
+            },
+            benchmark: { growthRate: 40.7, periodDays: 30, newSubscribers: 36, expirations: 3, outcome: "above_average", outcomeCopy: "Por encima de la media de Substack" },
             events: [],
             subscribers: { free: { daily: [
               { date: "2026-08-19", new: 8, losses: 1, net: 7 },
@@ -72,6 +111,12 @@ globalThis.chrome = {
               { date: "2026-08-21", new: 9, losses: 0, net: 9 },
             ], totals: { new: 33, losses: 3, net: 30 } }, paid: { daily: [], totals: { new: 0, losses: 0, net: 0 } } },
           },
+          traffic: { daily: [
+            { date: "2026-08-18", value: 210 },
+            { date: "2026-08-19", value: 180 },
+            { date: "2026-08-20", value: 340 },
+            { date: "2026-08-21", value: 284 },
+          ] },
           retention: { free: { cohorts: [{ cohort: '2026-05', points: [{ month: 0, rate: 1 }, { month: 1, rate: 0.86 }, { month: 3, rate: 0.74 }] }, { cohort: '2026-06', points: [{ month: 0, rate: 1 }, { month: 1, rate: 0.79 }] }], rates: [{ month: 1, rate: 0.82, comparison: 0.04 }, { month: 3, rate: 0.71, comparison: 0.02 }] }, paid: { cohorts: [], rates: [] } },
           content: { counts: {} },
           coverage: [],

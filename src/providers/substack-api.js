@@ -192,6 +192,10 @@ export const mapCampaign = (row, index) => ({
   slug: text(row.slug, row.post?.slug),
   audience: text(row.audience, row.post?.audience),
   type: text(row.type, row.post?.type),
+  // La seccion viene en la propia fila de `post_management/published`
+  // (`section_name`), asi que cortar por seccion no necesita `publication/post-tag`.
+  // Vacia cuando el post no esta en ninguna: eso no es un error, es el caso normal.
+  section: text(row.section_name, row.draft_section_name, row.post?.section_name),
   wordcount: asNumber(row.wordcount, row.word_count, row.stats?.wordcount, row.post?.wordcount),
   date: row.post_date || row.published_at || row.sent_at || row.date || "",
   status: "Enviado",

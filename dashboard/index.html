@@ -255,7 +255,7 @@
 
             <section class="panel chart-panel reveal" id="followers-panel">
               <div class="panel-header">
-                <div><h2>Seguidores</h2><p class="panel-copy">Evolución del total de seguidores</p></div>
+                <div><h2>Seguidores</h2><div class="chart-legend"><span></span>Seguidores<span class="is-secondary"></span>Suscriptores</div></div>
                 <span class="period-badge" id="followers-change"></span>
               </div>
               <div class="chart-wrap">
@@ -269,6 +269,10 @@
                 <div class="panel-header"><div><h2>Retención</h2><p class="panel-copy">Porcentaje que permanece suscrito</p></div></div>
                 <div class="retention-list" id="retention-list"></div>
                 <div class="retention-list" id="paid-retention-list" data-sensitive="paid" hidden></div>
+              </article>
+              <article class="panel list-panel" id="overlap-panel">
+                <div class="panel-header"><div><h2>Audiencias que se solapan</h2><p class="panel-copy">Publicaciones que comparten lectores contigo</p></div></div>
+                <div class="source-list" id="overlap-list"></div>
               </article>
               <article class="panel list-panel" id="engagement-panel">
                 <div class="panel-header"><div><h2>Actividad de la lista</h2><p class="panel-copy">Puntuación de actividad de Substack por suscriptor</p></div></div>
@@ -285,10 +289,41 @@
           </div>
 
           <div class="view" data-view="crecimiento" hidden>
+            <section class="panel chart-panel reveal" id="traffic-panel">
+              <div class="panel-header">
+                <div><h2>Visitas</h2><div class="chart-legend"><span></span>Visitas por día</div></div>
+                <span class="period-badge" id="traffic-total">—</span>
+              </div>
+              <div class="chart-wrap">
+                <svg id="traffic-chart" viewBox="0 0 820 200" role="img" aria-label="Visitas por día"></svg>
+                <div class="chart-empty" id="traffic-empty" hidden>Substack no devolvió visitas para este periodo.</div>
+              </div>
+              <div class="audience-totals" id="traffic-kpis"></div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Fuente de tráfico</th><th>Categoría</th><th>Visitas</th><th>Visitantes</th><th>Altas</th><th>Conversión</th></tr>
+                  </thead>
+                  <tbody id="visitor-sources-body"></tbody>
+                </table>
+              </div>
+              <p class="panel-copy" id="traffic-note"></p>
+            </section>
+
+            <section class="panel list-panel reveal" id="network-panel">
+              <div class="panel-header">
+                <div><h2>Efecto de red</h2><p class="panel-copy">Qué parte de tu audiencia llega por la red de Substack y qué parte es tuya.</p></div>
+                <span class="period-badge" id="network-total">—</span>
+              </div>
+              <div class="engagement-bar" id="network-bar"></div>
+              <div class="engagement-legend" id="network-legend"></div>
+              <p class="panel-copy" id="network-note" hidden></p>
+            </section>
+
             <section class="panel acquisition-panel reveal" id="growth-sources">
               <div class="panel-header">
                 <div><h2>Fuentes de adquisición</h2></div>
-                <span class="period-badge" id="acquisition-period" title="Periodo fijo del endpoint de Substack: no sigue el selector de rango">Últimos 12 meses · fijo</span>
+                <span class="period-badge" id="acquisition-period">—</span>
               </div>
               <div class="audience-totals">
                 <div><span>Altas atribuidas</span><strong id="acquisition-total">—</strong></div>
@@ -355,6 +390,8 @@
                 <p class="retention-label">Quién las ve</p>
                 <div class="engagement-bar" id="notes-audience-bar"></div>
                 <div class="engagement-legend" id="notes-audience-legend"></div>
+                <p class="retention-label">Qué superficie convierte</p>
+                <div class="source-list" id="notes-surface-yield"></div>
                 <p class="panel-copy" id="notes-reach-note" hidden></p>
               </div>
               <p class="panel-copy" id="notes-insight" hidden></p>
@@ -445,6 +482,15 @@
               </div>
             </section>
 
+            <section class="panel reveal" id="discovery-panel">
+              <div class="panel-header">
+                <div><h2>Correo o descubrimiento</h2><p class="panel-copy">Vistas por cada entrega. Por encima de 1, la pieza se lee más allá de la bandeja: web, app y recomendaciones.</p></div>
+                <span class="period-badge" id="discovery-median">—</span>
+              </div>
+              <div class="audience-totals" id="discovery-kpis"></div>
+              <div class="source-list" id="discovery-list"></div>
+            </section>
+
             <section class="panel reveal" id="diagnosis-panel">
               <div class="panel-header">
                 <div><h2>Diagnóstico asunto / contenido</h2><p class="panel-copy">La apertura mide el asunto; el CTOR mide el cuerpo. El umbral es tu propia mediana en cada eje.</p></div>
@@ -457,6 +503,10 @@
               <article class="panel list-panel" id="posts-by-day">
                 <div class="panel-header"><div><h2>Rendimiento por día</h2></div></div>
                 <div class="source-list" id="posts-day-list"></div>
+              </article>
+              <article class="panel list-panel" id="posts-by-section">
+                <div class="panel-header"><div><h2>Rendimiento por sección</h2></div></div>
+                <div class="source-list" id="posts-section-list"></div>
               </article>
               <article class="panel list-panel" id="posts-by-length">
                 <div class="panel-header"><div><h2>Rendimiento por longitud</h2></div></div>
