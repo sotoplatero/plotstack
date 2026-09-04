@@ -16,7 +16,6 @@ import {
   getPublishingRhythm,
   getRateWindows,
   getReachBeyondBubble,
-  getSurfaceYield,
   isFractionScale,
   ratio,
   viewsPerDelivery,
@@ -613,95 +612,60 @@ const NOTE_STATE_COPY = {
   ready: "",
 };
 
-const HOUR_BUCKET_LABELS = { night: "Madrugada (0-6)", morning: "Mañana (6-12)", afternoon: "Tarde (12-18)", evening: "Noche (18-24)" };
 
 // La cadencia es un recuento, asi que la intensidad codifica notas publicadas.
 // Las interacciones van en el tooltip, y "sin estadisticas" no es "cero".
 // Rejilla 7x4 por tramos: 168 celdas horarias con decenas de notas eran un
 // tablero casi vacío en el que la señal no se veía.
-const WEEKDAY_ROWS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
-// Nivel de intensidad 1-4 sobre el máximo del periodo. Cuatro escalones, como
-// GitHub: con más, los días de una y dos notas se vuelven indistinguibles.
-const calendarLevel = (notes, max) => {
-  if (!notes) return 0;
-  if (max <= 1) return 4;
-  return Math.max(1, Math.ceil((notes / max) * 4));
-};
-
-// Calendario estilo GitHub: columnas por semana, filas por día de la semana, una
-// celda por día. La rejilla por tramos horarios que había antes concentraba la
-// señal pero perdía el "cuándo", que es lo que responde un calendario.
-function renderCadenceCalendar(container, calendar) {
+// Mapa de calor día × hora, 7 filas × 24 columnas: una celda por hora de cada
+// día de la semana, intensidad por notas publicadas. Es el que responde "a qué
+// hora publico" de un vistazo. La intensidad codifica el RECUENTO; las
+// interacciones van en el tooltip, y "sin estadísticas" no es "cero".
+function renderCadenceHeatmap(container, cadence) {
   if (!container) return;
   container.replaceChildren();
-  const weeks = calendar?.weeks || [];
-  if (!weeks.length || !calendar.datedNotes) {
-    return emptyMessage(container, "No hay notas con fecha para construir el calendario.", "coverage-empty");
+  const cells = cadence?.cells || [];
+  if (!cells.length || !cadence.datedNotes) {
+    return emptyMessage(container, "No hay notas con fecha para construir el mapa.", "coverage-empty");
   }
-  const columns = weeks.length;
-  const grid = document.createElement("div");
-  grid.className = "calendar-grid";
-  grid.style.gridTemplateColumns = `34px repeat(${columns}, 1fr)`;
+  const byKey = new Map(cells.map((cell) => [`${cell.day}:${cell.hour}`, cell]));
+  const max = Math.max(1, cadence.maxNotes);
 
-  // Fila de meses: una etiqueta donde cambia el mes, alineada a su columna.
-  grid.append(document.createElement("span"));
-  const monthAt = new Map((calendar.months || []).map((entry) => [entry.column, entry.month]));
-  for (let column = 0; column < columns; column += 1) {
+  const header = document.createElement("div");
+  header.className = "heatmap-row is-header";
+  header.append(document.createElement("span"));
+  for (let hour = 0; hour < 24; hour += 1) {
     const label = document.createElement("small");
-    const month = monthAt.get(column);
-    if (month) label.textContent = MONTH_SHORT[Number(month.slice(5, 7)) - 1];
-    grid.append(label);
+    // Una etiqueta cada tres horas: 24 en una fila se pisan.
+    label.textContent = hour % 3 === 0 ? String(hour).padStart(2, "0") : "";
+    header.append(label);
   }
+  container.append(header);
 
-  for (let weekday = 0; weekday < 7; weekday += 1) {
+  for (const day of WEEK_ORDER) {
+    const row = document.createElement("div");
+    row.className = "heatmap-row";
     const name = document.createElement("span");
-    // Solo lunes, miércoles y viernes rotulados, como GitHub: siete etiquetas
-    // en 11 px de alto se pisan.
-    name.textContent = weekday % 2 === 0 ? WEEKDAY_ROWS[weekday] : "";
-    grid.append(name);
-    for (const week of weeks) {
-      const cell = week.find((day) => day.weekday === weekday);
+    name.textContent = DAY_NAMES[day];
+    row.append(name);
+    for (let hour = 0; hour < 24; hour += 1) {
+      const cell = byKey.get(`${day}:${hour}`) || { notes: 0, scoredNotes: 0, medianInteractions: null };
       const box = document.createElement("i");
-      box.className = "calendar-cell";
-      if (!cell) {
-        box.classList.add("is-outside");
-        grid.append(box);
-        continue;
-      }
-      box.classList.add(`is-level-${calendarLevel(cell.notes, calendar.maxNotes)}`);
-      const detail = cell.notes
-        ? cell.medianInteractions === null
+      box.className = "heatmap-cell";
+      const hora = `${String(hour).padStart(2, "0")}:00`;
+      if (cell.notes) {
+        // Suelo del 35 %: una sola nota tiene que verse, no confundirse con el fondo.
+        box.style.opacity = String(0.35 + (cell.notes / max) * 0.65);
+        box.classList.add("is-filled");
+        const detail = cell.medianInteractions === null
           ? "sin estadísticas"
-          : `mediana ${decimal(cell.medianInteractions)} interacciones (${cell.scoredNotes}/${cell.notes} con detalle)`
-        : "sin notas";
-      box.title = `${shortDate(cell.date)} · ${cell.notes} ${cell.notes === 1 ? "nota" : "notas"} · ${detail}`;
-      grid.append(box);
+          : `mediana ${decimal(cell.medianInteractions)} interacciones (${cell.scoredNotes}/${cell.notes} con detalle)`;
+        box.title = `${DAY_NAMES[day]} ${hora} · ${cell.notes} ${cell.notes === 1 ? "nota" : "notas"} · ${detail}`;
+      } else box.title = `${DAY_NAMES[day]} ${hora} · sin notas`;
+      row.append(box);
     }
+    container.append(row);
   }
-  container.append(grid);
-
-  const legend = document.createElement("div");
-  legend.className = "calendar-legend";
-  const less = document.createElement("small");
-  less.textContent = "Menos";
-  legend.append(less);
-  for (let level = 0; level <= 4; level += 1) {
-    const swatch = document.createElement("i");
-    swatch.className = `calendar-cell is-level-${level}`;
-    legend.append(swatch);
-  }
-  const more = document.createElement("small");
-  more.textContent = "Más";
-  legend.append(more);
-  if (calendar.truncatedWeeks) {
-    const note = document.createElement("small");
-    note.className = "calendar-truncated";
-    note.textContent = `Se muestran las últimas ${weeks.length} semanas; ${calendar.truncatedWeeks} anteriores quedan fuera.`;
-    legend.append(note);
-  }
-  container.append(legend);
 }
 
 // Sin fallback fuera de rango: si el periodo no tiene ≥2 puntos, el gráfico
@@ -902,6 +866,50 @@ function renderComposition(analytics) {
     ["Plan mensual", intervals.get("month") ?? intervals.get("monthly")],
     ["Plan anual", intervals.get("year") ?? intervals.get("yearly") ?? intervals.get("annual")],
   ], "Substack no devolvió la composición de la suscripción.");
+}
+
+// Donut en SVG. Cada segmento es un arco de `circle` con stroke-dasharray, así
+// que no hay trigonometría que mantener. Con un solo valor se pinta el anillo
+// completo. Devuelve false sin datos para que el llamador ponga su vacío.
+function drawDonut(svg, segments) {
+  svg.replaceChildren();
+  const total = segments.reduce((sum, segment) => sum + safeValue(segment.value), 0);
+  if (total <= 0) return false;
+  const ns = "http://www.w3.org/2000/svg";
+  const radius = 70;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  segments.forEach((segment) => {
+    const share = safeValue(segment.value) / total;
+    if (share <= 0) return;
+    const arc = document.createElementNS(ns, "circle");
+    arc.setAttribute("cx", "100"); arc.setAttribute("cy", "100"); arc.setAttribute("r", String(radius));
+    arc.setAttribute("class", `donut-arc is-${segment.key}`);
+    arc.setAttribute("stroke-dasharray", `${(share * circumference).toFixed(2)} ${circumference.toFixed(2)}`);
+    arc.setAttribute("stroke-dashoffset", String((-offset * circumference).toFixed(2)));
+    const title = document.createElementNS(ns, "title");
+    title.textContent = `${segment.label}: ${formatCompactNumber(segment.value)} (${formatPercent(share * 100)})`;
+    arc.append(title);
+    svg.append(arc);
+    offset += share;
+  });
+  return true;
+}
+
+// Leyenda del donut: etiqueta, porcentaje grande y cifra. Solo segmentos con
+// valor: uno a cero no es un reparto, es ausencia.
+function renderDonutLegend(container, segments) {
+  const total = segments.reduce((sum, segment) => sum + safeValue(segment.value), 0);
+  container.replaceChildren(...segments.filter((segment) => safeValue(segment.value) > 0).map((segment) => {
+    const item = document.createElement("div");
+    item.className = `donut-item is-${segment.key}`;
+    const swatch = document.createElement("i");
+    const name = document.createElement("span"); name.textContent = segment.label;
+    const pct = document.createElement("strong"); pct.textContent = formatPercent((safeValue(segment.value) / total) * 100, 0);
+    const value = document.createElement("small"); value.textContent = formatCompactNumber(segment.value);
+    item.append(swatch, name, pct, value);
+    return item;
+  }));
 }
 
 // Barra apilada + leyenda. Un cero SÍ se pinta en la leyenda (es una medición),
@@ -1720,61 +1728,17 @@ function renderNotesOverview(snapshot) {
   const analytics = getNotesAnalytics({ notes: ranged });
   $("#notes-detail-coverage").textContent = `${analytics.detailedCount} / ${analytics.ranked.length}`;
 
-  // El hallazgo incómodo y útil: si la nota más aplaudida no es la que más
-  // convierte, los likes no son la brújula. Solo con muestra suficiente.
-  const insight = $("#notes-insight");
-  const convertibles = analytics.ranked.filter((note) => noteConversion(note) !== null);
-  if (convertibles.length >= 3) {
-    const topConversion = [...convertibles].sort((a, b) => noteConversion(b) - noteConversion(a))[0];
-    const topInteractions = analytics.ranked[0];
-    insight.hidden = false;
-    insight.textContent = topConversion.id === topInteractions.id
-      ? "Tu nota con más interacciones es también la que más convierte por impresión: aplausos y altas van juntos."
-      : `Los aplausos y las altas no van juntos aquí: la nota que más convierte es «${String(topConversion.body).slice(0, 80)}» (${decimal(noteConversion(topConversion))} altas/1000 impresiones), no la más interactuada.`;
-  } else insight.hidden = true;
-  // Embudo con un solo denominador: por cada mil impresiones. Es lo que permite
-  // leer las cuatro etapas como una secuencia. Sin impresiones medidas las tasas
-  // son "—", no 0: no hay denominador, no hay cociente.
+  // Seis cifras grandes y ninguna letra pequeña: las tasas y los desgloses
+  // por nota están en la tabla de abajo, que es donde se comparan.
   const total = analytics.total;
-  const intent = safeValue(total.profileVisits) + safeValue(total.linkClicks);
-  const per1000 = (value) => {
-    const rate = ratio(safeValue(value), safeValue(total.impressions));
-    return rate === null ? "—" : `${decimal(rate * 1000, rate * 1000 < 10 ? 2 : 1)} por 1.000 impresiones`;
-  };
   [
     ["#notes-total", analytics.ranked.length],
     ["#notes-impressions", total.impressions],
     ["#notes-interactions", total.interactions],
-    ["#notes-likes", total.likes],
-    ["#notes-comments", total.replies],
-    ["#notes-restacks", total.restacks],
-    ["#notes-intent", intent],
     ["#notes-profile-visits", total.profileVisits],
     ["#notes-link-clicks", total.linkClicks],
     ["#notes-signups", total.freeSubscribers],
   ].forEach(([selector, value]) => { $(selector).textContent = formatCompactNumber(value); });
-  const impressionsPerNote = ratio(safeValue(total.impressions), analytics.detailedCount);
-  $("#notes-impressions-per-note").textContent = impressionsPerNote === null
-    ? "—"
-    : `${formatCompactNumber(impressionsPerNote)} por nota con detalle`;
-  $("#notes-rate-interactions").textContent = per1000(total.interactions);
-  $("#notes-rate-intent").textContent = per1000(intent);
-  $("#notes-rate-signups").textContent = per1000(total.freeSubscribers);
-  const paid = $("#notes-signups-paid");
-  paid.textContent = total.paidSubscribers ? `+ ${formatCompactNumber(total.paidSubscribers)} de pago` : "";
-  paid.hidden = !state.sensitive.paid || !total.paidSubscribers;
-
-  // Las cuatro etapas NO comparten población: interacciones suma todas las
-  // notas (likes públicos incluidos); impresiones, intención y altas solo
-  // existen en las que tienen detalle. Callarlo era lo que hacía las cifras
-  // poco claras.
-  const funnelNote = $("#notes-funnel-note");
-  if (analytics.ranked.length) {
-    funnelNote.textContent = analytics.detailedCount === analytics.ranked.length
-      ? "Las cuatro etapas se calculan sobre todas las notas del periodo."
-      : `Impresiones, intención y altas salen de las ${analytics.detailedCount} notas con estadísticas; las interacciones suman las ${analytics.ranked.length}, con los likes y restacks públicos de las que no las tienen. Las tasas usan las impresiones medidas como denominador.`;
-    funnelNote.hidden = false;
-  } else funnelNote.hidden = true;
   renderNotesReach(analytics);
 }
 
@@ -1796,60 +1760,54 @@ const NOTE_AUDIENCE_LABELS = [
   ["inactiva", "Unconnected", "Sin conexión"],
 ];
 
-// Desgloses que `note_stats` sí devuelve y nadie pintaba: por dónde llega el
-// alcance y a quién. "Sin conexión" es el dato que dice si sales de tu burbuja.
+// Dos cards con un pastel cada una. El centro del segundo lleva la cifra que
+// importa de ese reparto: qué parte de las impresiones llega a gente que no te
+// sigue ni te lee. Solo cuentan las notas con detalle, y el badge lo dice.
 function renderNotesReach(analytics) {
-  const surfaces = renderStackedBar(
-    $("#notes-surfaces-bar"),
-    $("#notes-surfaces-legend"),
-    NOTE_SURFACE_LABELS.map(([key, apiKey, label]) => [key, label, analytics.surfaces?.[apiKey] || 0]),
-    "Ninguna nota del periodo tiene desglose de superficies.",
-  );
-  const audience = renderStackedBar(
-    $("#notes-audience-bar"),
-    $("#notes-audience-legend"),
-    NOTE_AUDIENCE_LABELS.map(([key, apiKey, label]) => [key, label, analytics.audience?.[apiKey] || 0]),
-    "Ninguna nota del periodo tiene desglose de audiencia.",
-  );
-  // Qué superficie convierte, no cuál da más alcance. El reparto de altas es
-  // PROPORCIONAL a las impresiones de cada superficie, porque Substack solo da
-  // las altas de la nota entera: por eso el copy dice "estimadas".
-  const rendimiento = getSurfaceYield(analytics.ranked);
-  const etiqueta = new Map(NOTE_SURFACE_LABELS.map(([, apiKey, label]) => [apiKey, label]));
-  renderRankedList(
-    $("#notes-surface-yield"),
-    rendimiento.rows.filter((row) => row.per1000 !== null).map((row) => ({
-      label: etiqueta.get(row.surface) || row.surface,
-      value: row.per1000,
-      display: `${decimal(row.per1000, 2)} / 1.000`,
-      muted: row.impressions < 500,
-    })),
-    "Ninguna nota del periodo tiene impresiones por superficie.",
-  );
+  const surfaces = NOTE_SURFACE_LABELS.map(([key, apiKey, label]) => ({ key, label, value: analytics.surfaces?.[apiKey] || 0 }));
+  const audience = NOTE_AUDIENCE_LABELS.map(([key, apiKey, label]) => ({ key, label, value: analytics.audience?.[apiKey] || 0 }));
+  const cobertura = analytics.ranked.length
+    ? `${analytics.detailedCount} de ${analytics.ranked.length} notas`
+    : "Sin notas";
+  $("#notes-surfaces-coverage").textContent = cobertura;
+  $("#notes-audience-coverage").textContent = cobertura;
 
+  const surfacesDrawn = drawDonut($("#notes-surfaces-donut"), surfaces);
+  const surfacesCenter = $("#notes-surfaces-center");
+  if (surfacesDrawn) {
+    renderDonutLegend($("#notes-surfaces-legend"), surfaces);
+    const top = [...surfaces].sort((a, b) => b.value - a.value)[0];
+    const totalSurfaces = surfaces.reduce((sum, segment) => sum + segment.value, 0);
+    surfacesCenter.replaceChildren();
+    const big = document.createElement("strong"); big.textContent = formatPercent((top.value / totalSurfaces) * 100, 0);
+    const label = document.createElement("span"); label.textContent = top.label;
+    surfacesCenter.append(big, label);
+  } else {
+    surfacesCenter.replaceChildren();
+    emptyMessage($("#notes-surfaces-legend"), "Ninguna nota del periodo tiene desglose de superficies.", "coverage-empty");
+  }
+
+  const audienceDrawn = drawDonut($("#notes-audience-donut"), audience);
+  const audienceCenter = $("#notes-audience-center");
   const burbuja = getReachBeyondBubble(analytics.ranked);
-  const note = $("#notes-reach-note");
-  // Estos desgloses solo existen en las notas con detalle: hay que decir sobre
-  // cuántas de cuántas se está sumando, no dar el total como si fuera de todas.
-  const partes = [];
-  if ((surfaces || audience) && analytics.ranked.length) {
-    partes.push(`Sumado sobre ${analytics.detailedCount} de ${analytics.ranked.length} notas: las que no tienen estadísticas quedan fuera, no cuentan como cero.`);
+  if (audienceDrawn) {
+    renderDonutLegend($("#notes-audience-legend"), audience);
+    audienceCenter.replaceChildren();
+    const big = document.createElement("strong");
+    big.textContent = burbuja.share === null ? "—" : formatPercent(burbuja.share, 0);
+    const label = document.createElement("span"); label.textContent = "fuera de tu audiencia";
+    audienceCenter.append(big, label);
+  } else {
+    audienceCenter.replaceChildren();
+    emptyMessage($("#notes-audience-legend"), "Ninguna nota del periodo tiene desglose de audiencia.", "coverage-empty");
   }
-  if (burbuja.share !== null) {
-    partes.push(`El ${formatPercent(burbuja.share)} de tus impresiones llega a gente que no te sigue ni te lee.`);
-  }
-  if (rendimiento.rows.length) {
-    partes.push("Las altas por superficie se reparten en proporción a sus impresiones: Substack solo atribuye altas a la nota entera, así que son estimadas.");
-  }
-  note.textContent = partes.join(" ");
-  note.hidden = !partes.length;
 }
 
 function renderCadenceTable(content) {
-  renderCadenceCalendar($("#cadence-heatmap"), content?.calendar);
-  const busiest = content?.cadence?.busiestBucket;
+  renderCadenceHeatmap($("#cadence-heatmap"), content?.cadence);
+  const busiest = content?.cadence?.busiest;
   $("#cadence-summary").textContent = busiest
-    ? `${DAY_NAMES[busiest.day]} · ${HOUR_BUCKET_LABELS[busiest.bucket]}`
+    ? `${DAY_NAMES[busiest.day]} · ${String(busiest.hour).padStart(2, "0")}:00`
     : "Sin notas fechadas";
   const body = $("#cadence-table-body");
   body.replaceChildren();

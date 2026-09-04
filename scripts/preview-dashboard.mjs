@@ -129,6 +129,21 @@ const notes = NOTES.map(([body, ago, likes, replies, restacks, impressions, free
     },
     results: { freeSubscribers: free, paidSubscribers: paid },
     reach: { impressions, clicks: Math.round(impressions / 92) },
+    // Reparto por superficie y por audiencia, como lo devuelve note_stats.
+    surfaces: {
+      Feed: Math.round(impressions * 0.58),
+      Notifications: Math.round(impressions * 0.14),
+      "Profile page": Math.round(impressions * 0.11),
+      Permalinks: Math.round(impressions * 0.08),
+      Notes: Math.round(impressions * 0.05),
+      Search: Math.round(impressions * 0.03),
+      Other: Math.round(impressions * 0.01),
+    },
+    audience: {
+      Subscribers: Math.round(impressions * 0.22),
+      Followers: Math.round(impressions * 0.31),
+      Unconnected: Math.round(impressions * 0.47),
+    },
   },
 }));
 
@@ -217,6 +232,34 @@ const ANALYTICS = {
     },
   },
   growth: {
+    // Las tres fuentes agregadas en servidor van por ventana del selector.
+    visitors: Object.fromEntries(["7", "30", "90", "all"].map((key, index) => {
+      const factor = [0.06, 0.25, 0.62, 1][index];
+      const rows = [
+        ["direct to app", "Direct", 8920, 2720, 84],
+        ["substack app", "Substack", 7010, 2020, 31],
+        ["direct", "Direct", 3670, 1720, 22],
+        ["email opens", "Email", 1220, 900, null],
+        ["google", "Search", 640, 410, 9],
+        ["twitter", "Social", 210, 160, 2],
+      ].map(([source, category, views, users, free]) => ({
+        source, category,
+        views: Math.round(views * factor), users: Math.round(users * factor),
+        freeSignups: free === null ? null : Math.round(free * factor), paidSignups: free === null ? null : 0,
+        conversion: free === null ? null : (free / users) * 100,
+      }));
+      const totals = rows.reduce((sum, row) => ({ views: sum.views + row.views, users: sum.users + row.users, freeSignups: sum.freeSignups + (row.freeSignups || 0) }), { views: 0, users: 0, freeSignups: 0 });
+      return [key, { rows, totals }];
+    })),
+    network: Object.fromEntries(["7", "30", "90", "all"].map((key, index) => {
+      const factor = [0.05, 0.22, 0.6, 1][index];
+      const rows = [["Substack App", 1610], ["Substack existing accounts", 640], ["Other Substack Network", 310], ["Imported accounts", 280]]
+        .map(([label, subscribers]) => ({ label, subscribers: Math.round(subscribers * factor), share: 0 }));
+      const total = rows.reduce((sum, row) => sum + row.subscribers, 0);
+      rows.forEach((row) => { row.share = row.subscribers / total; });
+      return [key, { rows, total, updatedAt: "2026-08-21T01:30:00.000Z" }];
+    })),
+    benchmark: { growthRate: 12.4, periodDays: 30, newSubscribers: 341, expirations: 27, outcome: "above_average", outcomeCopy: "Por encima de la media de Substack" },
     sources: {
       totals: { visitors: 21400, subscribers: 1310, revenue: 0 },
       // La clave es `label`, la que produce mapSource() en
@@ -261,6 +304,23 @@ const ANALYTICS = {
   ],
 };
 
+// `growth.sources` se pide una vez por ventana: la muestra escala la de 12 meses.
+{
+  const all = ANALYTICS.growth.sources;
+  const scaled = (factor) => ({
+    totals: { visitors: Math.round(all.totals.visitors * factor), subscribers: Math.round(all.totals.subscribers * factor), revenue: 0 },
+    sources: all.sources.map((row) => ({ ...row, visitors: Math.round(row.visitors * factor), subscribers: Math.round(row.subscribers * factor) })),
+  });
+  ANALYTICS.growth.sources = { 7: scaled(0.06), 30: scaled(0.24), 90: scaled(0.6), all };
+}
+ANALYTICS.traffic = { daily: daily.map((row) => ({ date: row.date, value: Math.round(60 + row.signups * 11 + random() * 40) })) };
+ANALYTICS.audience.overlap = [
+  { name: "Mafia IA", subdomain: "aimafia", share: 0.39 },
+  { name: "Para todo IA", subdomain: "iaparatodo", share: 0.3 },
+  { name: "Cosas de Freelance", subdomain: "cosasdefreelance", share: 0.21 },
+  { name: "How to AI", subdomain: "ruben", share: 0.19 },
+];
+
 const STUB = `
 <script>
   const DATA = ${JSON.stringify({
@@ -275,7 +335,7 @@ const STUB = `
   globalThis.chrome = {
     runtime: { sendMessage: async () => ({ ok: true }), getURL: (p) => p },
     downloads: { download: async () => 1 },
-    storage: { local: {
+    storage: { onChanged: { addListener: () => {} }, local: {
       get: async (keys) => {
         if (!keys) return DATA;
         const list = Array.isArray(keys) ? keys : [keys];

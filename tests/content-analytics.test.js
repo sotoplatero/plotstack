@@ -318,7 +318,7 @@ test("getContentAnalytics assembles coverage, features, timeline, and findings",
     ...corpus(6, (index) => note(`b${index}`, `Apunte breve ${index}`, "2026-08-18T10:00:00Z", stats(50, { impressions: 500 }))),
   ];
   const analytics = getContentAnalytics({ notes });
-  assert.deepEqual(Object.keys(analytics).sort(), ["attribution", "cadence", "calendar", "coverage", "features", "findings", "primaryOutcome", "timeline"]);
+  assert.deepEqual(Object.keys(analytics).sort(), ["attribution", "cadence", "coverage", "features", "findings", "primaryOutcome", "timeline"]);
   assert.equal(analytics.primaryOutcome, "interactions");
   assert.equal(analytics.coverage.scoredNotes, 12);
   assert.ok(analytics.timeline.weeks.length >= 1);

@@ -331,10 +331,12 @@ test("Notas no pinta ceros donde no hubo medición y muestra la atribución", as
   assert.equal(celdas.at(-1), "—", "altas sin detalle es ausencia");
   assert.ok($$("#attribution-chart .chart-bar").length > 0, "faltan las barras de altas atribuidas a notas");
   assert.match($("#attribution-coverage").textContent, /2 de 3/, "la cobertura declara sobre qué se sostiene la serie");
-  // Calendario estilo GitHub: una celda por día, columnas por semana.
-  assert.ok($$("#cadence-heatmap .calendar-grid").length === 1, "falta el calendario de cadencia");
-  assert.ok($$("#cadence-heatmap .calendar-cell.is-level-4").length >= 1, "algún día tiene que marcar el máximo");
-  assert.ok($$("#cadence-heatmap .calendar-legend").length === 1, "la escala necesita leyenda");
+  // Mapa de calor día × hora: siete filas de veinticuatro celdas.
+  const filas = $$("#cadence-heatmap .heatmap-row").filter((row) => !row.classList.contains("is-header"));
+  assert.equal(filas.length, 7, "una fila por día de la semana");
+  assert.ok(filas.every((row) => row.querySelectorAll(".heatmap-cell").length === 24), "veinticuatro horas por fila");
+  assert.ok($$("#cadence-heatmap .heatmap-cell.is-filled").length >= 1, "alguna hora tiene notas");
+  assert.match($("#cadence-summary").textContent, /\d{2}:00/, "la hora más activa va en horas, no en tramos");
 });
 
 test("Audiencia pinta la actividad de la lista y la composición nace oculta", async () => {
@@ -398,7 +400,6 @@ test("las notas se ordenan por conversión con los sin-detalle al final", async 
   assert.match(filas.at(-1).textContent, /Tres aprendizajes/, "sin detalle no compite como si tuviera un 0");
   const celdas = filas[0].querySelectorAll("td").map((td) => txt(td.textContent));
   assert.equal(celdas.at(-2), "1", "7 altas / 6800 impresiones ≈ 1,0 por mil");
-  assert.equal($("#notes-insight").hidden, true, "con 2 notas medidas no hay hallazgo que declarar");
 
   sorter.value = "interactions";
   sorter.dispatchEvent({ type: "change", target: { value: "interactions" } });
@@ -502,29 +503,6 @@ test("Resumen pinta las vistas con su ventana fija declarada", async () => {
     "la ventana de vistas es fija y la tarjeta tiene que declararlo");
 });
 
-test("Notas muestra el desglose de alcance con etiquetas en español", async () => {
-  await arrancar();
-  await verVista("notas");
-  await rango("all");
-  assert.notEqual($("#notes-profile-visits").textContent, "—");
-  assert.notEqual($("#notes-link-clicks").textContent, "—");
-
-  const superficies = $("#notes-surfaces-legend").textContent;
-  const audiencia = $("#notes-audience-legend").textContent;
-  // Ninguna clave cruda de la API llega a la interfaz.
-  for (const crudo of ["Profile page", "Unconnected", "Permalinks", "Subscribers"]) {
-    assert.equal(superficies.includes(crudo), false, `clave cruda en superficies: ${crudo}`);
-    assert.equal(audiencia.includes(crudo), false, `clave cruda en audiencia: ${crudo}`);
-  }
-  assert.match(audiencia, /Suscriptores/);
-  assert.match(audiencia, /Sin conexión/);
-  assert.match(superficies, /Feed/);
-  assert.match(superficies, /Notificaciones/);
-  assert.equal($("#notes-surfaces-bar").hidden, false);
-  // Siete superficies, pero solo se pintan los segmentos con valor.
-  assert.equal($$("#notes-surfaces-bar i").length, 7);
-  assert.match($("#notes-reach-note").textContent, /2 de 3 notas/, "hay que declarar la cobertura del desglose");
-});
 
 test("Cobertura declara el estado del snapshot, no solo de las fuentes ampliadas", async () => {
   await arrancar();
@@ -640,16 +618,6 @@ test("Publicaciones separa lo que se lee fuera del correo y corta por seccion", 
   assert.match($("#posts-section-list").textContent, /Carpetas|Sin sección/);
 });
 
-test("Notas dice que superficie convierte y cuanto sales de tu burbuja", async () => {
-  await arrancar();
-  await verVista("notas");
-  await rango("all");
-  assert.match($("#notes-surface-yield").textContent, /Feed/);
-  assert.match($("#notes-surface-yield").textContent, /1\.000/);
-  const nota = $("#notes-reach-note").textContent;
-  assert.match(nota, /no te sigue ni te lee/);
-  assert.match(nota, /estimadas/, "el reparto por superficie es proporcional y hay que declararlo");
-});
 
 test("un analytics guardado con el esquema anterior no vacia el panel de adquisicion", async () => {
   await arrancar();
@@ -716,42 +684,37 @@ test("el listado de notas se pagina de 25 en 25 y se reinicia al buscar", async 
   assert.equal($$("#notes-table-body tr").length, 3, "el fixture queda restaurado");
 });
 
-test("la cabecera de Notas es un embudo con un solo denominador y declara sus poblaciones", async () => {
+
+
+test("la cabecera de Notas son seis cifras grandes y nada de letra pequeña", async () => {
   await arrancar();
   await verVista("notas");
   await rango("all");
-  const etapas = $$("#notes-analytics .funnel-stage");
-  assert.equal(etapas.length, 4, "Alcance, Interacción, Intención y Resultado");
-  // La cifra que faltaba en la cabecera: las altas atribuidas. Fixture: 7 + 4.
-  assert.equal(txt($("#notes-signups").textContent), "11");
-  // Intención = visitas al perfil (8+5) + clics a enlaces (3+3).
-  assert.equal(txt($("#notes-intent").textContent), "19");
-  // Mismo denominador en las tres tasas: impresiones medidas (6.800 + 4.900).
-  for (const id of ["#notes-rate-interactions", "#notes-rate-intent", "#notes-rate-signups"]) {
-    assert.match($(id).textContent, /por 1\.000 impresiones$/, `${id} tiene que ir por mil impresiones`);
-  }
-  // 11 altas / 11.700 impresiones = 0,94 por mil.
-  assert.match(txt($("#notes-rate-signups").textContent), /^0,94 por 1\.000/);
-  assert.match($("#notes-impressions-per-note").textContent, /por nota con detalle/);
-  // Las poblaciones no coinciden (2 con detalle de 3) y el pie lo dice.
-  assert.match($("#notes-funnel-note").textContent, /2 notas con estadísticas/);
-  assert.match($("#notes-funnel-note").textContent, /suman las 3/);
+  assert.equal($$("#notes-analytics .notes-kpis strong").length, 6, "seis cifras, ni una más");
+  assert.equal(txt($("#notes-total").textContent), "3");
+  assert.equal(txt($("#notes-impressions").textContent), "11,7 mil");
+  assert.equal(txt($("#notes-signups").textContent), "11", "las altas atribuidas están en la cabecera");
+  assert.equal($$("#notes-analytics .funnel-stage").length, 0, "sin embudo");
+  assert.equal($$("#notes-analytics em, #notes-analytics .funnel-breakdown").length, 0, "sin tasas ni desgloses en letra pequeña");
 });
 
-test("el embudo de Notas no inventa tasas sin impresiones medidas", async () => {
+test("Dónde se ven y Quién las ve son dos cards con pastel y leyenda en español", async () => {
   await arrancar();
   await verVista("notas");
-  const listener = globalThis.__plotstackStorageListener;
-  const original = (await globalThis.chrome.storage.local.get())["plotstack.snapshot"];
-  listener({ "plotstack.snapshot": { newValue: {
-    ...original,
-    notes: [{ id: "x", body: "Sin detalle", date: "2026-08-20T10:00:00Z", reactions: 12, replies: 1, restacks: 0, stats: { available: false } }],
-  } } }, "local");
-  await settle(4);
-  assert.equal(txt($("#notes-interactions").textContent), "13", "las interacciones públicas sí se suman");
-  assert.equal($("#notes-rate-interactions").textContent, "—", "sin impresiones no hay denominador: guion, no 0");
-  assert.equal($("#notes-rate-signups").textContent, "—");
-  assert.equal($("#notes-impressions-per-note").textContent, "—");
-  listener({ "plotstack.snapshot": { newValue: original } }, "local");
-  await settle(4);
+  await rango("all");
+  assert.equal(vistaDe($("#notes-surfaces-panel")), "notas");
+  assert.equal(vistaDe($("#notes-audience-panel")), "notas");
+  assert.equal($$("#notes-surfaces-donut .donut-arc").length, 7, "un arco por superficie con impresiones");
+  assert.equal($$("#notes-audience-donut .donut-arc").length, 3);
+  const superficies = $("#notes-surfaces-legend").textContent;
+  for (const crudo of ["Profile page", "Unconnected", "Permalinks", "Subscribers"]) {
+    assert.equal(superficies.includes(crudo), false, `clave cruda: ${crudo}`);
+    assert.equal($("#notes-audience-legend").textContent.includes(crudo), false, `clave cruda: ${crudo}`);
+  }
+  assert.match(superficies, /Feed/);
+  assert.match($("#notes-audience-legend").textContent, /Sin conexión/);
+  // El centro del pastel de audiencia lleva la cifra que importa del reparto.
+  assert.match($("#notes-audience-center").textContent, /fuera de tu audiencia/);
+  assert.match(txt($("#notes-audience-center").textContent), /^\d+%/);
+  assert.match($("#notes-surfaces-coverage").textContent, /2 de 3 notas/, "solo cuentan las notas con detalle y se dice");
 });

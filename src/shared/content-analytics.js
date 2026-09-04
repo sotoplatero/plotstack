@@ -558,7 +558,6 @@ export function getContentAnalytics(snapshot, options = {}) {
     features: insights.features,
     timeline: getNotesTimeline(snapshot, options),
     cadence: getCadenceHeatmap(snapshot, options),
-    calendar: getCadenceCalendar(snapshot, options),
     attribution: getNoteAttributionTimeline(snapshot, options),
     findings: getContentFindings(insights, { ...options, primaryOutcome }),
     primaryOutcome,
