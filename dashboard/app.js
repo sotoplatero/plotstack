@@ -1732,18 +1732,49 @@ function renderNotesOverview(snapshot) {
       ? "Tu nota con más interacciones es también la que más convierte por impresión: aplausos y altas van juntos."
       : `Los aplausos y las altas no van juntos aquí: la nota que más convierte es «${String(topConversion.body).slice(0, 80)}» (${decimal(noteConversion(topConversion))} altas/1000 impresiones), no la más interactuada.`;
   } else insight.hidden = true;
+  // Embudo con un solo denominador: por cada mil impresiones. Es lo que permite
+  // leer las cuatro etapas como una secuencia. Sin impresiones medidas las tasas
+  // son "—", no 0: no hay denominador, no hay cociente.
+  const total = analytics.total;
+  const intent = safeValue(total.profileVisits) + safeValue(total.linkClicks);
+  const per1000 = (value) => {
+    const rate = ratio(safeValue(value), safeValue(total.impressions));
+    return rate === null ? "—" : `${decimal(rate * 1000, rate * 1000 < 10 ? 2 : 1)} por 1.000 impresiones`;
+  };
   [
     ["#notes-total", analytics.ranked.length],
-    ["#notes-interactions", analytics.total.interactions],
-    ["#notes-likes", analytics.total.likes],
-    ["#notes-comments", analytics.total.replies],
-    ["#notes-restacks", analytics.total.restacks],
-    ["#notes-impressions", analytics.total.impressions],
-    // Dos señales de intención que Substack ya devolvía y se sumaban solo al
-    // total: un clic a enlace o una visita al perfil valen más que un like.
-    ["#notes-profile-visits", analytics.total.profileVisits],
-    ["#notes-link-clicks", analytics.total.linkClicks],
+    ["#notes-impressions", total.impressions],
+    ["#notes-interactions", total.interactions],
+    ["#notes-likes", total.likes],
+    ["#notes-comments", total.replies],
+    ["#notes-restacks", total.restacks],
+    ["#notes-intent", intent],
+    ["#notes-profile-visits", total.profileVisits],
+    ["#notes-link-clicks", total.linkClicks],
+    ["#notes-signups", total.freeSubscribers],
   ].forEach(([selector, value]) => { $(selector).textContent = formatCompactNumber(value); });
+  const impressionsPerNote = ratio(safeValue(total.impressions), analytics.detailedCount);
+  $("#notes-impressions-per-note").textContent = impressionsPerNote === null
+    ? "—"
+    : `${formatCompactNumber(impressionsPerNote)} por nota con detalle`;
+  $("#notes-rate-interactions").textContent = per1000(total.interactions);
+  $("#notes-rate-intent").textContent = per1000(intent);
+  $("#notes-rate-signups").textContent = per1000(total.freeSubscribers);
+  const paid = $("#notes-signups-paid");
+  paid.textContent = total.paidSubscribers ? `+ ${formatCompactNumber(total.paidSubscribers)} de pago` : "";
+  paid.hidden = !state.sensitive.paid || !total.paidSubscribers;
+
+  // Las cuatro etapas NO comparten población: interacciones suma todas las
+  // notas (likes públicos incluidos); impresiones, intención y altas solo
+  // existen en las que tienen detalle. Callarlo era lo que hacía las cifras
+  // poco claras.
+  const funnelNote = $("#notes-funnel-note");
+  if (analytics.ranked.length) {
+    funnelNote.textContent = analytics.detailedCount === analytics.ranked.length
+      ? "Las cuatro etapas se calculan sobre todas las notas del periodo."
+      : `Impresiones, intención y altas salen de las ${analytics.detailedCount} notas con estadísticas; las interacciones suman las ${analytics.ranked.length}, con los likes y restacks públicos de las que no las tienen. Las tasas usan las impresiones medidas como denominador.`;
+    funnelNote.hidden = false;
+  } else funnelNote.hidden = true;
   renderNotesReach(analytics);
 }
 

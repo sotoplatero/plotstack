@@ -715,3 +715,43 @@ test("el listado de notas se pagina de 25 en 25 y se reinicia al buscar", async 
   await settle(4);
   assert.equal($$("#notes-table-body tr").length, 3, "el fixture queda restaurado");
 });
+
+test("la cabecera de Notas es un embudo con un solo denominador y declara sus poblaciones", async () => {
+  await arrancar();
+  await verVista("notas");
+  await rango("all");
+  const etapas = $$("#notes-analytics .funnel-stage");
+  assert.equal(etapas.length, 4, "Alcance, Interacción, Intención y Resultado");
+  // La cifra que faltaba en la cabecera: las altas atribuidas. Fixture: 7 + 4.
+  assert.equal(txt($("#notes-signups").textContent), "11");
+  // Intención = visitas al perfil (8+5) + clics a enlaces (3+3).
+  assert.equal(txt($("#notes-intent").textContent), "19");
+  // Mismo denominador en las tres tasas: impresiones medidas (6.800 + 4.900).
+  for (const id of ["#notes-rate-interactions", "#notes-rate-intent", "#notes-rate-signups"]) {
+    assert.match($(id).textContent, /por 1\.000 impresiones$/, `${id} tiene que ir por mil impresiones`);
+  }
+  // 11 altas / 11.700 impresiones = 0,94 por mil.
+  assert.match(txt($("#notes-rate-signups").textContent), /^0,94 por 1\.000/);
+  assert.match($("#notes-impressions-per-note").textContent, /por nota con detalle/);
+  // Las poblaciones no coinciden (2 con detalle de 3) y el pie lo dice.
+  assert.match($("#notes-funnel-note").textContent, /2 notas con estadísticas/);
+  assert.match($("#notes-funnel-note").textContent, /suman las 3/);
+});
+
+test("el embudo de Notas no inventa tasas sin impresiones medidas", async () => {
+  await arrancar();
+  await verVista("notas");
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.snapshot"];
+  listener({ "plotstack.snapshot": { newValue: {
+    ...original,
+    notes: [{ id: "x", body: "Sin detalle", date: "2026-08-20T10:00:00Z", reactions: 12, replies: 1, restacks: 0, stats: { available: false } }],
+  } } }, "local");
+  await settle(4);
+  assert.equal(txt($("#notes-interactions").textContent), "13", "las interacciones públicas sí se suman");
+  assert.equal($("#notes-rate-interactions").textContent, "—", "sin impresiones no hay denominador: guion, no 0");
+  assert.equal($("#notes-rate-signups").textContent, "—");
+  assert.equal($("#notes-impressions-per-note").textContent, "—");
+  listener({ "plotstack.snapshot": { newValue: original } }, "local");
+  await settle(4);
+});

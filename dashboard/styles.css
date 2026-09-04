@@ -436,3 +436,23 @@ td.is-below-median { color: var(--danger); }
 /* Paginador del listado de notas. */
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 27px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
 .pager .text-button:disabled { opacity: .35; cursor: default; }
+
+/* Embudo de Notas: cuatro etapas del mismo tamano que se leen de izquierda a
+   derecha. La ultima (Resultado) va en acento porque es la cifra que importa. */
+.notes-funnel { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); }
+.funnel-stage { padding: 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.funnel-stage:last-child { border-right: 0; }
+.funnel-label { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .12em; }
+.funnel-label::after { content: " →"; opacity: .5; }
+.funnel-stage:last-child .funnel-label::after { content: ""; }
+.funnel-stage strong { font: 400 32px/1 var(--serif); margin-top: 8px; letter-spacing: -.03em; }
+.funnel-stage small { color: var(--muted); font-size: 10px; }
+.funnel-stage em { font-style: normal; font-size: 10px; color: var(--paper); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.funnel-breakdown { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.funnel-breakdown b { color: var(--paper); font-weight: 600; }
+.funnel-stage.is-outcome strong { color: var(--accent); }
+.notes-overview-header .panel-copy { margin: 6px 0 0; }
+.notes-overview-header .panel-copy strong { color: var(--paper); font-weight: 600; }
+#notes-funnel-note { padding: 0 27px 20px; margin: 14px 0 0; }
+@media (max-width: 950px) { .notes-funnel { grid-template-columns: repeat(2, 1fr); } .funnel-stage { border-bottom: 1px solid var(--line); } .funnel-stage:nth-child(2n) { border-right: 0; } }
+@media (max-width: 560px) { .notes-funnel { grid-template-columns: 1fr; } .funnel-stage { border-right: 0; } }

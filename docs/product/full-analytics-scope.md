@@ -28,9 +28,12 @@ Para la forma exacta de cada payload, ver
    fuentes de adquisición con su desglose anidado, y altas y bajas con la
    comparación entre días con envío y sin él. **Todo obedece al selector**: el
    badge "· fijo" desapareció porque la ventana fija era autoimpuesta.
-4. **Notas** — cabecera agregada (con visitas al perfil y clics a enlaces),
-   desglose de alcance por superficie y por audiencia, calendario de cadencia
-   estilo GitHub, listado paginado de 25 en 25,
+4. **Notas** — cabecera en **embudo de cuatro etapas** (Alcance → Interacción →
+   Intención → Resultado) con un solo denominador, altas por cada mil
+   impresiones, y un pie que declara que interacciones suma todas las notas
+   mientras impresiones, intención y altas solo existen en las que tienen
+   detalle. Desglose de alcance por superficie y por audiencia, calendario de
+   cadencia estilo GitHub, listado paginado de 25 en 25,
    altas atribuidas y tabla por nota con el detalle de `note_stats`.
 5. **Publicaciones** — tabla ordenable y buscable, correo frente a
    descubrimiento, y cortes por día, longitud y sección. **No filtra por rango**: es histórico completo.

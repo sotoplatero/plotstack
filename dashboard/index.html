@@ -370,19 +370,42 @@
           <div class="view" data-view="notas" hidden>
             <section class="panel campaigns-panel reveal" id="notes-analytics">
               <div class="panel-header notes-overview-header">
-                <div><h2>Notas</h2></div>
-                <div class="detail-coverage"><span>Detalle disponible</span><strong id="notes-detail-coverage">—</strong></div>
+                <div><h2>Notas</h2><p class="panel-copy"><strong id="notes-total">—</strong> notas en <span class="summary-period-label">el periodo</span></p></div>
+                <div class="detail-coverage"><span>Con estadísticas</span><strong id="notes-detail-coverage">—</strong></div>
               </div>
-              <div class="post-kpi-strip">
-                <div><span>Notas</span><strong id="notes-total">—</strong></div>
-                <div><span>Interacciones</span><strong id="notes-interactions">—</strong></div>
-                <div><span>Likes</span><strong id="notes-likes">—</strong></div>
-                <div><span>Comentarios</span><strong id="notes-comments">—</strong></div>
-                <div><span>Restacks</span><strong id="notes-restacks">—</strong></div>
-                <div><span>Impresiones</span><strong id="notes-impressions">—</strong></div>
-                <div><span>Visitas al perfil</span><strong id="notes-profile-visits">—</strong></div>
-                <div><span>Clics a enlaces</span><strong id="notes-link-clicks">—</strong></div>
+              <!-- Embudo: cuatro etapas con el MISMO denominador (por 1.000
+                   impresiones), para que se lea de izquierda a derecha como una
+                   secuencia y no como ocho cifras sueltas. -->
+              <div class="notes-funnel" aria-label="Embudo de las notas">
+                <div class="funnel-stage">
+                  <span class="funnel-label">Alcance</span>
+                  <strong id="notes-impressions">—</strong>
+                  <small>impresiones</small>
+                  <em id="notes-impressions-per-note">—</em>
+                </div>
+                <div class="funnel-stage">
+                  <span class="funnel-label">Interacción</span>
+                  <strong id="notes-interactions">—</strong>
+                  <small>interacciones</small>
+                  <em id="notes-rate-interactions">—</em>
+                  <p class="funnel-breakdown"><b id="notes-likes">—</b> likes · <b id="notes-comments">—</b> comentarios · <b id="notes-restacks">—</b> restacks</p>
+                </div>
+                <div class="funnel-stage">
+                  <span class="funnel-label">Intención</span>
+                  <strong id="notes-intent">—</strong>
+                  <small>visitas al perfil y clics</small>
+                  <em id="notes-rate-intent">—</em>
+                  <p class="funnel-breakdown"><b id="notes-profile-visits">—</b> al perfil · <b id="notes-link-clicks">—</b> a enlaces</p>
+                </div>
+                <div class="funnel-stage is-outcome">
+                  <span class="funnel-label">Resultado</span>
+                  <strong id="notes-signups">—</strong>
+                  <small>altas atribuidas</small>
+                  <em id="notes-rate-signups">—</em>
+                  <p class="funnel-breakdown" id="notes-signups-paid" data-sensitive="paid" hidden></p>
+                </div>
               </div>
+              <p class="panel-copy" id="notes-funnel-note" hidden></p>
               <div class="notes-reach">
                 <p class="retention-label">Dónde se ven tus notas</p>
                 <div class="engagement-bar" id="notes-surfaces-bar"></div>
