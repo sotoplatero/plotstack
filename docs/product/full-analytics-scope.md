@@ -67,7 +67,7 @@ consumidor en la interfaz):
 |---|---|---|
 | `subscriberTimeline` | `POST /api/v1/subscriber-stats` paginado | Serie diaria de altas desde `subscription_created_at`. `limit` máx. 100 |
 | `audience` | *(sin petición propia)* | Conteos de `chartCounts` de la primera página de la timeline |
-| `growthSources` | `/api/v1/publication/stats/growth/sources` | Fuentes con desglose en `children`. Periodo fijo de 12 meses |
+| `growthSources` | `/api/v1/publication/stats/growth/sources` | Fuentes con desglose en `children`. Hoy se pide con 12 meses fijos, pero **el endpoint acepta `from_date`/`to_date`**: la ventana fija es autoimpuesta |
 | `followerTimeseries` | `/api/v1/publication/stats/followers/timeseries` | Evolución real de seguidores |
 | `audienceLocation` | `/api/v1/publication/stats/audience_insights/location` (+ `/total`) | Países de las altas gratuitas |
 | `freeSubscriberGrowth` | `/api/v1/publication/stats/paid_subscriber_growth?is_subscribed=false` | Altas, bajas y neto diarios |

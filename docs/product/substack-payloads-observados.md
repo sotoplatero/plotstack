@@ -391,3 +391,42 @@ solo hacen falta `name` y `subdomain`: el resto es configuración ajena.
 | `publication/stats/referrals/leaderboard?order_by=num_gifts_accepted` | lista | Idem |
 | `publication/post-tag` | `[{id, publication_id, name, slug, hidden}]` | **Secciones/etiquetas de la publicación.** Permite cortar el rendimiento por sección |
 | `publication/stats/reader-referrals?to=&offset=&limit=&order_by=visitors` | lista | Pestaña Compartir |
+
+## `/publish/growth` — "Growth sources", 4 sep 2026
+
+Página aparte de `/publish/stats`, con su propio enlace en la barra lateral
+(`/publish/growth`; `/publish/grow` es 404). Tres métricas en pestañas: Unique
+visitors, New subscribers, New revenue.
+
+### `growth/sources` SÍ acepta rango de fechas
+
+```
+GET publication/stats/growth/sources?order_by=users&order_direction=desc&from_date=&to_date=
+```
+
+Comprobado con tres ventanas sobre la misma publicación:
+
+| Ventana | Visitas | Altas | Fuentes distintas |
+|---|---|---|---|
+| 7 días | 87 | 6 | 7 |
+| 30 días | 508 | 37 | 8 |
+| 365 días | 1196 | 118 | 13 |
+
+El badge "· fijo" del panel de adquisición de PlotStack **no refleja un límite
+de la API**: es una limitación autoimpuesta por llamar siempre con una ventana
+de 12 meses. El selector de rango puede aplicarse también a esa vista.
+
+`growth/events?from_date=&to_date=` acepta el mismo rango (96 eventos en 30
+días).
+
+### `growth/partial-timeseries` — cuerpo sin confirmar
+
+```
+POST publication/stats/growth/partial-timeseries  -> 200
+```
+
+Alimenta el área apilada por fuente a lo largo del tiempo. **Es un POST y no se
+consiguió capturar su cuerpo**: la página no pasa por `window.fetch` ni por
+`XMLHttpRequest` interceptables desde la consola. Mientras el cuerpo no se
+observe, no se implementa: adivinar el esquema de una petición POST es
+exactamente lo que la regla de "no se inventan endpoints" prohíbe.
