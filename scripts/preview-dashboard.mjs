@@ -194,6 +194,10 @@ const SNAPSHOT = {
     monthlyRevenue: 1425,
     followers: 3900,
     appSubscribers: 720,
+    // Vistas de la ventana fija de 30 días que da `publish-dashboard/summary`,
+    // con su variación. Sin esto la tarjeta de Vistas sale en cero.
+    totalViews: 18400,
+    viewsDelta: 2140,
   },
   previous: { subscribers: 2710, paidSubscribers: 173, openRate: 45.9, clickRate: 6.1, monthlyRevenue: 1330 },
   trend,

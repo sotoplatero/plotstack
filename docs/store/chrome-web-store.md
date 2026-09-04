@@ -6,7 +6,7 @@ están en el límite de caracteres que impone cada campo.
 ## Antes de subir
 
 ```powershell
-npm test          # 116 pruebas
+npm test          # 160 pruebas
 npm run icons     # regenera assets/icons/*.png desde assets/icon.svg
 npm run package   # valida y escribe dist/plotstack-<versión>.zip
 npm run screenshot -- capturas\resumen.png   # capturas a 1280x800 en dist/store/
@@ -56,14 +56,18 @@ las estadísticas de tu propia publicación y las guarda en tu equipo.
 
 SEIS VISTAS
 
-• Resumen — suscriptores, tasa de apertura, CTR y crecimiento neto.
-• Audiencia — suscriptores acumulados, altas por día y total de seguidores.
-• Crecimiento — fuentes de adquisición con visitantes y altas, y eventos de
-  crecimiento del periodo.
-• Notas — interacciones, impresiones, mapa de cadencia por día y hora, y las
-  altas atribuidas a cada nota.
-• Publicaciones — tabla ordenable y buscable con las métricas por post, más
-  cortes por día de envío y por longitud.
+• Resumen — suscriptores, vistas, tasa de apertura, CTR y crecimiento neto.
+• Audiencia — suscriptores acumulados, altas por día, seguidores superpuestos
+  para ver la divergencia, países, retención y qué publicaciones comparten
+  lectores contigo.
+• Crecimiento — visitas por día y por fuente con su conversión, qué parte de tu
+  audiencia llega por la red de Substack, fuentes de adquisición, y altas y
+  bajas comparando días con envío y sin él.
+• Notas — impresiones, interacciones, visitas al perfil, clics y altas
+  atribuidas; dónde se ven y quién las ve en gráficos de pastel; mapa de
+  cadencia por día y hora, y el listado completo paginado.
+• Publicaciones — tabla ordenable y buscable con las métricas por post, cortes
+  por día de envío, longitud y sección, y cuáles se leen más allá del correo.
 • Cobertura — qué fuentes de datos respondieron y cuándo fue la última
   sincronización.
 
@@ -76,6 +80,8 @@ RIGOR EN LAS CIFRAS
 • Un crecimiento sin base previa no se convierte en «+100 %».
 • Si una fuente de Substack falla, se conserva el dato anterior y el panel de
   Cobertura lo dice; nunca se rellena con ceros.
+• Lo estimado se llama estimado: el reparto de altas por superficie de una nota
+  es una proporción, y la interfaz lo declara en vez de presentarlo como medido.
 
 PRIVACIDAD
 
@@ -131,6 +137,7 @@ justificaciones genéricas: cada una nombra la función concreta.
 | `tabs` | Abrir el dashboard de la extensión en una pestaña al pulsar el icono, reutilizar la pestaña ya abierta si existe, y abrir la página de acceso de Substack cuando no hay sesión activa. |
 | `downloads` | Guardar en el equipo del usuario los archivos PNG y CSV que él mismo genera desde el dashboard con el botón de captura y el de exportar. |
 | `clipboardWrite` | Copiar al portapapeles la imagen PNG de la vista o tarjeta cuando el usuario elige la opción «Copiar» del menú de captura. |
+| `alarms` | Programar una única comprobación diaria (`chrome.alarms` con periodo de 24 h) que actualiza en segundo plano las estadísticas de la publicación del propio usuario. Sin ella, el histórico local solo crece los días en que el usuario abre el dashboard, y series como la de seguidores quedan con huecos. No se envían notificaciones ni se ejecuta ninguna otra tarea. |
 | **Host** `https://substack.com/*`, `https://*.substack.com/*` | Leer los endpoints de estadísticas de solo lectura de la publicación del propio usuario (perfil, resumen, estadísticas de email, publicaciones y notas). Es el único origen con el que la extensión se comunica y sin él no hay datos que mostrar. |
 
 **Código remoto:** No. Todo el JavaScript va dentro del paquete; no se carga ni
@@ -162,20 +169,32 @@ Lo que la tienda exige y lo que ya está resuelto:
 | Recurso | Tamaño | Estado |
 | --- | --- | --- |
 | Icono de la tienda | 128×128 PNG | ✅ `assets/icons/icon-128.png` |
-| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/` |
+| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/`, regeneradas para 1.1.0 |
 | Mosaico pequeño | 440×280 PNG | ⏳ opcional |
 | Imagen destacada | 1400×560 PNG | ⏳ opcional |
 
-Las cinco capturas están hechas y se suben en este orden: `plotstack-resumen`,
-`plotstack-publicaciones`, `plotstack-notas`, `plotstack-crecimiento`,
-`plotstack-audiencia`.
+Se suben cinco, en este orden: `plotstack-resumen`, `plotstack-publicaciones`,
+`plotstack-notas`, `plotstack-crecimiento`, `plotstack-audiencia`. `dist/` está
+en `.gitignore`, así que las capturas no viven en el repo: hay que regenerarlas
+antes de cada subida en la que la interfaz haya cambiado, y en 1.1.0 cambió.
 
 ### Cómo se regeneran
 
 ```powershell
 npm run preview     # http://localhost:4173/dashboard/
-npm run screenshot -- <captura.png>
 ```
+
+Con el servidor en marcha, se captura **con el viewport del navegador puesto a
+1280×800 exactos**: así el PNG ya sale del tamaño que pide la tienda y no hay que
+escalarlo ni rellenarlo. Se navega a `http://localhost:4173/dashboard/`, se
+recorre cada vista de la barra lateral y se guarda una captura del viewport por
+vista, con el scroll arriba.
+
+`npm run screenshot -- <captura.png>` sigue estando para el otro caso: una
+captura hecha a mano, o desde la cuenta real con el botón de cámara, que llega
+con un tamaño cualquiera y hay que encajar en 1280×800 sobre el fondo de marca.
+Nunca amplía una captura pequeña, así que si sale con márgenes anchos hay que
+volver a capturar más grande en vez de forzar el escalado.
 
 `preview-dashboard.mjs` sirve el dashboard real —el mismo `index.html`, el mismo
 `app.js`— con la publicación ficticia **«Carta de muestra»**, y pasa los datos
@@ -196,6 +215,11 @@ más grande en vez de forzar el escalado.
 
 - Los permisos `cookies` y de host amplios sitúan la extensión en revisión
   manual: cuenta con días, no horas, en la primera publicación.
+- **1.1.0 añade el permiso `alarms`.** Una actualización que pide un permiso
+  nuevo vuelve a pasar por revisión, así que hay que rellenar su justificación
+  en el formulario (está en la tabla de arriba) antes de enviar. `alarms` no
+  genera aviso de permisos al usuario, de modo que la actualización se instala
+  sin pedirle que la acepte de nuevo.
 - El revisor necesita poder ver la extensión funcionando. En *Notes for
   reviewer* conviene explicar que hace falta una sesión de Substack con una
   publicación propia, y ofrecer credenciales de prueba si es posible.
@@ -214,6 +238,35 @@ substack.com. El valor de las cookies nunca se lee: solo se comprueba con
 chrome.cookies que exista substack.sid o connect.sid.
 
 Código fuente completo: https://github.com/sotoplatero/plotstack
+```
+
+## Novedades de esta versión
+
+La tienda no tiene un campo de «What's new» propio: el cambio se cuenta en la
+descripción detallada y, si se quiere, en el primer párrafo. Texto listo para
+usar en el anuncio o en el repositorio:
+
+```
+1.1.0
+
+• El dashboard aparece sin esperar: la sincronización responde en cuanto tiene
+  las cifras y sigue trayendo el detalle por publicación y por nota en segundo
+  plano, informando de en qué va.
+• Refresco diario automático, para que el histórico crezca aunque no abras el
+  dashboard.
+• Vista de tráfico: visitas por día y por fuente, con su conversión a alta.
+• Efecto de red: qué parte de tu audiencia llega por la red de Substack.
+• Notas: gráficos de pastel para saber dónde se ven y quién las ve, altas
+  atribuidas en la cabecera y listado paginado.
+• Publicaciones: cortes por sección y cuáles se leen más allá del correo.
+• Audiencia: seguidores y suscriptores en el mismo gráfico, retención por
+  cohorte y publicaciones que comparten lectores contigo.
+• El selector de rango ya aplica a las fuentes de adquisición, que antes eran
+  siempre de doce meses.
+• Correcciones: el delta de suscriptores compara contra la ventana elegida y no
+  contra treinta días fijos; las altas de pago ya no se perdían cuando las
+  gratuitas eran cero; y una tasa por publicación del 0,8 % ya no se mostraba
+  como 80 %.
 ```
 
 ## Después de publicar

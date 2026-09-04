@@ -38,7 +38,7 @@
       </div>
 
       <h1>Política de privacidad</h1>
-      <p class="updated">Última actualización: 2 de septiembre de 2026 · Versión 1.0.0</p>
+      <p class="updated">Última actualización: 4 de septiembre de 2026 · Versión 1.1.0</p>
 
       <p class="lede">
         PlotStack no recoge, transmite ni vende ningún dato. No existe servidor de
@@ -50,7 +50,15 @@
       <p>
         PlotStack reúne en un dashboard local las métricas de la publicación de
         Substack en la que ya has iniciado sesión en Chrome: suscriptores,
-        aperturas, clics, crecimiento, publicaciones y Notas.
+        aperturas, clics, crecimiento, tráfico, publicaciones y Notas.
+      </p>
+      <p>
+        Desde la versión 1.1.0, además de cuando pulsas «Sincronizar», la
+        extensión comprueba tus estadísticas <strong>una vez al día en segundo
+        plano</strong> para que el histórico siga creciendo aunque no abras el
+        dashboard. Esa comprobación habla únicamente con substack.com y guarda
+        el resultado en tu equipo, igual que una sincronización manual. Si
+        pulsas «Desconectar», deja de ocurrir.
       </p>
 
       <h2>Datos que se manejan y dónde se quedan</h2>
@@ -64,6 +72,13 @@
         <li>
           <strong>Nombre y subdominio de la publicación conectada</strong>, para saber qué
           cuenta se está mostrando.
+        </li>
+        <li>
+          <strong>Nombres de publicaciones que comparten audiencia contigo.</strong>
+          Substack informa de qué otras publicaciones leen también tus
+          suscriptores, con un porcentaje de solapamiento. Se guardan solo el
+          nombre público y el subdominio de cada una, tal como Substack los
+          muestra en tu propio panel; nunca datos de sus suscriptores.
         </li>
         <li>
           <strong>Preferencias de interfaz</strong> (vista activa, rango de fechas y si
@@ -113,6 +128,7 @@
         <li><strong>tabs</strong> — abrir el dashboard en una pestaña, reutilizar la que ya esté abierta y llevarte a la página de acceso de Substack si no hay sesión.</li>
         <li><strong>downloads</strong> — guardar en tu carpeta de descargas los PNG y CSV que generas tú desde el dashboard.</li>
         <li><strong>clipboardWrite</strong> — copiar al portapapeles la captura PNG cuando eliges «Copiar».</li>
+        <li><strong>alarms</strong> — programar la comprobación diaria descrita arriba. Es lo único que hace: no envía notificaciones ni ejecuta nada más.</li>
         <li><strong>Acceso a substack.com</strong> — leer las estadísticas de tu propia cuenta. Sin esto la extensión no tiene nada que mostrar.</li>
       </ul>
 

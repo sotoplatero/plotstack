@@ -718,3 +718,14 @@ test("Dónde se ven y Quién las ve son dos cards con pastel y leyenda en españ
   assert.match(txt($("#notes-audience-center").textContent), /^\d+%/);
   assert.match($("#notes-surfaces-coverage").textContent, /2 de 3 notas/, "solo cuentan las notas con detalle y se dice");
 });
+
+test("el eje Y no repite etiquetas cuando el recorrido es estrecho", async () => {
+  await arrancar();
+  await verVista("audiencia");
+  await rango("all");
+  // La curva acumulada del fixture va de 2.710 a 2.840: en formato compacto
+  // las cuatro marcas caerían en "2,8 mil" repetido.
+  const etiquetas = $$("#audience-chart .chart-label").map((node) => node.textContent);
+  const marcasY = etiquetas.slice(0, 4);
+  assert.equal(new Set(marcasY).size, marcasY.length, `eje con etiquetas repetidas: ${marcasY.join(" / ")}`);
+});

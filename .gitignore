@@ -1,3 +1,5 @@
 node_modules/
 .tmp-*
 dist/
+# Configuracion local del agente y worktrees: nunca se publica.
+.claude/

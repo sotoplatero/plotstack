@@ -435,6 +435,14 @@ function drawLineChart(svg, points, gradientId, options = {}) {
     gradient.append(stop);
   });
   defs.append(gradient); svg.append(defs);
+  // Con un recorrido estrecho el formato compacto redondea dos marcas al mismo
+  // texto ("2,8 mil" arriba y en la siguiente): un eje con etiquetas repetidas
+  // no dice nada. Si colisionan, se cae a un formato exacto.
+  const tickValues = [0, 1, 2, 3].map((index) => max - (index / 3) * spread);
+  let ticks = tickValues.map((value) => formatValue(value));
+  if (new Set(ticks).size < ticks.length) {
+    ticks = tickValues.map((value) => Math.round(value).toLocaleString("es-ES"));
+  }
   for (let index = 0; index < 4; index += 1) {
     const gy = top + (index / 3) * (height - top - bottom);
     const grid = document.createElementNS(ns, "line");
@@ -444,7 +452,7 @@ function drawLineChart(svg, points, gradientId, options = {}) {
     const label = document.createElementNS(ns, "text");
     label.setAttribute("x", 0); label.setAttribute("y", gy + 3);
     label.setAttribute("class", "chart-label");
-    label.textContent = formatValue(max - (index / 3) * spread);
+    label.textContent = ticks[index];
     svg.append(label);
   }
   const area = document.createElementNS(ns, "path");
@@ -878,6 +886,10 @@ function drawDonut(svg, segments) {
   const ns = "http://www.w3.org/2000/svg";
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
+  // Hueco entre segmentos: dos porciones contiguas se distinguen por el corte
+  // aunque el lector no compare tonos. Solo si hay mas de una porcion.
+  const drawn = segments.filter((segment) => safeValue(segment.value) > 0);
+  const gap = drawn.length > 1 ? 2 : 0;
   let offset = 0;
   segments.forEach((segment) => {
     const share = safeValue(segment.value) / total;
@@ -885,7 +897,9 @@ function drawDonut(svg, segments) {
     const arc = document.createElementNS(ns, "circle");
     arc.setAttribute("cx", "100"); arc.setAttribute("cy", "100"); arc.setAttribute("r", String(radius));
     arc.setAttribute("class", `donut-arc is-${segment.key}`);
-    arc.setAttribute("stroke-dasharray", `${(share * circumference).toFixed(2)} ${circumference.toFixed(2)}`);
+    // El hueco se resta del arco, nunca del reparto: los porcentajes de la
+    // leyenda siguen siendo los reales.
+    arc.setAttribute("stroke-dasharray", `${Math.max(1, share * circumference - gap).toFixed(2)} ${circumference.toFixed(2)}`);
     arc.setAttribute("stroke-dashoffset", String((-offset * circumference).toFixed(2)));
     const title = document.createElementNS(ns, "title");
     title.textContent = `${segment.label}: ${formatCompactNumber(segment.value)} (${formatPercent(share * 100)})`;
@@ -1265,7 +1279,9 @@ function renderTraffic(analytics) {
   const drawn = drawLineChart($("#traffic-chart"), daily, "rates-gradient", { primaryLabel: "Visitas", baselineZero: true });
   $("#traffic-empty").hidden = drawn;
   const totalVisitas = daily.reduce((sum, point) => sum + safeValue(point.value), 0);
-  $("#traffic-total").textContent = daily.length ? `${formatCompactNumber(totalVisitas)} visitas` : "Sin visitas";
+  $("#traffic-total").textContent = daily.length
+    ? `${formatCompactNumber(totalVisitas)} visitas en ${rangeLabel()}`
+    : "Sin visitas";
 
   const fuentes = byRange(analytics?.growth?.visitors);
   const filas = fuentes?.rows || [];
@@ -1274,7 +1290,6 @@ function renderTraffic(analytics) {
   // vuelve tres veces no puede contar como tres oportunidades de alta.
   const conversion = ratio(totales.freeSignups, totales.users);
   renderLabelledGrid($("#traffic-kpis"), [
-    ["Visitas", totales.views],
     ["Visitantes", totales.users],
     ["Altas atribuidas", totales.freeSignups],
     ["Conversión", conversion === null ? null : conversion * 100, "percent"],
@@ -1315,7 +1330,7 @@ function renderTraffic(analytics) {
   const concentracion = getConcentration(filas, (fila) => fila.views);
   $("#traffic-note").textContent = concentracion.share === null
     ? "Sin visitas medidas por fuente en este periodo."
-    : `Las ${concentracion.top} fuentes principales concentran el ${formatPercent(concentracion.share)} de las visitas, sobre ${concentracion.counted} fuentes medidas.`;
+    : `Las ${concentracion.top} fuentes principales concentran el ${formatPercent(concentracion.share)} de las visitas, sobre ${concentracion.counted} fuentes medidas. El desglose por fuente sale de un endpoint distinto al de la serie diaria, así que su suma no tiene por qué coincidir con el total del gráfico.`;
 }
 
 // Efecto de red: `network_attribution` respondia 500 solo porque se llamaba sin

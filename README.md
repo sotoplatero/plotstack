@@ -29,7 +29,23 @@ Substack actualiza estas estadísticas aproximadamente cada hora y puede tardar 
 
 El feed del perfil también contiene restacks de contenido ajeno. PlotStack los excluye comparando el `comment.user_id` de cada elemento con el usuario autenticado, en lugar de confiar en la URL del perfil.
 
-La sincronización ampliada también reúne, cuando la cuenta y el plan de Substack los exponen, audiencia, fuentes y eventos de crecimiento, atribución de red, recomendaciones, histórico de email, inventario de contenido, resúmenes de monetización y estado de exportaciones. El panel **Cobertura** muestra qué fuentes respondieron: una ruta no disponible no se transforma en un cero ni interrumpe las demás.
+La sincronización ocurre en **dos fases**. La primera trae escalares y listas y
+deja el dashboard pintado en segundo; la segunda resuelve lo caro —detalle por
+publicación, feed de notas y la cola de `note_stats`— en segundo plano,
+informando de su progreso, y vuelve a guardar el snapshot cuando termina. Un
+fallo en la segunda deja intacto lo que la primera ya guardó. Todas las
+peticiones pasan por un limitador único de cuatro simultáneas, y una alarma
+diaria repite la fase rápida para que el histórico crezca aunque no abras el
+dashboard.
+
+La sincronización ampliada reúne, cuando la cuenta y el plan de Substack los
+exponen: audiencia y su composición, altas por día, fuentes de adquisición,
+fuentes de tráfico con su conversión, visitas por día, efecto de red, histórico
+de seguidores, ubicación, altas y bajas gratuitas y de pago, retención por
+cohorte, la comparación de crecimiento que publica Substack y las publicaciones
+que comparten audiencia contigo. El panel **Cobertura** muestra qué fuentes
+respondieron: una ruta no disponible no se transforma en un cero ni interrumpe
+las demás.
 
 De cada publicación se guardan además titular, subtítulo, slug, audiencia, tipo y
 conteo de palabras cuando Substack los devuelve; si no vienen, la columna queda
@@ -42,19 +58,24 @@ Para publicaciones, PlotStack pagina todo `post_management/published` y consulta
 PlotStack reúne en seis vistas lo que Substack reparte entre `publish/stats`,
 `publish/growth/revenue`, el panel de posts y la pestaña de Notes:
 
-- **Resumen** — suscriptores, apertura, CTR, curva de crecimiento e
+- **Resumen** — suscriptores, vistas, apertura, CTR, curva de crecimiento e
   interacciones de publicaciones y Notas. Pago e ingreso mensual son tarjetas
   optativas, ocultas por defecto.
-- **Audiencia** — suscriptores acumulados, altas por día y total actual de
-  seguidores. No se grafica la evolución de seguidores hasta observar su fuente histórica real.
-- **Crecimiento** — fuentes de adquisición con visitantes y altas;
-  atribución de red, recomendaciones recibidas y eventos de crecimiento.
-- **Notas** — KPIs de interacción, mapa de cadencia, volumen semanal y una
-  tabla única con todas las notas del periodo.
-- **Publicaciones** — tabla ordenable y buscable con las métricas por post, más
-  cortes por día de envío y por longitud.
-- **Cobertura** — qué fuentes respondieron, cuántos registros trajo cada una y
-  cuándo fue la última sincronización.
+- **Audiencia** — suscriptores acumulados, seguidores superpuestos sobre su
+  propia curva para ver la divergencia entre seguir y suscribirse, países,
+  retención por cohorte, actividad de la lista y qué publicaciones comparten
+  lectores contigo.
+- **Crecimiento** — visitas por día y por fuente con su conversión, efecto de
+  red, fuentes de adquisición con su desglose anidado, y altas y bajas
+  comparando días con envío contra días en silencio.
+- **Notas** — seis cifras grandes, dos gráficos de pastel para dónde se ven y
+  quién las ve, mapa de cadencia día × hora, altas atribuidas y el listado
+  completo paginado.
+- **Publicaciones** — tabla ordenable y buscable con las métricas por post,
+  cortes por día de envío, longitud y sección, y el reparto entre lo que
+  depende del correo y lo que se descubre fuera.
+- **Cobertura** — qué fuentes respondieron, cuántos registros trajo cada una,
+  el estado de la cola de notas y cuándo fue la última sincronización.
 
 ## Privacidad
 
@@ -73,6 +94,11 @@ PlotStack reúne en seis vistas lo que Substack reparte entre `publish/stats`,
 - No hay backend, telemetría ni servidor intermedio.
 - **Desconectar** elimina la conexión y las métricas guardadas por PlotStack; no cierra la sesión de Substack.
 
+El selector de rango (7/30/90 días y todo el histórico) lo aplican todas las
+vistas menos Cobertura. Las tres fuentes que Substack agrega en servidor
+—adquisición, tráfico y efecto de red— se sincronizan una vez por ventana,
+porque sus totales no se pueden recortar en cliente.
+
 ## Limitaciones actuales
 
 Substack no documenta públicamente sus endpoints internos de estadísticas. PlotStack usa rutas de solo lectura que consume el propio dashboard web; pueden cambiar y requerir una actualización de la extensión. La primera versión admite publicaciones bajo `*.substack.com`; los dominios personalizados quedan fuera de alcance.
@@ -80,7 +106,7 @@ Substack no documenta públicamente sus endpoints internos de estadísticas. Plo
 ## Desarrollo
 
 ```powershell
-npm test            # 116 pruebas con node --test
+npm test            # 160 pruebas con node --test
 npm run validate    # manifest, archivos, iconos y permisos declarados
 npm run icons       # regenera assets/icons/*.png desde assets/icon.svg
 npm run package     # valida y escribe dist/plotstack-<versión>.zip

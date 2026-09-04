@@ -411,15 +411,18 @@ td.is-below-median { color: var(--danger); }
 .donut-wrap { position: relative; width: 200px; height: 200px; margin: 22px auto 18px; }
 .donut-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .donut-arc { fill: none; stroke: var(--accent); stroke-width: 26; }
-.donut-arc.is-s2, .donut-item.is-s2 i { opacity: .8; }
-.donut-arc.is-s3, .donut-item.is-s3 i { opacity: .62; }
-.donut-arc.is-s4, .donut-item.is-s4 i { stroke: var(--paper); background: var(--paper); opacity: .55; }
-.donut-arc.is-s5, .donut-item.is-s5 i { stroke: var(--paper); background: var(--paper); opacity: .4; }
-.donut-arc.is-s6, .donut-item.is-s6 i { stroke: var(--paper); background: var(--paper); opacity: .26; }
-.donut-arc.is-s7, .donut-item.is-s7 i { stroke: var(--line); background: var(--line); opacity: 1; }
+/* Rampa de luminancia: del acento al fondo, con pasos bien separados. Si dos
+   segmentos vecinos tienen el mismo tono, el anillo no se puede leer. */
+.donut-arc.is-s1, .donut-item.is-s1 i { stroke: var(--accent); background: var(--accent); }
+.donut-arc.is-s2, .donut-item.is-s2 i { stroke: color-mix(in srgb, var(--accent) 62%, var(--panel)); background: color-mix(in srgb, var(--accent) 62%, var(--panel)); }
+.donut-arc.is-s3, .donut-item.is-s3 i { stroke: color-mix(in srgb, var(--accent) 34%, var(--panel)); background: color-mix(in srgb, var(--accent) 34%, var(--panel)); }
+.donut-arc.is-s4, .donut-item.is-s4 i { stroke: color-mix(in srgb, var(--paper) 74%, var(--panel)); background: color-mix(in srgb, var(--paper) 74%, var(--panel)); }
+.donut-arc.is-s5, .donut-item.is-s5 i { stroke: color-mix(in srgb, var(--paper) 52%, var(--panel)); background: color-mix(in srgb, var(--paper) 52%, var(--panel)); }
+.donut-arc.is-s6, .donut-item.is-s6 i { stroke: color-mix(in srgb, var(--paper) 34%, var(--panel)); background: color-mix(in srgb, var(--paper) 34%, var(--panel)); }
+.donut-arc.is-s7, .donut-item.is-s7 i { stroke: color-mix(in srgb, var(--paper) 20%, var(--panel)); background: color-mix(in srgb, var(--paper) 20%, var(--panel)); }
 .donut-arc.is-alta, .donut-item.is-alta i { stroke: var(--accent); background: var(--accent); }
-.donut-arc.is-baja, .donut-item.is-baja i { stroke: var(--paper); background: var(--paper); opacity: .55; }
-.donut-arc.is-inactiva, .donut-item.is-inactiva i { stroke: var(--line); background: var(--line); opacity: 1; }
+.donut-arc.is-baja, .donut-item.is-baja i { stroke: color-mix(in srgb, var(--paper) 64%, var(--panel)); background: color-mix(in srgb, var(--paper) 64%, var(--panel)); }
+.donut-arc.is-inactiva, .donut-item.is-inactiva i { stroke: color-mix(in srgb, var(--paper) 30%, var(--panel)); background: color-mix(in srgb, var(--paper) 30%, var(--panel)); }
 .donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
 .donut-center strong { font: 400 36px/1 var(--serif); letter-spacing: -.04em; }
 .donut-center span { display: block; color: var(--muted); font-size: 9px; margin-top: 6px; max-width: 110px; }
