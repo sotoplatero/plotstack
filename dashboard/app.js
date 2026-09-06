@@ -1451,12 +1451,14 @@ function renderCoverage(analytics, snapshot) {
   // vista es el sitio donde mirarlo.
   if (state.progress && state.progress.phase !== "done") {
     const { done = 0, total = 0 } = state.progress.detail || {};
+    const detenida = progressStalled(state.progress);
+    const fallida = detenida || state.progress.phase === "error";
     list.append(coverageRow({
       label: "Sincronización en curso",
       meta: total > 0 ? `${state.progress.step} ${done}/${total}` : state.progress.step,
-      status: state.progress.phase === "error" ? "unavailable" : "pending",
-      statusCopy: state.progress.phase === "error" ? "Interrumpida" : "En marcha",
-      title: state.progress.error || "",
+      status: fallida ? "unavailable" : "pending",
+      statusCopy: fallida ? "Interrumpida" : "En marcha",
+      title: detenida ? PROGRESS_STALLED_COPY : state.progress.error || "",
     }));
   }
 
@@ -2138,7 +2140,7 @@ async function sync() {
   }
   // Con detalle pendiente, el botón lo reactiva `renderProgress` al ver la fase
   // final: reactivarlo aquí invitaría a lanzar otra sincronización encima.
-  if (!state.progress || state.progress.phase === "done" || state.progress.phase === "error") {
+  if (!state.progress || state.progress.phase === "done" || state.progress.phase === "error" || progressStalled(state.progress)) {
     button.disabled = false;
     button.classList.remove("is-loading");
   }
@@ -2146,13 +2148,34 @@ async function sync() {
 
 const PROGRESS_ACTIVE = new Set(["core", "detail"]);
 
+// El service worker late cada 20 s mientras trabaja (`updatedAt`). Si ese
+// latido se corta, Chrome lo terminó a mitad de la fase de detalle y nadie va a
+// escribir `done` ni `error`: sin este margen, un `phase: "detail"` guardado
+// dejaba el botón deshabilitado para siempre, incluso recargando la página.
+const PROGRESS_STALE_MS = 90000;
+let progressWatchdog = null;
+
+function progressStalled(progress) {
+  if (!PROGRESS_ACTIVE.has(progress?.phase)) return false;
+  const beat = new Date(progress.updatedAt || progress.startedAt || 0).getTime();
+  if (!Number.isFinite(beat) || beat <= 0) return true;
+  return Date.now() - beat > PROGRESS_STALE_MS;
+}
+
+const PROGRESS_STALLED_COPY = "La sincronización se interrumpió. Vuelve a sincronizar.";
+
 // Estado visible de la sincronización. Sin esto, una primera carga con cientos
 // de notas dejaba el icono girando sin decir en qué iba ni cuánto quedaba.
 function renderProgress() {
   const progress = state.progress;
   const label = $("#sync-progress");
   const button = $("#sync-button");
-  const active = PROGRESS_ACTIVE.has(progress?.phase);
+  if (progressWatchdog) {
+    clearTimeout(progressWatchdog);
+    progressWatchdog = null;
+  }
+  const stalled = progressStalled(progress);
+  const active = PROGRESS_ACTIVE.has(progress?.phase) && !stalled;
   button.disabled = active;
   button.classList.toggle("is-loading", active);
   $("#sync-label").textContent = active ? "Sincronizando" : "Sincronizar";
@@ -2163,7 +2186,11 @@ function renderProgress() {
     return;
   }
   label.hidden = false;
-  label.classList.toggle("is-error", progress.phase === "error");
+  label.classList.toggle("is-error", progress.phase === "error" || stalled);
+  if (stalled) {
+    label.textContent = PROGRESS_STALLED_COPY;
+    return;
+  }
   if (progress.phase === "error") {
     label.textContent = progress.error || "La sincronización no terminó.";
     return;
@@ -2171,6 +2198,11 @@ function renderProgress() {
   const { done = 0, total = 0 } = progress.detail || {};
   // El contador solo aparece cuando hay un total real: "0/0" no informa de nada.
   label.textContent = total > 0 ? `${progress.step} ${done}/${total}` : progress.step;
+  // Con el dashboard abierto no llega ningún `onChanged` si el worker muere:
+  // hay que volver a mirar el reloj por cuenta propia para liberar el botón.
+  const beat = new Date(progress.updatedAt || progress.startedAt || 0).getTime();
+  const restante = PROGRESS_STALE_MS - (Date.now() - beat) + 1000;
+  progressWatchdog = setTimeout(renderProgress, Math.max(1000, restante));
 }
 
 // Actualización en vivo: la fase de detalle escribe el snapshot desde el service

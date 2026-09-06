@@ -426,7 +426,7 @@ test("el progreso de sincronizacion nombra la fase y su avance", async () => {
   const listener = globalThis.__plotstackStorageListener;
   assert.ok(listener, "el dashboard tiene que engancharse a storage.onChanged");
 
-  listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen, publicaciones y audiencia", detail: { done: 0, total: 0 } } } }, "local");
+  listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen, publicaciones y audiencia", detail: { done: 0, total: 0 }, updatedAt: new Date().toISOString() } } }, "local");
   await settle(2);
   assert.equal($("#sync-progress").hidden, false);
   assert.equal($("#sync-progress").textContent, "Resumen, publicaciones y audiencia",
@@ -434,7 +434,7 @@ test("el progreso de sincronizacion nombra la fase y su avance", async () => {
   assert.equal($("#sync-button").disabled, true, "no se puede lanzar otra sincronizacion encima");
   assert.equal($("#sync-label").textContent, "Sincronizando");
 
-  listener({ "plotstack.progress": { newValue: { phase: "detail", step: "Estadísticas de notas", detail: { done: 40, total: 120 } } } }, "local");
+  listener({ "plotstack.progress": { newValue: { phase: "detail", step: "Estadísticas de notas", detail: { done: 40, total: 120 }, updatedAt: new Date().toISOString() } } }, "local");
   await settle(2);
   assert.equal($("#sync-progress").textContent, "Estadísticas de notas 40/120");
 
@@ -448,6 +448,34 @@ test("el progreso de sincronizacion nombra la fase y su avance", async () => {
   await settle(2);
   assert.match($("#sync-progress").textContent, /limitó las solicitudes/);
   assert.equal($("#sync-progress").classList.contains("is-error"), true);
+
+  listener({ "plotstack.progress": { newValue: null } }, "local");
+  await settle(2);
+});
+
+// Regresion: el dashboard confiaba ciegamente en el `phase` guardado. Si Chrome
+// terminaba el service worker en plena fase de detalle, nadie escribia nunca
+// `done` ni `error` y el boton quedaba deshabilitado para siempre, tambien al
+// recargar: "Sincronizando" sin final y sin forma de reintentar.
+test("un progreso sin latido reciente se declara interrumpido y libera el boton", async () => {
+  await arrancar();
+  const listener = globalThis.__plotstackStorageListener;
+  const viejo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+  listener({ "plotstack.progress": { newValue: { phase: "detail", step: "Estadísticas de notas", detail: { done: 40, total: 120 }, startedAt: viejo, updatedAt: viejo } } }, "local");
+  await settle(2);
+  assert.equal($("#sync-button").disabled, false, "el usuario tiene que poder reintentar");
+  assert.equal($("#sync-label").textContent, "Sincronizar");
+  assert.equal($("#sync-progress").hidden, false);
+  assert.match($("#sync-progress").textContent, /se interrumpió/);
+  assert.equal($("#sync-progress").classList.contains("is-error"), true);
+
+  // Un progreso antiguo de la fase rapida sin `updatedAt` (escrito por una
+  // version anterior) cuenta igual como interrumpido, no como en marcha.
+  listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen", detail: {} } } }, "local");
+  await settle(2);
+  assert.equal($("#sync-button").disabled, false);
+  assert.match($("#sync-progress").textContent, /se interrumpió/);
 
   listener({ "plotstack.progress": { newValue: null } }, "local");
   await settle(2);

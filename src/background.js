@@ -9,6 +9,11 @@ const ANALYTICS_KEY = "plotstack.analytics";
 const PROGRESS_KEY = "plotstack.progress";
 const DAILY_ALARM = "plotstack-daily";
 
+// Una sola sincronización en vuelo. Dos pulsaciones seguidas del botón (o el
+// botón mientras corre la alarma) compartían la ráfaga de peticiones y se
+// pisaban al escribir el snapshot.
+let syncInFlight = null;
+
 async function openDashboard() {
   const existing = await chrome.tabs.query({ url: `${DASHBOARD_URL}*` });
   if (existing[0]?.id) {
@@ -29,9 +34,13 @@ function scheduleDailySync() {
 chrome.action.onClicked.addListener(openDashboard);
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   scheduleDailySync();
+  void recoverOrphanProgress();
   if (reason === "install") openDashboard();
 });
-chrome.runtime.onStartup?.addListener(scheduleDailySync);
+chrome.runtime.onStartup?.addListener(() => {
+  scheduleDailySync();
+  void recoverOrphanProgress();
+});
 chrome.alarms?.onAlarm.addListener(async (alarm) => {
   if (alarm?.name !== DAILY_ALARM) return;
   const stored = await chrome.storage.local.get([CONNECTION_KEY]);
@@ -63,16 +72,53 @@ async function connect() {
   }
 }
 
-const writeProgress = (progress) => chrome.storage.local.set({ [PROGRESS_KEY]: progress });
+// `updatedAt` es el latido del progreso, y sin el la interfaz no puede
+// distinguir "sigue trabajando" de "el service worker murio a mitad": un
+// `phase: "detail"` guardado se quedaba para siempre y dejaba el boton de
+// sincronizar deshabilitado incluso tras recargar el dashboard.
+let lastProgress = null;
+const writeProgress = (progress) => {
+  lastProgress = { ...progress, updatedAt: new Date().toISOString() };
+  return chrome.storage.local.set({ [PROGRESS_KEY]: lastProgress });
+};
 
-// Una sola sincronización en vuelo. Dos pulsaciones seguidas del botón (o el
-// botón mientras corre la alarma) compartían la ráfaga de peticiones y se
-// pisaban al escribir el snapshot.
-let syncInFlight = null;
+// Chrome termina el service worker a los 30 s sin eventos. La fase de detalle
+// corre como promesa suelta, asi que sin este latido el propio navegador la
+// mataba a mitad y nadie escribia nunca `done` ni `error`. Cada llamada a la
+// API de extensiones reinicia ese contador; además refresca `updatedAt` para
+// que el dashboard sepa que hay alguien vivo al otro lado.
+const HEARTBEAT_MS = 20000;
+
+function startHeartbeat() {
+  const timer = setInterval(() => {
+    void chrome.runtime.getPlatformInfo?.();
+    if (lastProgress) void chrome.storage.local.set({ [PROGRESS_KEY]: { ...lastProgress, updatedAt: new Date().toISOString() } });
+  }, HEARTBEAT_MS);
+  return () => clearInterval(timer);
+}
+
+// Un service worker recien arrancado no tiene ninguna sincronizacion en vuelo
+// por definicion: si el progreso guardado dice lo contrario, es de una sesion
+// que murio a medias y hay que declararlo interrumpido para que el usuario
+// pueda volver a sincronizar.
+const ACTIVE_PHASES = new Set(["core", "detail"]);
+
+async function recoverOrphanProgress() {
+  const stored = await chrome.storage.local.get([PROGRESS_KEY]);
+  const progress = stored[PROGRESS_KEY];
+  if (!ACTIVE_PHASES.has(progress?.phase) || syncInFlight) return;
+  await writeProgress({
+    ...progress,
+    phase: "error",
+    finishedAt: new Date().toISOString(),
+    error: "La sincronización se interrumpió antes de terminar. Vuelve a sincronizar.",
+  });
+}
 
 // Fase de detalle: lo caro. Corre DESPUÉS de haber persistido la fase rápida,
 // así que un fallo aquí deja el snapshot recién guardado intacto.
 async function runDetailPhase(publication, core, startedAt) {
+  const stopHeartbeat = startHeartbeat();
   try {
     const enriched = await enrichSnapshot(core, publication, {
       onProgress: ({ step, done, total }) => {
@@ -90,6 +136,8 @@ async function runDetailPhase(publication, core, startedAt) {
       finishedAt: new Date().toISOString(),
       error: error.message || "No se pudo completar el detalle.",
     });
+  } finally {
+    stopHeartbeat();
   }
 }
 

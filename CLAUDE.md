@@ -120,6 +120,23 @@ listeners quedarían colgando.
 - **Fallo parcial nunca es cero.** Toda fuente nueva va dentro de `Promise.allSettled` (o del array `sources` de `substack-extended.js`) y, si falla, conserva el valor anterior o queda marcada `unavailable` en `coverage`. `getPublicationSnapshot` solo lanza si fallan a la vez `summary` y `summary-v2?range=30`.
 - **Sincronización incremental por dos vías.** (1) Los paginadores paran cuando una página entera ya está en `knownIds`: la lista y el feed vienen en orden descendente, así que lo de detrás también es conocido. (2) Solo se piden detalles de los 12 más recientes más los que aún no lo tienen (`detailAvailable` / `stats.available`). `fullRefresh` (snapshot de más de 7 días) fuerza el recorrido completo para que los contadores públicos de notas antiguas no se congelen. Las notas conocidas que no vuelven a aparecer **se conservan**, no desaparecen por haber parado antes. No conviertas esto en un refresco total.
 
+- **Una fase activa sin latido está muerta, no en marcha.** Toda escritura de
+  `plotstack.progress` sella `updatedAt`, y la fase de detalle mantiene un
+  latido de 20 s (`startHeartbeat`) para que Chrome no termine el service
+  worker en mitad de una promesa suelta. El dashboard trata como interrumpida
+  cualquier fase `core`/`detail` cuyo latido pase de `PROGRESS_STALE_MS`
+  (90 s) y libera el botón; además hay un `setTimeout` de vigilancia, porque
+  con el worker muerto **no llega ningún `onChanged`** que repinte. Y el SW
+  sanea el progreso huérfano en `onStartup`/`onInstalled`: recién arrancado no
+  tiene ningún sync en vuelo por definición. Sin las tres piezas, un
+  `phase: "detail"` guardado dejaba "Sincronizando" para siempre, con el botón
+  deshabilitado incluso tras recargar.
+- **Ninguna petición sale sin plazo.** `performRequest` adjunta
+  `AbortSignal.timeout(limiter.timeoutMs)` (30 s) y traduce el corte a
+  `SubstackApiError`. `fetch` sin `signal` nunca rechaza una conexión que se
+  queda a medias, y con el limitador a 4 en paralelo una sola petición colgada
+  agota los huecos y detiene la cola entera.
+
 - **Fase rápida y fase de detalle no son intercambiables.** La rápida no pide ni un detalle: si le añades una petición por pieza, vuelves a la espera ciega de varios minutos que este diseño elimina. Un fallo en la de detalle deja intacto el snapshot que la primera ya persistió.
 
 - **El delta de audiencia compara contra la ventana del selector.** `previousByRange` guarda los arranques de 7/30/90 que da `summary-v2`; `getComparisonBase` elige el del rango activo, cae al histórico local con "Todo" y devuelve `basis: "none"` si no hay ninguno. El copy **nombra** la base ("vs. hace 7 días", "desde 5 ene"): antes decía "vs. sincronización anterior" mientras comparaba siempre contra hace 30 días.

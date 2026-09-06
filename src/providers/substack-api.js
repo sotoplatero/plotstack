@@ -13,11 +13,16 @@ export class SubstackApiError extends Error {
 // ~15 peticiones a la vez (5 detalles + 3 note_stats + 9 fuentes + paginación)
 // y Substack respondía 429, que es lo que cortaba la cola de notas. El 429
 // sigue propagándose: la política de reintento y corte no cambia.
-const limiter = { concurrency: 4, gapMs: 60, active: 0, lastStart: 0, queue: [] };
+// `timeoutMs` no es un adorno: `fetch` sin `signal` nunca rechaza una conexion
+// que se queda a medias, y con el limitador a 4 en paralelo una sola peticion
+// colgada agota los huecos y deja la cola entera detenida. Eso es exactamente
+// lo que dejaba el dashboard en "Sincronizando" sin final ni error.
+const limiter = { concurrency: 4, gapMs: 60, timeoutMs: 30000, active: 0, lastStart: 0, queue: [] };
 
-export function configureRequestLimiter({ concurrency, gapMs } = {}) {
+export function configureRequestLimiter({ concurrency, gapMs, timeoutMs } = {}) {
   if (Number.isFinite(concurrency) && concurrency > 0) limiter.concurrency = Math.floor(concurrency);
   if (Number.isFinite(gapMs) && gapMs >= 0) limiter.gapMs = gapMs;
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) limiter.timeoutMs = Math.floor(timeoutMs);
 }
 
 const drainLimiter = () => {
@@ -53,17 +58,29 @@ export async function requestJson(url, options = {}) {
 
 async function performRequest(url, options = {}) {
   const hasJson = options.json !== undefined;
-  const response = await fetch(url, {
-    method: options.method || "GET",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...(hasJson ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-    ...(hasJson ? { body: JSON.stringify(options.json) } : {}),
-    cache: "no-store",
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: options.method || "GET",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        ...(hasJson ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
+      },
+      ...(hasJson ? { body: JSON.stringify(options.json) } : {}),
+      cache: "no-store",
+      signal: AbortSignal.timeout(limiter.timeoutMs),
+    });
+  } catch (error) {
+    // Un corte por tiempo tiene que ser un fallo con nombre, no una promesa
+    // eterna: aguas arriba ya hay reintento, `allSettled` y estados de
+    // cobertura que saben tratar un error, pero no una espera infinita.
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      throw new SubstackApiError("Substack no respondió a tiempo.", 0);
+    }
+    throw error;
+  }
   if (response.status === 401) throw new SubstackApiError("Tu sesión de Substack no está activa.", 401);
   if (response.status === 403) throw new SubstackApiError("La cuenta conectada no tiene acceso a esta publicación.", 403);
   if (response.status === 429) throw new SubstackApiError("Substack limitó temporalmente las solicitudes. Espera un momento y sincroniza de nuevo.", 429);

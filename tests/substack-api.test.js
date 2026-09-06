@@ -357,6 +357,42 @@ test("el limitador libera la cola aunque una peticion falle", async () => {
   }
 });
 
+// Regresion: `fetch` sin `signal` nunca rechaza una conexion que se queda a
+// medias. Con el limitador a 4 en paralelo, una sola peticion colgada agotaba
+// los huecos y detenia la cola entera: el dashboard se quedaba en
+// "Sincronizando" sin final ni error.
+test("una peticion que no responde corta por tiempo y no bloquea la cola", async () => {
+  const originalFetch = globalThis.fetch;
+  configureRequestLimiter({ concurrency: 2, gapMs: 0, timeoutMs: 30 });
+  // El temporizador de `AbortSignal.timeout` no retiene el bucle de eventos en
+  // Node, y sin nada mas pendiente el runner cerraria el caso antes del corte.
+  const sostenBucle = setTimeout(() => {}, 5000);
+  globalThis.fetch = async (url, options) => {
+    if (!url.endsWith("colgada")) return jsonResponse({ ok: true });
+    assert.ok(options.signal, "toda peticion viaja con un plazo");
+    // Un `fetch` real rechaza con TimeoutError cuando expira el AbortSignal.
+    await new Promise((_, reject) => {
+      options.signal.addEventListener("abort", () => reject(Object.assign(new Error("timed out"), { name: "TimeoutError" })));
+    });
+  };
+  try {
+    const resultados = await Promise.allSettled([
+      requestJson("https://substack.com/api/v1/colgada"),
+      requestJson("https://substack.com/api/v1/a"),
+      requestJson("https://substack.com/api/v1/b"),
+      requestJson("https://substack.com/api/v1/c"),
+    ]);
+    assert.equal(resultados[0].status, "rejected");
+    assert.equal(resultados[0].reason.name, "SubstackApiError", "el corte es un fallo con nombre, no una espera eterna");
+    assert.match(resultados[0].reason.message, /no respondió a tiempo/);
+    assert.equal(resultados.slice(1).filter((r) => r.status === "fulfilled").length, 3, "la cola sigue avanzando");
+  } finally {
+    clearTimeout(sostenBucle);
+    configureRequestLimiter({ concurrency: 4, gapMs: 0, timeoutMs: 30000 });
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("los paginadores paran cuando una pagina entera ya esta en el snapshot", async () => {
   const originalFetch = globalThis.fetch;
   configureRequestLimiter({ concurrency: 4, gapMs: 0 });

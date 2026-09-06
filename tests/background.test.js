@@ -229,3 +229,32 @@ test("PLOTSTACK_DISCONNECT borra también el progreso de sincronización", async
     globalThis.chrome = originalChrome;
   }
 });
+
+test("el progreso lleva latido y un arranque limpio rescata el que quedo a medias", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  try {
+    const { send, store, captured, esperarDetalle } = await loadBackground({ storage: conexionAntigua });
+    await send({ type: "PLOTSTACK_SYNC" });
+    const final = await esperarDetalle();
+    // Sin `updatedAt` el dashboard no puede distinguir "sigue trabajando" de
+    // "el service worker murio a mitad de la fase de detalle".
+    assert.ok(final.updatedAt, "cada escritura de progreso sella su latido");
+    assert.ok(Date.now() - new Date(final.updatedAt).getTime() < 60000);
+
+    // La regresion: un `phase: "detail"` huerfano sobrevivia a la muerte del
+    // worker y dejaba el boton de sincronizar deshabilitado para siempre.
+    store["plotstack.progress"] = { phase: "detail", step: "Estadísticas de notas", detail: { done: 3, total: 90 }, startedAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    await captured.onStartup();
+    assert.equal(store["plotstack.progress"].phase, "error");
+    assert.match(store["plotstack.progress"].error, /se interrumpió/);
+
+    // Una fase ya terminada no se toca: no hay nada que rescatar.
+    store["plotstack.progress"] = { phase: "done", step: "", detail: {}, error: "" };
+    await captured.onStartup();
+    assert.equal(store["plotstack.progress"].phase, "done");
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
