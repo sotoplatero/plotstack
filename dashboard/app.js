@@ -2153,10 +2153,19 @@ const PROGRESS_ACTIVE = new Set(["core", "detail"]);
 // escribir `done` ni `error`: sin este margen, un `phase: "detail"` guardado
 // dejaba el botón deshabilitado para siempre, incluso recargando la página.
 const PROGRESS_STALE_MS = 90000;
+
+// Tope absoluto, además del latido. Un latido fresco solo prueba que el service
+// worker respira, no que la fase avance: sin este techo, una fase atascada con
+// el worker vivo dejaba "Sincronizando" para siempre. El service worker corta
+// antes (2 min la fase rápida, 10 la de detalle); esto es la red por si el
+// corte tampoco llega.
+const PROGRESS_MAX_MS = 15 * 60 * 1000;
 let progressWatchdog = null;
 
 function progressStalled(progress) {
   if (!PROGRESS_ACTIVE.has(progress?.phase)) return false;
+  const inicio = new Date(progress.startedAt || 0).getTime();
+  if (Number.isFinite(inicio) && inicio > 0 && Date.now() - inicio > PROGRESS_MAX_MS) return true;
   const beat = new Date(progress.updatedAt || progress.startedAt || 0).getTime();
   if (!Number.isFinite(beat) || beat <= 0) return true;
   return Date.now() - beat > PROGRESS_STALE_MS;

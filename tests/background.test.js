@@ -72,7 +72,9 @@ async function loadBackground({ storage = {}, profileFails = false, followerCoun
   };
 
   // Import fresco en cada caso: el módulo guarda estado en sus listeners.
-  await import(`../src/background.js?case=${Math.random()}`);
+  const modulo = await import(`../src/background.js?case=${Math.random()}`);
+  // Plazos de juguete: el caso comprueba que el corte llega, no cuanto tarda.
+  modulo.configureSyncDeadlines({ coreMs: 400, detailMs: 400 });
 
   const send = (message, sender = null) => new Promise((resolve) => {
     captured.onMessage(message, sender, resolve);
@@ -92,7 +94,7 @@ async function loadBackground({ storage = {}, profileFails = false, followerCoun
     throw new Error("la fase de detalle no terminó");
   };
 
-  return { send, store, perfilPedido, captured, esperarDetalle };
+  return { send, store, perfilPedido, captured, esperarDetalle, modulo };
 }
 
 const conexionAntigua = {
@@ -254,6 +256,42 @@ test("el progreso lleva latido y un arranque limpio rescata el que quedo a media
     await captured.onStartup();
     assert.equal(store["plotstack.progress"].phase, "done");
   } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
+// EL caso que faltaba desde el principio: si una peticion no responde NUNCA, el
+// sync tiene que terminar igual. Antes no habia plazo por peticion ni por fase,
+// asi que `plotstack.progress` se quedaba en `detail` y el dashboard mostraba
+// "Sincronizando" sin final y con el boton deshabilitado, incluso al recargar.
+test("una peticion que nunca responde no deja el sync colgado", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  const sostenBucle = setTimeout(() => {}, 30000);
+  try {
+    const { send, store, esperarDetalle } = await loadBackground({ storage: conexionAntigua });
+    const stubNormal = globalThis.fetch;
+    globalThis.fetch = async (url, options) => {
+      // Hace falta una publicacion real, o la fase de detalle no pide ningun
+      // detalle y el caso no prueba nada (asi se colo la primera version).
+      if (url.includes("post_management/published")) {
+        return jsonResponse({ posts: [{ id: 11, title: "Carta uno", post_date: "2026-08-01T10:00:00Z", email_sent_at: "2026-08-01T10:00:00Z" }] });
+      }
+      // El detalle por publicacion se queda mudo para siempre, como una
+      // conexion a medias que `fetch` sin `signal` nunca rechaza.
+      if (url.includes("post_management/detail")) return new Promise(() => {});
+      return stubNormal(url, options);
+    };
+    await send({ type: "PLOTSTACK_SYNC" });
+    const final = await esperarDetalle(400);
+    assert.ok(["done", "error"].includes(final.phase), `la fase quedo en ${final.phase}`);
+    assert.ok(final.finishedAt, "una fase terminada sella su final");
+    // Y el snapshot de la fase rapida sigue intacto: un fallo del detalle no
+    // borra lo que la primera fase ya persistio.
+    assert.ok(store["plotstack.snapshot"], "el snapshot de la fase rapida sobrevive");
+  } finally {
+    clearTimeout(sostenBucle);
     globalThis.fetch = originalFetch;
     globalThis.chrome = originalChrome;
   }

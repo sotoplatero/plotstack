@@ -89,6 +89,33 @@ const writeProgress = (progress) => {
 // que el dashboard sepa que hay alguien vivo al otro lado.
 const HEARTBEAT_MS = 20000;
 
+// Plazo absoluto por fase. El latido prueba que el service worker esta vivo,
+// NO que la fase avance: sin un tope, un `await` que no resuelve mantiene el
+// latido puntual y "Sincronizando" para siempre. Con estos dos topes el sync
+// termina por construccion, sin depender de que cada rama este acotada.
+const deadlines = { coreMs: 120000, detailMs: 600000 };
+
+// Los tests no pueden esperar diez minutos para comprobar que el plazo corta.
+export function configureSyncDeadlines({ coreMs, detailMs } = {}) {
+  if (Number.isFinite(coreMs) && coreMs > 0) deadlines.coreMs = coreMs;
+  if (Number.isFinite(detailMs) && detailMs > 0) deadlines.detailMs = detailMs;
+}
+
+async function withDeadline(trabajo, ms, mensaje) {
+  // El perdedor de la carrera sigue corriendo: hay que manejar su rechazo o
+  // queda como unhandled rejection y tira el service worker.
+  trabajo.catch(() => {});
+  let temporizador;
+  try {
+    return await Promise.race([
+      trabajo,
+      new Promise((_, reject) => { temporizador = setTimeout(() => reject(new Error(mensaje)), ms); }),
+    ]);
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
 function startHeartbeat() {
   const timer = setInterval(() => {
     void chrome.runtime.getPlatformInfo?.();
@@ -119,22 +146,28 @@ async function recoverOrphanProgress() {
 // así que un fallo aquí deja el snapshot recién guardado intacto.
 async function runDetailPhase(publication, core, startedAt) {
   const stopHeartbeat = startHeartbeat();
+  // El paso alcanzado se recuerda para que un plazo agotado diga DONDE se
+  // quedó. Sin eso, "no terminó" no permite arreglar nada.
+  let ultimoPaso = "";
   try {
-    const enriched = await enrichSnapshot(core, publication, {
+    const trabajo = enrichSnapshot(core, publication, {
       onProgress: ({ step, done, total }) => {
+        ultimoPaso = step;
         void writeProgress({ phase: "detail", step, detail: { done, total }, startedAt, finishedAt: "", error: "" });
       },
     });
+    const enriched = await withDeadline(trabajo, deadlines.detailMs, "El detalle tardó demasiado y se detuvo.");
     await chrome.storage.local.set({ [SNAPSHOT_KEY]: normalizeSnapshot(enriched) });
     await writeProgress({ phase: "done", step: "", detail: { done: 0, total: 0 }, startedAt, finishedAt: new Date().toISOString(), error: "" });
   } catch (error) {
+    const donde = ultimoPaso ? ` Se quedó en: ${ultimoPaso}.` : "";
     await writeProgress({
       phase: "error",
-      step: "Detalle por publicación y por nota",
+      step: ultimoPaso || "Detalle por publicación y por nota",
       detail: { done: 0, total: 0 },
       startedAt,
       finishedAt: new Date().toISOString(),
-      error: error.message || "No se pudo completar el detalle.",
+      error: `${error.message || "No se pudo completar el detalle."}${donde}`,
     });
   } finally {
     stopHeartbeat();
@@ -150,10 +183,18 @@ async function syncPublication(publication) {
       const stored = await chrome.storage.local.get([SNAPSHOT_KEY]);
       // Fase rápida: escalares y listas. Devuelve un snapshot completo y válido
       // para pintar sin esperar a una sola petición de detalle.
-      const [core, analytics] = await Promise.all([
-        getCoreSnapshot(publication, stored[SNAPSHOT_KEY]),
-        getExtendedAnalytics(publication),
-      ]);
+      // La fase rápida lanza ~50 peticiones (13 fuentes ampliadas, varias por
+      // ventana, más la paginación de suscriptores). Con un plazo por petición
+      // pero ninguno para el conjunto, una racha de cortes suma minutos y el
+      // usuario no distingue eso de un cuelgue.
+      const [core, analytics] = await withDeadline(
+        Promise.all([
+          getCoreSnapshot(publication, stored[SNAPSHOT_KEY]),
+          getExtendedAnalytics(publication),
+        ]),
+        deadlines.coreMs,
+        "La fase rápida tardó demasiado y se detuvo.",
+      );
       const snapshot = normalizeSnapshot(core.snapshot);
       const connection = { provider: "substack", publication, connectedAt: new Date().toISOString() };
       await chrome.storage.local.set({ [SNAPSHOT_KEY]: snapshot, [CONNECTION_KEY]: connection, [ANALYTICS_KEY]: analytics });

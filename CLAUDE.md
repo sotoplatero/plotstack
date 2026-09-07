@@ -131,6 +131,17 @@ listeners quedarían colgando.
   tiene ningún sync en vuelo por definición. Sin las tres piezas, un
   `phase: "detail"` guardado dejaba "Sincronizando" para siempre, con el botón
   deshabilitado incluso tras recargar.
+- **Cada fase tiene un plazo absoluto, no solo un latido.** `withDeadline`
+  corta la fase rápida a los 2 min y la de detalle a los 10
+  (`configureSyncDeadlines` los baja en tests). El latido prueba que el service
+  worker respira, **no que la fase avance**: con un latido puntual y un `await`
+  que no resuelve, "Sincronizando" era eterno — el latido lo empeoraba, porque
+  certificaba vida. El dashboard tiene además un techo por `startedAt`
+  (`PROGRESS_MAX_MS`, 15 min) por si el corte tampoco llega. Está cubierto por
+  el test "una peticion que nunca responde no deja el sync colgado", que **se
+  cuelga de verdad** si quitas el plazo: no lo debilites dejando el stub sin
+  publicaciones, que fue como se colo vacío la primera vez.
+
 - **Ninguna petición sale sin plazo.** `performRequest` adjunta
   `AbortSignal.timeout(limiter.timeoutMs)` (30 s) y traduce el corte a
   `SubstackApiError`. `fetch` sin `signal` nunca rechaza una conexión que se
