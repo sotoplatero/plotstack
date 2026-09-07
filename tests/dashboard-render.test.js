@@ -421,33 +421,38 @@ test("las altas de pago de notas viven en un nodo sensible independiente", async
   assert.ok(paid[0].parentNode.textContent.startsWith("7"), "el total gratuito permanece fuera del nodo sensible");
 });
 
-test("el progreso de sincronizacion nombra la fase y su avance", async () => {
+test("la sincronizacion solo cambia el estado del boton, sin mover la topbar", async () => {
   await arrancar();
   const listener = globalThis.__plotstackStorageListener;
   assert.ok(listener, "el dashboard tiene que engancharse a storage.onChanged");
+  const boton = $("#sync-button");
+  // Ni etiqueta de progreso ni texto variable: cualquiera de las dos cosas
+  // cambiaba el ancho de la topbar y la barra entera se movia a cada paso.
+  const rotulo = $("#sync-label").textContent;
 
-  listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen, publicaciones y audiencia", detail: { done: 0, total: 0 }, updatedAt: new Date().toISOString() } } }, "local");
+  listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen", detail: { done: 0, total: 0 }, updatedAt: new Date().toISOString() } } }, "local");
   await settle(2);
-  // La fase rapida no tiene avance que contar y nombrar sus endpoints no ayuda:
-  // el boton ya dice "Sincronizando". La etiqueta solo aparece con un total real.
-  assert.equal($("#sync-progress").hidden, true, "sin total real no se pinta una etiqueta que no informa");
-  assert.equal($("#sync-button").disabled, true, "no se puede lanzar otra sincronizacion encima");
-  assert.equal($("#sync-label").textContent, "Sincronizando");
+  assert.equal(boton.disabled, true, "no se puede lanzar otra sincronizacion encima");
+  assert.equal(boton.classList.contains("is-loading"), true, "el icono girando es lo que comunica actividad");
+  assert.equal(boton.getAttribute("aria-busy"), "true");
+  assert.equal($("#sync-label").textContent, rotulo, "el rotulo del boton no cambia de ancho");
 
   listener({ "plotstack.progress": { newValue: { phase: "detail", step: "Estadísticas de notas", detail: { done: 40, total: 120 }, updatedAt: new Date().toISOString() } } }, "local");
   await settle(2);
-  assert.equal($("#sync-progress").textContent, "Estadísticas de notas 40/120");
+  assert.equal(boton.disabled, true);
+  assert.equal($("#sync-label").textContent, rotulo);
 
   listener({ "plotstack.progress": { newValue: { phase: "done", step: "", detail: { done: 0, total: 0 } } } }, "local");
   await settle(2);
-  assert.equal($("#sync-progress").hidden, true);
-  assert.equal($("#sync-button").disabled, false);
-  assert.equal($("#sync-label").textContent, "Sincronizar");
+  assert.equal(boton.disabled, false);
+  assert.equal(boton.classList.contains("is-loading"), false);
+  assert.equal(boton.getAttribute("aria-busy"), "false");
+  assert.equal($("#sync-label").textContent, rotulo);
 
   listener({ "plotstack.progress": { newValue: { phase: "error", step: "Detalle", detail: {}, error: "Substack limitó las solicitudes." } } }, "local");
   await settle(2);
-  assert.match($("#sync-progress").textContent, /limitó las solicitudes/);
-  assert.equal($("#sync-progress").classList.contains("is-error"), true);
+  assert.equal(boton.disabled, false, "un fallo libera el boton para reintentar");
+  assert.equal($("#sync-label").textContent, rotulo);
 
   listener({ "plotstack.progress": { newValue: null } }, "local");
   await settle(2);
@@ -465,17 +470,15 @@ test("un progreso sin latido reciente se declara interrumpido y libera el boton"
   listener({ "plotstack.progress": { newValue: { phase: "detail", step: "Estadísticas de notas", detail: { done: 40, total: 120 }, startedAt: viejo, updatedAt: viejo } } }, "local");
   await settle(2);
   assert.equal($("#sync-button").disabled, false, "el usuario tiene que poder reintentar");
-  assert.equal($("#sync-label").textContent, "Sincronizar");
-  assert.equal($("#sync-progress").hidden, false);
-  assert.match($("#sync-progress").textContent, /se interrumpió/);
-  assert.equal($("#sync-progress").classList.contains("is-error"), true);
+  assert.equal($("#sync-button").classList.contains("is-loading"), false, "el icono deja de girar");
+  assert.equal($("#sync-button").getAttribute("aria-busy"), "false");
 
   // Un progreso antiguo de la fase rapida sin `updatedAt` (escrito por una
   // version anterior) cuenta igual como interrumpido, no como en marcha.
   listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen", detail: {} } } }, "local");
   await settle(2);
   assert.equal($("#sync-button").disabled, false);
-  assert.match($("#sync-progress").textContent, /se interrumpió/);
+  assert.equal($("#sync-button").classList.contains("is-loading"), false);
 
   listener({ "plotstack.progress": { newValue: null } }, "local");
   await settle(2);

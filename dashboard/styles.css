@@ -368,10 +368,7 @@ td.is-below-median { color: var(--danger); }
 
 /* Progreso de la sincronizacion: la fase de detalle puede tardar minutos con un
    historial largo, y un icono girando sin texto no dice en que va. */
-.sync-progress { margin: 0; max-width: 240px; color: var(--muted); font-size: 10px; line-height: 1.4; }
-.sync-progress.is-error { color: var(--danger); }
 .sync-button:disabled { opacity: .6; cursor: progress; }
-@media (max-width: 950px) { .sync-progress { display: none; } }
 
 /* Tercer estado de Cobertura: una fuente a medias no es ni verde ni roja. */
 .coverage-item.is-pending strong::before { background: var(--paper); opacity: .55; }

@@ -74,6 +74,14 @@ crecimiento.
 por defecto con `data-sensitive`; sus preferencias viven en `localStorage` bajo
 `plotstack.showPaid` y `plotstack.showRevenue`.
 
+**La topbar no muestra progreso de sincronización.** El párrafo `#sync-progress`
+y el cambio de texto del botón ("Sincronizar" → "Sincronizando") se retiraron:
+ambos alteraban el ancho de la topbar y la barra entera se desplazaba a cada
+paso. La actividad la comunica **solo** el icono girando (`is-loading`) más
+`aria-busy`; el avance por pasos vive en la vista **Cobertura** y los fallos en
+el toast. Si añades estado de sincronización, que no cambie la geometría de la
+barra.
+
 El botón de cámara renderiza localmente un PNG de la vista activa desde el DOM
 y lo guarda mediante `chrome.downloads.download`. Durante la captura,
 `html.is-capturing` elimina navegación/controles y fuerza el ocultamiento

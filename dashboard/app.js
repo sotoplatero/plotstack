@@ -2177,7 +2177,6 @@ const PROGRESS_STALLED_COPY = "La sincronización se interrumpió. Vuelve a sinc
 // de notas dejaba el icono girando sin decir en qué iba ni cuánto quedaba.
 function renderProgress() {
   const progress = state.progress;
-  const label = $("#sync-progress");
   const button = $("#sync-button");
   if (progressWatchdog) {
     clearTimeout(progressWatchdog);
@@ -2185,36 +2184,15 @@ function renderProgress() {
   }
   const stalled = progressStalled(progress);
   const active = PROGRESS_ACTIVE.has(progress?.phase) && !stalled;
+  // Ni etiqueta de progreso ni cambio de texto en el boton: ambos alteraban el
+  // ancho de la topbar y la barra entera se movia a cada paso de la
+  // sincronizacion. La actividad la comunica el icono girando y `aria-busy`;
+  // el detalle y los fallos viven en la vista Cobertura y en el toast, que no
+  // desplazan nada.
   button.disabled = active;
   button.classList.toggle("is-loading", active);
-  $("#sync-label").textContent = active ? "Sincronizando" : "Sincronizar";
-  if (!progress || progress.phase === "done") {
-    label.hidden = true;
-    label.textContent = "";
-    label.classList.remove("is-error");
-    return;
-  }
-  label.hidden = false;
-  label.classList.toggle("is-error", progress.phase === "error" || stalled);
-  if (stalled) {
-    label.textContent = PROGRESS_STALLED_COPY;
-    return;
-  }
-  if (progress.phase === "error") {
-    label.textContent = progress.error || "La sincronización no terminó.";
-    return;
-  }
-  const { done = 0, total = 0 } = progress.detail || {};
-  // La fase rápida no tiene nada que contar: nombrar sus endpoints ("Resumen,
-  // publicaciones y audiencia") no dice al usuario cuánto queda ni qué decidir,
-  // y el propio botón ya pone "Sincronizando". Solo se pinta el detalle, que sí
-  // trae un avance real.
-  if (total <= 0) {
-    label.hidden = true;
-    label.textContent = "";
-  } else {
-    label.textContent = `${progress.step} ${done}/${total}`;
-  }
+  button.setAttribute("aria-busy", active ? "true" : "false");
+  if (!active) return;
   // Con el dashboard abierto no llega ningún `onChanged` si el worker muere:
   // hay que volver a mirar el reloj por cuenta propia para liberar el botón.
   const beat = new Date(progress.updatedAt || progress.startedAt || 0).getTime();
