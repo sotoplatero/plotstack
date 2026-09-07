@@ -1455,7 +1455,7 @@ function renderCoverage(analytics, snapshot) {
     const fallida = detenida || state.progress.phase === "error";
     list.append(coverageRow({
       label: "Sincronización en curso",
-      meta: total > 0 ? `${state.progress.step} ${done}/${total}` : state.progress.step,
+      meta: total > 0 ? `${state.progress.step} ${done}/${total}` : "Fase rápida en curso",
       status: fallida ? "unavailable" : "pending",
       statusCopy: fallida ? "Interrumpida" : "En marcha",
       title: detenida ? PROGRESS_STALLED_COPY : state.progress.error || "",
@@ -2196,8 +2196,16 @@ function renderProgress() {
     return;
   }
   const { done = 0, total = 0 } = progress.detail || {};
-  // El contador solo aparece cuando hay un total real: "0/0" no informa de nada.
-  label.textContent = total > 0 ? `${progress.step} ${done}/${total}` : progress.step;
+  // La fase rápida no tiene nada que contar: nombrar sus endpoints ("Resumen,
+  // publicaciones y audiencia") no dice al usuario cuánto queda ni qué decidir,
+  // y el propio botón ya pone "Sincronizando". Solo se pinta el detalle, que sí
+  // trae un avance real.
+  if (total <= 0) {
+    label.hidden = true;
+    label.textContent = "";
+  } else {
+    label.textContent = `${progress.step} ${done}/${total}`;
+  }
   // Con el dashboard abierto no llega ningún `onChanged` si el worker muere:
   // hay que volver a mirar el reloj por cuenta propia para liberar el botón.
   const beat = new Date(progress.updatedAt || progress.startedAt || 0).getTime();

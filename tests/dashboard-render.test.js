@@ -428,9 +428,9 @@ test("el progreso de sincronizacion nombra la fase y su avance", async () => {
 
   listener({ "plotstack.progress": { newValue: { phase: "core", step: "Resumen, publicaciones y audiencia", detail: { done: 0, total: 0 }, updatedAt: new Date().toISOString() } } }, "local");
   await settle(2);
-  assert.equal($("#sync-progress").hidden, false);
-  assert.equal($("#sync-progress").textContent, "Resumen, publicaciones y audiencia",
-    "sin total real no se pinta un 0/0 que no informa");
+  // La fase rapida no tiene avance que contar y nombrar sus endpoints no ayuda:
+  // el boton ya dice "Sincronizando". La etiqueta solo aparece con un total real.
+  assert.equal($("#sync-progress").hidden, true, "sin total real no se pinta una etiqueta que no informa");
   assert.equal($("#sync-button").disabled, true, "no se puede lanzar otra sincronizacion encima");
   assert.equal($("#sync-label").textContent, "Sincronizando");
 
