@@ -579,13 +579,17 @@ export async function getCoreSnapshot(publication, existingSnapshot) {
   const previousCampaigns = new Map((existingSnapshot?.campaigns || []).map((campaign) => [String(campaign.id), campaign]));
   const previousNotes = new Map((existingSnapshot?.notes || []).map((note) => [String(note.id), note]));
 
-  const [summaryResult, range30Result, range7Result, range90Result, emailResult, postsResult] = await Promise.allSettled([
+  const [summaryResult, range30Result, range7Result, range90Result, emailResult, postsResult, recentFeedResult] = await Promise.allSettled([
     requestJson(`${base}/publish-dashboard/summary`),
     requestJson(`${base}/publish-dashboard/summary-v2?range=30`),
     requestJson(`${base}/publish-dashboard/summary-v2?range=7`),
     requestJson(`${base}/publish-dashboard/summary-v2?range=90`),
     requestJson(`${base}/publication/stats/email_stats`),
     getAllPublishedPosts(base, { knownIds: new Set(previousCampaigns.keys()), fullRefresh }),
+    // La cadencia depende solo del feed (id, texto y fecha), no de las costosas
+    // estadísticas por nota. Leer su primera página aquí evita guardar un
+    // snapshot con sello nuevo pero notas antiguas mientras corre el detalle.
+    publication.userId ? getAllProfileFeedItems(publication.userId, { maxPages: 1 }) : Promise.resolve([]),
   ]);
   if (summaryResult.status === "rejected" && range30Result.status === "rejected") throw summaryResult.reason;
 
@@ -626,10 +630,16 @@ export async function getCoreSnapshot(publication, existingSnapshot) {
   const rawCampaigns = postRows.length ? postRows : emailRows;
   // Sin pedir un solo detalle: cada fila se queda con el que ya tenía.
   const campaigns = buildCampaigns(rawCampaigns, new Map(), previousCampaigns);
-  // Las notas de la fase rápida son las del snapshot anterior, tal cual. La
-  // fase de detalle las refresca; hasta entonces se muestran las guardadas en
-  // lugar de una tabla vacía.
-  const notes = [...previousNotes.values()];
+  // Incorporamos enseguida las notas más recientes. Sus contadores públicos y
+  // `note_stats` se completan en la fase de detalle, pero fecha y contenido ya
+  // bastan para que Cadencia no quede desfasada respecto al sello de sync.
+  const coreNotes = new Map(previousNotes);
+  if (recentFeedResult.status === "fulfilled") {
+    for (const note of buildNotes(recentFeedResult.value, publication)) {
+      coreNotes.set(String(note.id), { ...coreNotes.get(String(note.id)), ...note });
+    }
+  }
+  const notes = [...coreNotes.values()].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
 
   const snapshot = {
     version: 1,

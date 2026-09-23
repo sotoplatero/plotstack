@@ -16,7 +16,7 @@ const SIZES = [16, 32, 48, 128];
 const SUPERSAMPLE = 4;
 
 const BACKGROUND = "#141612";
-const BAR = "#d7ff3f";
+const BAR = "#cbe75d";
 const RULE = "#f0eee6";
 
 // Coordenadas en el sistema del viewBox 0 0 64 64 de assets/icon.svg.

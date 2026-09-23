@@ -1,0 +1,9 @@
+{
+  "type": "stdio",
+  "name": "com.plotstack.codex",
+  "allowed_origins": [
+    "chrome-extension://ooenmcflkicilickgfmabhaidmmhgdfh/"
+  ],
+  "description": "Análisis local PlotStack con Codex",
+  "path": "C:\\Users\\soto\\projects\\PlotStack\\native\\launch.cmd"
+}

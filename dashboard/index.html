@@ -15,38 +15,24 @@
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <span>Plot<span>Stack</span></span>
       </div>
-      <div class="onboarding-grid">
-        <div class="onboarding-copy">
-          <p class="kicker"><span class="live-dot"></span> ANALÍTICA LOCAL PARA SUBSTACK</p>
-          <h1 id="onboarding-title">Tu newsletter,<br><em>en perspectiva.</em></h1>
-          <p>Conecta la sesión de Substack que ya tienes abierta en Chrome y reúne crecimiento, audiencia y contenido en un solo lugar.</p>
-          <div class="privacy-line">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
-            <span>PlotStack nunca copia ni almacena tus cookies.</span>
-          </div>
-        </div>
+      <div class="onboarding-grid onboarding-direct">
         <div class="connect-card" id="connect-card">
-          <div class="connect-visual" aria-hidden="true">
-            <div class="substack-glyph"><i></i><i></i><strong>S</strong></div>
-            <div class="connector"><span></span></div>
-            <div class="plotstack-glyph"><span class="brand-mark"><i></i><i></i><i></i></span></div>
-          </div>
           <div id="connect-content">
-            <p class="step-label">PASO 1 DE 1</p>
-            <h2>Conecta tu publicación</h2>
-            <p>Usaremos tu sesión activa únicamente para consultar endpoints de estadísticas de solo lectura.</p>
-            <button class="connect-button" id="connect-button" type="button"><span>Conectar con Substack</span><b>→</b></button>
+            <span class="detecting-mark" aria-hidden="true"></span>
+            <h1 id="onboarding-title">Buscando tus newsletters…</h1>
+            <p>Estamos comprobando la sesión de Substack abierta en este navegador.</p>
+            <button class="connect-button" id="connect-button" type="button" hidden><span>Volver a detectar</span><b>→</b></button>
             <button class="login-button" id="login-button" type="button" hidden>Iniciar sesión en Substack ↗</button>
           </div>
           <div class="publication-picker" id="publication-picker" hidden>
-            <p class="step-label">ELIGE UNA PUBLICACIÓN</p>
-            <h2>¿Qué quieres analizar?</h2>
+            <h1>Elige qué newsletter quieres analizar</h1>
+            <p>Encontramos estas publicaciones en tu cuenta de Substack.</p>
             <div id="publication-list"></div>
           </div>
           <div class="connect-status" id="connect-status" role="status" aria-live="polite"></div>
+          <p class="onboarding-privacy">Solo lectura · Los datos permanecen en este navegador</p>
         </div>
       </div>
-      <div class="onboarding-foot"><span>Privado por diseño</span><span>Sin servidor intermedio</span><span>Solo lectura</span></div>
     </section>
 
     <div class="shell" id="dashboard-shell" hidden>
@@ -61,19 +47,19 @@
             <svg aria-hidden="true"><use href="#icon-grid"></use></svg><span>Resumen</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="audiencia">
-            <svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Audiencia</span>
+            <svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Tus lectores</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="crecimiento">
-            <svg aria-hidden="true"><use href="#icon-arrow"></use></svg><span>Crecimiento</span>
+            <svg aria-hidden="true"><use href="#icon-arrow"></use></svg><span>Cómo creces</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="notas">
             <svg aria-hidden="true"><use href="#icon-note"></use></svg><span>Notas</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="publicaciones">
-            <svg aria-hidden="true"><use href="#icon-mail"></use></svg><span>Publicaciones</span>
+            <svg aria-hidden="true"><use href="#icon-mail"></use></svg><span>Envíos</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="cobertura">
-            <svg aria-hidden="true"><use href="#icon-database"></use></svg><span>Cobertura</span>
+            <svg aria-hidden="true"><use href="#icon-database"></use></svg><span>Estado de datos</span>
           </button>
         </nav>
 
@@ -93,7 +79,7 @@
 
       <main>
         <header class="topbar">
-          <div class="eyebrow"><span></span> Centro de rendimiento</div>
+          <div class="eyebrow"><span></span> Tu informe de crecimiento</div>
           <div class="top-actions">
             <div class="range-control" id="range-control" aria-label="Periodo analizado">
               <button type="button" data-days="7">7D</button>
@@ -146,6 +132,18 @@
         <div class="content" id="overview">
 
           <div class="view" data-view="resumen">
+            <section class="growth-brief reveal" aria-labelledby="growth-brief-title">
+              <div class="brief-copy">
+                <p class="brief-date" id="brief-period">Últimos 30 días</p>
+                <h1 id="growth-brief-title">Así está creciendo tu newsletter</h1>
+                <p id="growth-verdict">Sincroniza para preparar una lectura sencilla de tu crecimiento.</p>
+              </div>
+              <div class="brief-action">
+                <span>Lo más útil ahora</span>
+                <strong id="growth-action">Sigue publicando y vuelve después de la próxima edición.</strong>
+              </div>
+            </section>
+
             <section class="metrics-grid" aria-label="Métricas principales">
               <article class="metric-card metric-primary reveal" data-goto="audiencia" role="link" tabindex="0">
                 <div class="card-label"><span>Suscriptores</span><svg aria-hidden="true"><use href="#icon-arrow"></use></svg></div>
@@ -154,19 +152,19 @@
                 <div class="spark-bars" id="subscriber-bars" aria-hidden="true"></div>
               </article>
               <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
-                <div class="card-label"><span>Apertura media</span><span class="metric-glyph">◒</span></div>
+                <div class="card-label"><span>Lectores que abren</span><span class="metric-glyph">◒</span></div>
                 <p class="metric-value" id="metric-open-rate">—</p>
                 <p class="delta" id="delta-open-rate">—</p>
                 <div class="benchmark"><span id="open-progress"></span></div>
                 <small id="open-reference">—</small>
               </article>
               <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
-                <div class="card-label"><span>Clics por envío</span><span class="metric-glyph">⇱</span></div>
+                <div class="card-label"><span>Lectores que hacen clic</span><span class="metric-glyph">⇱</span></div>
                 <p class="metric-value" id="metric-click-rate">—</p>
                 <p class="delta" id="delta-click-rate">—</p>
                 <div class="paid-note"><span id="click-basis">—</span></div>
               </article>
-              <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
+              <article class="metric-card reveal metric-secondary" data-goto="publicaciones" role="link" tabindex="0">
                 <div class="card-label"><span>Vistas</span><span class="period-badge">30 días · fijo</span></div>
                 <p class="metric-value" id="metric-views">—</p>
                 <p class="delta" id="delta-views">—</p>
@@ -204,7 +202,28 @@
               </article>
             </section>
 
-            <section class="content-summary-grid" aria-label="Interacciones del periodo">
+            <section class="growth-drivers" aria-label="Qué está impulsando el crecimiento">
+              <article class="panel driver-panel reveal" data-goto="crecimiento" role="link" tabindex="0">
+                <div class="panel-header">
+                  <div><h2>De dónde llegan tus nuevos lectores</h2><p class="panel-copy">Las fuentes que más altas aportaron en <span class="summary-period-label">el periodo</span>.</p></div>
+                  <span class="period-badge">Ver detalle ↗</span>
+                </div>
+                <div class="driver-bars" id="summary-source-bars"></div>
+                <p class="plain-insight" id="summary-source-insight">Sincroniza para identificar tus fuentes de crecimiento.</p>
+              </article>
+              <article class="panel driver-panel reveal" data-goto="publicaciones" role="link" tabindex="0">
+                <div class="panel-header">
+                  <div><h2>Qué publicaciones convierten mejor</h2><p class="panel-copy">Altas conseguidas durante el primer día.</p></div>
+                  <span class="period-badge">Ver envíos ↗</span>
+                </div>
+                <div class="driver-bars" id="summary-post-bars"></div>
+                <p class="plain-insight" id="summary-post-insight">Aún no hay publicaciones con altas atribuidas.</p>
+              </article>
+            </section>
+
+            <details class="secondary-detail reveal">
+              <summary>Ver actividad de publicaciones y Notas</summary>
+              <section class="content-summary-grid" aria-label="Interacciones del periodo">
               <article class="panel content-summary-panel reveal" data-goto="publicaciones" role="link" tabindex="0">
                 <div class="panel-header"><div><h2>Publicaciones</h2><p class="panel-copy">Actividad en <span class="summary-period-label">el periodo</span></p></div><span class="period-badge">Ver todas ↗</span></div>
                 <div class="summary-kpi-grid">
@@ -227,7 +246,8 @@
                   <div><span>Impresiones</span><strong id="summary-notes-impressions">—</strong></div>
                 </div>
               </article>
-            </section>
+              </section>
+            </details>
           </div>
 
           <div class="view" data-view="audiencia" hidden>
@@ -344,13 +364,16 @@
                 <div><h2>Altas y bajas</h2><div class="chart-legend"><span></span>Altas<span class="is-secondary"></span>Bajas</div></div>
                 <span class="period-badge" id="churn-net">—</span>
               </div>
-              <div class="audience-totals" id="churn-kpis"></div>
+              <div class="churn-summary" aria-labelledby="churn-summary-title">
+                <h3 id="churn-summary-title">Cifras y explicación</h3>
+                <div class="audience-totals" id="churn-kpis"></div>
+                <p class="panel-copy" id="channels-note" hidden></p>
+              </div>
               <div class="chart-wrap">
                 <svg id="churn-chart" viewBox="0 0 820 200" role="img" aria-label="Altas y bajas por día"></svg>
                 <div class="chart-empty" id="churn-empty" hidden>Sin movimientos de audiencia en este periodo.</div>
               </div>
               <p class="panel-copy" id="churn-basis"></p>
-              <p class="panel-copy" id="channels-note" hidden></p>
             </section>
 
             <section class="panel chart-panel reveal" id="paid-churn-panel" data-sensitive="paid" hidden>
@@ -384,9 +407,9 @@
               </div>
             </section>
 
-            <div class="two-up">
+            <div class="two-up notes-reach-grid" aria-label="Alcance de las notas">
               <section class="panel list-panel reveal" id="notes-surfaces-panel">
-                <div class="panel-header"><div><h2>Dónde se ven tus notas</h2></div><span class="period-badge" id="notes-surfaces-coverage">—</span></div>
+                <div class="panel-header"><div><h2>Dónde se ven tus notas</h2><p class="panel-copy">Las superficies de Substack que generan impresiones.</p></div><span class="period-badge" id="notes-surfaces-coverage">—</span></div>
                 <div class="donut-wrap">
                   <svg id="notes-surfaces-donut" viewBox="0 0 200 200" role="img" aria-label="Reparto de impresiones por superficie"></svg>
                   <div class="donut-center" id="notes-surfaces-center"></div>
@@ -394,7 +417,7 @@
                 <div class="donut-legend" id="notes-surfaces-legend"></div>
               </section>
               <section class="panel list-panel reveal" id="notes-audience-panel">
-                <div class="panel-header"><div><h2>Quién las ve</h2></div><span class="period-badge" id="notes-audience-coverage">—</span></div>
+                <div class="panel-header"><div><h2>Quién las ve</h2><p class="panel-copy">Qué relación tenían contigo antes de encontrar la nota.</p></div><span class="period-badge" id="notes-audience-coverage">—</span></div>
                 <div class="donut-wrap">
                   <svg id="notes-audience-donut" viewBox="0 0 200 200" role="img" aria-label="Reparto de impresiones por tipo de audiencia"></svg>
                   <div class="donut-center" id="notes-audience-center"></div>
@@ -405,13 +428,15 @@
 
             <section class="panel reveal" id="cadence-panel">
               <div class="panel-header">
-                <div><h2>Cadencia</h2></div>
+                <div><h2>Cuándo publicas</h2><p class="panel-copy">Busca un día a la izquierda y una hora arriba. El cuadro será más verde cuanto más hayas publicado en esa combinación.</p></div>
                 <span class="period-badge" id="cadence-summary">—</span>
               </div>
-              <div class="heatmap" id="cadence-heatmap" aria-label="Notas publicadas por día de la semana y hora"></div>
+              <div class="heatmap" id="cadence-heatmap" aria-label="Mapa de actividad: notas publicadas por día de la semana y hora"></div>
+              <div class="heatmap-legend" aria-hidden="true"><span>Menos</span><i></i><i></i><i></i><i></i><span>Más publicaciones</span></div>
               <div class="table-wrap cadence-table-wrap">
                 <table>
-                  <thead><tr><th>Semana</th><th>Notas</th><th>Con estadísticas</th><th>Interacciones</th><th>Promedio</th></tr></thead>
+                  <caption>Tu ritmo durante las últimas 12 semanas</caption>
+                  <thead><tr><th>Semana que empieza</th><th>Notas publicadas</th><th>Interacciones medidas</th><th>Promedio por nota medida</th></tr></thead>
                   <tbody id="cadence-table-body"></tbody>
                 </table>
               </div>
@@ -444,8 +469,21 @@
                 </div>
               </div>
               <div class="table-wrap">
-                <table>
-                  <thead><tr><th>Nota</th><th>Fecha</th><th>Likes</th><th>Comentarios</th><th>Restacks</th><th>Interacciones</th><th>Impresiones</th><th>Ratio</th><th>Altas/1000 impr.</th><th>Nuevos subs.</th></tr></thead>
+                <table class="notes-data-table">
+                  <colgroup><col class="notes-col-title"><col class="notes-col-date"><col span="9" class="notes-col-metric"></colgroup>
+                  <thead><tr>
+                    <th>Nota</th>
+                    <th><abbr title="Fecha de publicación">Fecha</abbr></th>
+                    <th><abbr title="Me gusta">LIK</abbr></th>
+                    <th><abbr title="Comentarios y respuestas">COM</abbr></th>
+                    <th><abbr title="Veces compartida dentro de Substack">RST</abbr></th>
+                    <th><abbr title="Interacciones totales">INT</abbr></th>
+                    <th><abbr title="Visitas al perfil">PER</abbr></th>
+                    <th><abbr title="Impresiones">IMP</abbr></th>
+                    <th><abbr title="Interacciones sobre impresiones">ENG</abbr></th>
+                    <th><abbr title="Altas por cada 1.000 impresiones">A/1K</abbr></th>
+                    <th><abbr title="Nuevos suscriptores atribuidos">ALT</abbr></th>
+                  </tr></thead>
                   <tbody id="notes-table-body"></tbody>
                 </table>
               </div>
@@ -456,6 +494,8 @@
               </div>
             </section>
           </div>
+
+          <div class="ui-hint" id="ui-hint" role="tooltip" hidden></div>
 
           <div class="view" data-view="publicaciones" hidden>
             <section class="panel campaigns-panel reveal" id="campaigns">

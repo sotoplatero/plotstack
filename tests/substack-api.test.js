@@ -426,7 +426,7 @@ test("los paginadores paran cuando una pagina entera ya esta en el snapshot", as
   }
 });
 
-test("getCoreSnapshot no pide ni un detalle y conserva lo ya medido", async () => {
+test("getCoreSnapshot incorpora notas recientes sin pedir sus estadísticas y conserva lo ya medido", async () => {
   const originalFetch = globalThis.fetch;
   configureRequestLimiter({ concurrency: 4, gapMs: 0 });
   const urls = [];
@@ -435,6 +435,9 @@ test("getCoreSnapshot no pide ni un detalle y conserva lo ya medido", async () =
     if (url.includes("summary-v2?range=30")) return jsonResponse({ totalSubscribersEnd: 300, totalSubscribersStart: 250 });
     if (url.endsWith("/publish-dashboard/summary")) return jsonResponse({ totalEmail: 300, openRate: 41, views: 900, viewsDelta: -120 });
     if (url.includes("post_management/published")) return jsonResponse({ posts: [{ id: 9, title: "Nueva", post_date: "2026-09-01" }] });
+    if (url.includes("reader/feed/profile")) return jsonResponse({ items: [
+      { type: "comment", entity_key: "c-6", comment: { id: 6, user_id: 7, body: "De septiembre", date: "2026-09-12T12:00:00Z", reaction_count: 3 } },
+    ], nextCursor: "pagina-2" });
     return jsonResponse({});
   };
   try {
@@ -446,13 +449,14 @@ test("getCoreSnapshot no pide ni un detalle y conserva lo ya medido", async () =
     const { snapshot, context } = await getCoreSnapshot({ name: "Carta", subdomain: "carta", userId: 7 }, previo);
     assert.equal(urls.some((url) => url.includes("post_management/detail")), false, "la fase rapida no pide detalles");
     assert.equal(urls.some((url) => url.includes("note_stats")), false);
-    assert.equal(urls.some((url) => url.includes("reader/feed/profile")), false);
+    assert.equal(urls.filter((url) => url.includes("reader/feed/profile")).length, 1, "la fase rápida solo lee la primera página del feed");
     assert.equal(snapshot.metrics.subscribers, 300);
     assert.equal(snapshot.metrics.totalViews, 900);
     assert.equal(snapshot.metrics.viewsDelta, -120, "la variacion de vistas puede ser negativa");
     assert.equal(snapshot.campaigns[0].openRate, 50, "el detalle anterior se conserva sin pedirlo otra vez");
-    assert.equal(snapshot.notes.length, 1, "las notas guardadas se muestran hasta que el detalle las refresque");
-    assert.equal(snapshot.notesSummary.total, 1);
+    assert.deepEqual(snapshot.notes.map((note) => note.id), ["6", "5"], "la nota reciente entra sin perder la guardada");
+    assert.equal(snapshot.notes[1].stats.interactions.total, 12, "el detalle ya medido se conserva");
+    assert.equal(snapshot.notesSummary.total, 2);
     assert.equal(context.rawCampaigns.length, 1, "el contexto lleva las filas crudas para la fase de detalle");
   } finally {
     globalThis.fetch = originalFetch;

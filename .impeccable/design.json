@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-13T00:00:00-04:00",
+  "title": "Design System: PlotStack",
+  "extensions": {
+    "colorMeta": {
+      "warm-lime": { "role": "primary", "displayName": "Verde lima cálido", "canonical": "#92ad28", "tonalRamp": ["#222b08", "#3d4d0d", "#627b0f", "#92ad28", "#afca3b", "#cbe75d", "#e1ef9d", "#f5f9dd"] },
+      "paper-ground": { "role": "neutral", "displayName": "Papel de archivo", "canonical": "#f2ede1", "tonalRamp": ["#28251f", "#4f493e", "#766e5f", "#9e9583", "#c2b9a8", "#ded6c8", "#f2ede1", "#fdfbf6"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Voz editorial", "purpose": "Conclusiones y encabezados." },
+      "body": { "displayName": "Lectura funcional", "purpose": "Controles, etiquetas y explicaciones." }
+    },
+    "shadows": [],
+    "motion": [{ "name": "state", "value": "180ms ease-out", "purpose": "Cambios de estado breves; el contenido permanece visible por defecto." }],
+    "breakpoints": [{ "name": "compact", "value": "760px" }, { "name": "single-column", "value": "960px" }]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal directa.",
+      "html": "<button class=\"ds-primary\">Sincronizar</button>",
+      "css": ".ds-primary{background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent);border-radius:2px;padding:12px 18px;font-weight:800}.ds-primary:hover{filter:brightness(.94)}.ds-primary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}"
+    },
+    {
+      "name": "Editorial Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Superficie plana para evidencia.",
+      "html": "<section class=\"ds-panel\"><h2>Crecimiento</h2><p>La evidencia que sostiene la lectura.</p></section>",
+      "css": ".ds-panel{background:var(--panel);color:var(--paper);border:1px solid var(--line);border-radius:0;padding:27px}.ds-panel h2{font-family:var(--serif);font-weight:400}.ds-panel:focus-within{outline:2px solid var(--accent);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "La edición comentada",
+    "overview": "Una lectura editorial de los datos del autor: conclusión primero, evidencia después y detalle bajo demanda.",
+    "keyCharacteristics": ["Papel y tinta de alto contraste", "Verde musgo cálido", "Serif para conclusiones", "Reglas finas y superficies planas"],
+    "rules": [
+      { "name": "The Rubric Rule", "body": "El verde musgo señala dónde mirar o actuar; no colorea grandes superficies informativas.", "section": "colors" },
+      { "name": "The Meaning Rule", "body": "El verde comunica marca y avance; el rojo queda reservado para retrocesos y errores.", "section": "colors" }
+    ],
+    "dos": ["Comenzar cada vista principal con la pregunta que responde.", "Traducir tasas y fuentes a frases accionables.", "Plegar el detalle que no cambie una decisión inmediata."],
+    "donts": ["Llenar la primera pantalla con métricas de cobertura o diagnóstico.", "Usar color sin significado.", "Presentar correlación como recomendación con muestra insuficiente."]
+  }
+}

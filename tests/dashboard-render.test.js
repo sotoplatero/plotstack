@@ -188,8 +188,68 @@ test("Crecimiento pinta altas y bajas del histórico real", async () => {
   await rango("all");
   assert.notEqual($("#churn-net").textContent.trim(), "—");
   assert.match($("#churn-basis").textContent, /histórico de crecimiento/, "hay que declarar de dónde salen las bajas");
+  assert.ok($$("#churn-chart .chart-bar").length > 0, "el gráfico necesita barras de altas visibles");
+  assert.ok($$("#churn-chart .chart-bar-secondary").length > 0, "el gráfico necesita barras de bajas visibles");
+  const alta = $("#churn-chart .chart-bar");
+  const baja = $("#churn-chart .chart-bar-secondary");
+  assert.notEqual(alta.attributes.x, baja.attributes.x, "altas y bajas no deben taparse");
   assert.match($("#acquisition-conversion").textContent, /%|Sin dato/);
   assert.equal($("#growth-events-panel"), null, "no debe duplicarse la lista de publicaciones y notas");
+});
+
+test("Altas y bajas recupera el último tramo disponible sin presentarlo como actual", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  await rango("7");
+  assert.ok($$("#churn-chart .chart-bar").length > 0, "un histórico válido no debe dejar la tarjeta vacía");
+  assert.match($("#churn-net").textContent, /último tramo disponible/);
+  assert.match($("#churn-basis").textContent, /No hay movimientos dentro del rango actual/);
+});
+
+test("Altas y bajas usa la atribución por envío cuando falta el histórico diario", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  await rango("all");
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.analytics"];
+  listener({ "plotstack.analytics": { newValue: {
+    ...original,
+    audience: { ...original.audience, timeline: { ...original.audience.timeline, daily: [] } },
+    growth: { ...original.growth, subscribers: { ...original.growth.subscribers, free: { daily: [], totals: { new: 0, losses: 0, net: 0 } } } },
+  } } }, "local");
+  await settle(4);
+  assert.ok($$("#churn-chart .chart-bar").length > 0, "las altas D1 por envío deben sostener el gráfico");
+  assert.match($("#churn-basis").textContent, /primeras 24 h/);
+  listener({ "plotstack.analytics": { newValue: original } }, "local");
+  await settle(4);
+});
+
+test("Altas y bajas combina las altas de adquisición con las bajas del histórico", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  await rango("all");
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.analytics"];
+  listener({ "plotstack.analytics": { newValue: {
+    ...original,
+    growth: {
+      ...original.growth,
+      sources: { totals: { visitors: 10, subscribers: 4, revenue: 0 }, sources: [
+        { id: "direct", label: "Directo", visitors: 10, subscribers: 4, series: [{ date: "2026-09-13", value: 4 }] },
+      ] },
+      subscribers: { ...original.growth.subscribers, free: {
+        daily: [{ date: "2026-09-13", new: 0, losses: -3, net: 3 }],
+        totals: { new: 0, losses: -3, net: 3 },
+      } },
+    },
+  } } }, "local");
+  await settle(4);
+  assert.match($("#churn-net").textContent, /\+1 neto · 4 altas − 3 bajas/);
+  assert.equal($$("#churn-chart .chart-bar").length, 1, "las altas de fuentes deben producir una barra visible");
+  assert.equal($$("#churn-chart .chart-bar-secondary").length, 1, "una baja negativa de la API debe producir una barra visible");
+  assert.match($("#churn-basis").textContent, /Altas obtenidas de las fuentes de crecimiento/);
+  listener({ "plotstack.analytics": { newValue: original } }, "local");
+  await settle(4);
 });
 
 test("Notas usa el detalle real y no inventa lo que no existe", async () => {
@@ -200,6 +260,11 @@ test("Notas usa el detalle real y no inventa lo que no existe", async () => {
   assert.equal($("#notes-table-body").children.length, 3);
   // Impresiones sí existen en note_stats; seguidores e ingresos por nota no.
   assert.equal(txt($("#notes-impressions").textContent), "11,7 mil");
+  const primeraNota = $("#notes-table-body").children[0];
+  assert.equal(primeraNota.querySelectorAll("td")[6].textContent, "8", "la tabla muestra las visitas al perfil de la nota");
+  const headerHints = $$(".notes-data-table abbr").map((abbr) => abbr.dataset.hint);
+  assert.deepEqual(headerHints, ["Fecha de publicación", "Me gusta", "Comentarios y respuestas", "Veces compartida dentro de Substack", "Interacciones totales", "Visitas al perfil", "Impresiones", "Interacciones sobre impresiones", "Altas por cada 1.000 impresiones", "Nuevos suscriptores atribuidos"]);
+  assert.ok($$("#notes-table-body td.is-standout").length > 0, "los valores representativos necesitan énfasis visual");
   assert.ok($("#cadence-table-body").children.length > 0);
   const vista = $$(".view").find((node) => !node.hidden);
   assert.equal(/Seguidores atribuidos/.test(vista.textContent), false,
@@ -331,12 +396,13 @@ test("Notas no pinta ceros donde no hubo medición y muestra la atribución", as
   assert.equal(celdas.at(-1), "—", "altas sin detalle es ausencia");
   assert.ok($$("#attribution-chart .chart-bar").length > 0, "faltan las barras de altas atribuidas a notas");
   assert.match($("#attribution-coverage").textContent, /2 de 3/, "la cobertura declara sobre qué se sostiene la serie");
-  // Mapa de calor día × hora: siete filas de veinticuatro celdas.
+  // Mapa estilo GitHub: siete días por veinticuatro horas y ancho completo.
   const filas = $$("#cadence-heatmap .heatmap-row").filter((row) => !row.classList.contains("is-header"));
   assert.equal(filas.length, 7, "una fila por día de la semana");
   assert.ok(filas.every((row) => row.querySelectorAll(".heatmap-cell").length === 24), "veinticuatro horas por fila");
   assert.ok($$("#cadence-heatmap .heatmap-cell.is-filled").length >= 1, "alguna hora tiene notas");
-  assert.match($("#cadence-summary").textContent, /\d{2}:00/, "la hora más activa va en horas, no en tramos");
+  assert.match($("#cadence-summary").textContent, /Publicas más:/, "el resumen explica el patrón en lenguaje natural");
+  assert.ok($$("#cadence-heatmap .heatmap-cell[data-hint]").length === 168, "cada hora explica su dato con el hint propio");
 });
 
 test("Audiencia pinta la actividad de la lista y la composición nace oculta", async () => {
@@ -735,6 +801,9 @@ test("Dónde se ven y Quién las ve son dos cards con pastel y leyenda en españ
   await rango("all");
   assert.equal(vistaDe($("#notes-surfaces-panel")), "notas");
   assert.equal(vistaDe($("#notes-audience-panel")), "notas");
+  assert.ok($(".notes-reach-grid"), "los paneles de alcance necesitan un bloque separado de la cabecera");
+  assert.ok($("#notes-surfaces-panel .panel-copy"));
+  assert.ok($("#notes-audience-panel .panel-copy"));
   assert.equal($$("#notes-surfaces-donut .donut-arc").length, 7, "un arco por superficie con impresiones");
   assert.equal($$("#notes-audience-donut .donut-arc").length, 3);
   const superficies = $("#notes-surfaces-legend").textContent;

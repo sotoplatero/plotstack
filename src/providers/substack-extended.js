@@ -113,7 +113,9 @@ const sumPresent = (row, keys, fallbackKeys = []) => {
 export function normalizeSubscriberGrowth(payload = {}) {
   const daily = rowsFrom(payload, ["subscriberGrowth"]).map((row) => {
     const gained = sumPresent(row, ["new_free", "new_paid"], ["new_subscribers", "new"]);
-    const losses = sumPresent(row, ["num_unsubs", "num_expirations"], ["unsubscribes", "cancellations_finalized"]);
+    // Substack devuelve estas salidas con signo negativo en algunas cuentas.
+    // En PlotStack `losses` siempre es una magnitud positiva.
+    const losses = Math.abs(sumPresent(row, ["num_unsubs", "num_expirations"], ["unsubscribes", "cancellations_finalized"]));
     return { date: isoDay(text(row?.dt, row?.date)), new: gained, losses, net: gained - losses };
   }).filter((row) => row.date).sort((a, b) => a.date.localeCompare(b.date));
   const totals = daily.reduce((sum, row) => ({
@@ -154,7 +156,19 @@ export function normalizeRetention(payload = {}) {
   const cohorts = entries
     .map(([cohort, values]) => ({ cohort: String(cohort), points: cohortPoints(values) }))
     .filter((row) => row.points.length);
-  return { cohorts, rates };
+  const recognized = Array.isArray(payload?.rates)
+    || Array.isArray(payload?.summary)
+    || Array.isArray(payload?.summary?.rates)
+    || Object.hasOwn(payload, "cohorts")
+    || Object.hasOwn(payload, "cohortStats");
+  return {
+    cohorts,
+    rates,
+    // Permite distinguir una respuesta válida pero vacía de un formato que
+    // cambió y ya no sabemos interpretar.
+    sourceState: payload?.sourceState || (recognized ? "ready" : "unsupported"),
+    sourceError: text(payload?.sourceError),
+  };
 }
 
 // Ventanas que `network_attribution` reconoce, observadas una por una. "1 year"
@@ -418,11 +432,21 @@ export async function getExtendedAnalytics(publication) {
   };
   const retentionRequest = async (paid) => {
     const subscribed = paid ? "true" : "false";
-    const [cohorts, summary] = await Promise.all([
+    const [cohortsResult, summaryResult] = await Promise.allSettled([
       requestJson(`${base}/publication/stats/subscriber_retention?${retentionQuery}&is_subscribed=${subscribed}`),
       requestJson(`${base}/publication/stats/subscriber_retention/summary?is_subscribed=${subscribed}&subscription_interval_cohort=all`),
     ]);
-    return { ...(cohorts || {}), summary };
+    if (cohortsResult.status === "rejected" && summaryResult.status === "rejected") throw cohortsResult.reason;
+    const errors = [cohortsResult, summaryResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason?.message)
+      .filter(Boolean);
+    return {
+      ...(cohortsResult.status === "fulfilled" ? cohortsResult.value || {} : {}),
+      summary: summaryResult.status === "fulfilled" ? summaryResult.value || {} : {},
+      sourceState: errors.length ? "partial" : "ready",
+      sourceError: errors.join(" · "),
+    };
   };
 
   // `audience` NO es una fuente propia: sus conteos (`chartCounts`) vienen en la
@@ -520,7 +544,7 @@ export async function getExtendedAnalytics(publication) {
   const coverage = settled.map((result, index) => {
     const source = sources[index];
     if (result.status === "rejected") {
-      data[source.key] = source.normalize({});
+      data[source.key] = source.normalize({ sourceState: "unavailable", sourceError: result.reason?.message || "No disponible" });
       return { key: source.key, label: source.label, status: "unavailable", records: 0, error: result.reason?.message || "No disponible" };
     }
     raw[source.key] = result.value;

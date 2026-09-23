@@ -37,6 +37,10 @@ test("normaliza ubicación, crecimiento y retención sin fabricar datos", () => 
   ] });
   assert.deepEqual(growth.totals, { new: 5, losses: 2, net: 3 });
   assert.equal(growth.daily[0].date, "2026-08-20");
+  const signedLoss = normalizeSubscriberGrowth({ subscriberGrowth: [
+    { dt: "2026-08-22", new_free: 0, num_unsubs: -3 },
+  ] });
+  assert.deepEqual(signedLoss.totals, { new: 0, losses: 3, net: -3 }, "las bajas negativas de Substack se guardan como magnitud positiva");
   // Las claves presentes se SUMAN. Con "primer finito", un `new_free: 0`
   // tapaba las altas de pago de la misma fila y la vista de pago salía a cero.
   const pago = normalizeSubscriberGrowth({ subscriberGrowth: [
@@ -51,6 +55,8 @@ test("normaliza ubicación, crecimiento y retención sin fabricar datos", () => 
   assert.deepEqual(normalizeRetention({ cohortStats: {} }).cohorts, []);
   assert.deepEqual(normalizeRetention({ rates: [{ months_since_subscription: 1, rate: 0.82, comparison: 0.04 }] }).rates,
     [{ month: 1, rate: 0.82, comparison: 0.04 }]);
+  assert.equal(normalizeRetention({ rates: [] }).sourceState, "ready", "una respuesta vacía reconocida no es un fallo");
+  assert.equal(normalizeRetention({}).sourceState, "unsupported", "una forma desconocida se declara como tal");
 });
 
 // Payload real capturado en docs/product/substack-payloads-observados.md:
@@ -132,6 +138,23 @@ test("getExtendedAnalytics aisla fallos y descarta la PII de suscriptores", asyn
     }
     assert.deepEqual(Object.keys(analytics).sort(),
       ["audience", "coverage", "growth", "period", "retention", "syncedAt", "traffic", "version"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Retención conserva el resumen cuando falla la matriz de cohortes", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url.endsWith("/subscriber-stats")) return response({ count: 0, subscribers: [] });
+    if (url.includes("subscriber_retention/summary")) return response({ rates: [{ months_since_subscription: 1, rate: 0.73 }] });
+    if (url.includes("subscriber_retention")) throw new Error("cohortes no disponibles");
+    return response({});
+  };
+  try {
+    const analytics = await getExtendedAnalytics({ subdomain: "carta" });
+    assert.equal(analytics.retention.free.rates[0].rate, 0.73);
+    assert.equal(analytics.retention.free.sourceState, "partial");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -18,6 +18,7 @@ import {
   getReachBeyondBubble,
   isFractionScale,
   ratio,
+  safeNumber,
   viewsPerDelivery,
   normalizeSnapshot,
   parseDay,
@@ -76,6 +77,61 @@ const shortDate = (value) => (value ? parseDay(value).toLocaleDateString("es-ES"
 const timezoneOffset = () => -new Date().getTimezoneOffset();
 const rangeLabel = () => (state.days === ALL_TIME ? "todo el histórico" : `los últimos ${state.days} días`);
 
+// Un único hint para toda la aplicación: aparece sin la demora del tooltip
+// nativo, funciona con ratón y teclado, y evita crear un nodo por elemento.
+function setHint(element, copy) {
+  if (!element) return;
+  element.removeAttribute("title");
+  if (copy) element.dataset.hint = copy;
+  else delete element.dataset.hint;
+}
+
+function initializeHints() {
+  const hint = $("#ui-hint");
+  if (!hint) return;
+  $$('[title]').forEach((element) => setHint(element, element.getAttribute("title")));
+  let active = null;
+  let frame = 0;
+  const place = (x, y) => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      const gap = 12;
+      const width = hint.offsetWidth;
+      const height = hint.offsetHeight;
+      hint.style.left = `${Math.max(8, Math.min(innerWidth - width - 8, x + gap))}px`;
+      hint.style.top = `${Math.max(8, Math.min(innerHeight - height - 8, y + gap))}px`;
+    });
+  };
+  const show = (element, x, y) => {
+    active = element;
+    hint.textContent = element.dataset.hint;
+    hint.hidden = false;
+    element.setAttribute("aria-describedby", "ui-hint");
+    place(x, y);
+  };
+  const hide = () => {
+    active?.removeAttribute("aria-describedby");
+    active = null;
+    hint.hidden = true;
+  };
+  document.addEventListener("pointerover", (event) => {
+    const target = event.target.closest?.("[data-hint]");
+    if (target) show(target, event.clientX, event.clientY);
+  });
+  document.addEventListener("pointermove", (event) => { if (active) place(event.clientX, event.clientY); }, { passive: true });
+  document.addEventListener("pointerout", (event) => {
+    if (active && !active.contains(event.relatedTarget)) hide();
+  });
+  document.addEventListener("focusin", (event) => {
+    const target = event.target.closest?.("[data-hint]");
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    show(target, rect.left + rect.width / 2, rect.bottom);
+  });
+  document.addEventListener("focusout", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+}
+
 // Corta por fecha con la ventana activa. Las filas sin fecha se conservan
 // siempre: excluirlas seria tratar "no se sabe cuando" como "fuera de rango".
 function withinRange(rows, getDate) {
@@ -105,7 +161,8 @@ function setConnectionStatus(message = "", error = false) {
 function setConnecting(active, label = "Conectando…") {
   const button = $("#connect-button");
   button.disabled = active;
-  button.querySelector("span").textContent = active ? label : "Conectar con Substack";
+  button.querySelector("span").textContent = active ? label : "Volver a detectar";
+  $("#connect-card").classList.toggle("is-detecting", active);
 }
 
 function showOnboarding() {
@@ -113,6 +170,7 @@ function showOnboarding() {
   $("#dashboard-shell").hidden = true;
   $("#connect-content").hidden = false;
   $("#publication-picker").hidden = true;
+  $("#connect-button").hidden = true;
   $("#login-button").hidden = true;
   setConnectionStatus();
 }
@@ -160,27 +218,28 @@ function showPublicationPicker(publications) {
 
 async function connect() {
   setConnecting(true);
+  $("#connect-button").hidden = true;
+  $("#login-button").hidden = true;
   setConnectionStatus("Comprobando tu sesión de Substack…");
   try {
     const response = await sendMessage("PLOTSTACK_CONNECT");
     if (response?.needsLogin) {
       $("#login-button").hidden = false;
+      $("#connect-button").hidden = false;
       setConnectionStatus("No hay una sesión activa de Substack en este navegador.", true);
       return;
     }
     if (!response?.ok) throw new Error(response?.error || "No se pudo conectar.");
     const publications = response.publications || [];
     if (!publications.length) {
+      $("#connect-button").hidden = false;
       setConnectionStatus("Esta cuenta no administra ninguna publicación.", true);
-      return;
-    }
-    if (publications.length === 1) {
-      await selectPublication(publications[0]);
       return;
     }
     setConnectionStatus("");
     showPublicationPicker(publications);
   } catch (error) {
+    $("#connect-button").hidden = false;
     setConnectionStatus(error.message || "No se pudo conectar.", true);
   } finally {
     setConnecting(false);
@@ -200,8 +259,6 @@ async function selectPublication(publication, button) {
     renderProgress();
   } catch (error) {
     setConnectionStatus(error.message || "No se pudo sincronizar.", true);
-    $("#connect-content").hidden = false;
-    $("#publication-picker").hidden = true;
   } finally {
     if (button) button.disabled = false;
   }
@@ -328,7 +385,7 @@ function renderMetrics(snapshot, analytics) {
     bars.replaceChildren(...daily.map((point) => {
       const bar = document.createElement("i");
       bar.style.height = `${(point.signups / top) * 100}%`;
-      bar.title = `${shortDate(point.date)}: ${point.signups} ${point.signups === 1 ? "alta" : "altas"}`;
+      setHint(bar, `${shortDate(point.date)}: ${point.signups} ${point.signups === 1 ? "alta" : "altas"}`);
       return bar;
     }));
   } else {
@@ -543,10 +600,15 @@ function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = "Valor"
   // tiene que caber en la escala y verse, no quedar capado bajo la barra.
   const max = Math.max(1, ...points.map((point) => Math.max(point.value, point.secondary || 0)));
   const slot = (width - left - right) / points.length;
-  const barWidth = Math.max(2, Math.min(22, slot * 0.68));
+  const grouped = Boolean(secondaryLabel);
+  const groupGap = grouped ? Math.max(2, Math.min(5, slot * 0.08)) : 0;
+  const barWidth = grouped
+    ? Math.max(3, Math.min(16, (slot * 0.72 - groupGap) / 2))
+    : Math.max(2, Math.min(22, slot * 0.68));
   const scale = (value) => (value / max) * (height - top - bottom);
   points.forEach((point, index) => {
-    const x = left + index * slot + (slot - barWidth) / 2;
+    const groupWidth = grouped ? barWidth * 2 + groupGap : barWidth;
+    const x = left + index * slot + (slot - groupWidth) / 2;
     const barHeight = scale(point.value);
     const bar = document.createElementNS(SVG_NS, "rect");
     bar.setAttribute("x", x);
@@ -560,11 +622,12 @@ function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = "Valor"
       : `${axisDate(point.date)}: ${point.value}`;
     bar.append(title);
     svg.append(bar);
-    // Solo se dibuja el segmento secundario si existe: un cero no pinta nada.
+    // La segunda serie va al lado, no encima. Superponer las bajas tapaba las
+    // altas pequeñas y hacía que el gráfico pareciese vacío o ambiguo.
     if (point.secondary > 0) {
       const overlay = document.createElementNS(SVG_NS, "rect");
       const overlayHeight = scale(point.secondary);
-      overlay.setAttribute("x", x);
+      overlay.setAttribute("x", x + barWidth + groupGap);
       overlay.setAttribute("y", height - bottom - overlayHeight);
       overlay.setAttribute("width", barWidth);
       overlay.setAttribute("height", Math.max(1, overlayHeight));
@@ -621,10 +684,6 @@ const NOTE_STATE_COPY = {
 };
 
 
-// La cadencia es un recuento, asi que la intensidad codifica notas publicadas.
-// Las interacciones van en el tooltip, y "sin estadisticas" no es "cero".
-// Rejilla 7x4 por tramos: 168 celdas horarias con decenas de notas eran un
-// tablero casi vacío en el que la señal no se veía.
 // Mapa de calor día × hora, 7 filas × 24 columnas: una celda por hora de cada
 // día de la semana, intensidad por notas publicadas. Es el que responde "a qué
 // hora publico" de un vistazo. La intensidad codifica el RECUENTO; las
@@ -641,10 +700,11 @@ function renderCadenceHeatmap(container, cadence) {
 
   const header = document.createElement("div");
   header.className = "heatmap-row is-header";
-  header.append(document.createElement("span"));
+  const axis = document.createElement("span");
+  axis.textContent = "Hora";
+  header.append(axis);
   for (let hour = 0; hour < 24; hour += 1) {
     const label = document.createElement("small");
-    // Una etiqueta cada tres horas: 24 en una fila se pisan.
     label.textContent = hour % 3 === 0 ? String(hour).padStart(2, "0") : "";
     header.append(label);
   }
@@ -660,16 +720,20 @@ function renderCadenceHeatmap(container, cadence) {
       const cell = byKey.get(`${day}:${hour}`) || { notes: 0, scoredNotes: 0, medianInteractions: null };
       const box = document.createElement("i");
       box.className = "heatmap-cell";
+      box.tabIndex = 0;
       const hora = `${String(hour).padStart(2, "0")}:00`;
       if (cell.notes) {
-        // Suelo del 35 %: una sola nota tiene que verse, no confundirse con el fondo.
-        box.style.opacity = String(0.35 + (cell.notes / max) * 0.65);
-        box.classList.add("is-filled");
+        const level = Math.max(1, Math.min(4, Math.ceil((cell.notes / max) * 4)));
+        box.classList.add("is-filled", `is-level-${level}`);
         const detail = cell.medianInteractions === null
           ? "sin estadísticas"
           : `mediana ${decimal(cell.medianInteractions)} interacciones (${cell.scoredNotes}/${cell.notes} con detalle)`;
-        box.title = `${DAY_NAMES[day]} ${hora} · ${cell.notes} ${cell.notes === 1 ? "nota" : "notas"} · ${detail}`;
-      } else box.title = `${DAY_NAMES[day]} ${hora} · sin notas`;
+        setHint(box, `${DAY_NAMES[day]} a las ${hora}: ${cell.notes} ${cell.notes === 1 ? "nota publicada" : "notas publicadas"}; ${detail}.`);
+        box.setAttribute("aria-label", box.dataset.hint);
+      } else {
+        setHint(box, `${DAY_NAMES[day]} a las ${hora}: no publicaste notas.`);
+        box.setAttribute("aria-label", box.dataset.hint);
+      }
       row.append(box);
     }
     container.append(row);
@@ -722,7 +786,7 @@ function renderChart(snapshot, analytics) {
   const elapsed = Math.max(1, (parseDay(last.date).getTime() - parseDay(first.date).getTime()) / 86400000);
   let net, netLabel;
   if (growthDaily.length) {
-    net = growthDaily.reduce((sum, point) => sum + (Number.isFinite(point.net) ? point.net : point.new - point.losses), 0);
+    net = growthDaily.reduce((sum, point) => sum + safeNumber(point.new) - Math.abs(safeNumber(point.losses)), 0);
     netLabel = "Crecimiento neto";
   } else {
     net = last.subscribers - first.subscribers;
@@ -853,8 +917,21 @@ function renderAudience(snapshot, analytics) {
     "Substack no devolvió publicaciones con audiencia en común.",
   );
 
-  renderRetention($("#retention-list"), analytics?.retention?.free, "Suscriptores gratuitos");
-  renderRetention($("#paid-retention-list"), analytics?.retention?.paid, "Suscriptores de pago");
+  const freeRetention = analytics?.retention?.free;
+  const paidRetention = analytics?.retention?.paid;
+  const hasRetention = [freeRetention, paidRetention].some((retention) =>
+    (retention?.rates || []).length || (retention?.cohorts || []).some((cohort) => cohort.points?.length));
+  // Substack solo habilita su panel de Retención cuando la publicación tiene
+  // pagos. Para una newsletter gratuita, una card vacía permanente no aporta
+  // información y hacía creer que la sincronización estaba rota.
+  const paymentsEnabled = safeNumber(snapshot?.metrics?.paidSubscribers) > 0
+    || safeNumber(snapshot?.metrics?.monthlyRevenue) > 0
+    || safeNumber(timeline?.composition?.paid) > 0;
+  $("#retention-panel").hidden = !hasRetention && !paymentsEnabled;
+  if (hasRetention || paymentsEnabled) {
+    renderRetention($("#retention-list"), freeRetention, "Suscriptores gratuitos");
+    renderRetention($("#paid-retention-list"), paidRetention, "Suscriptores de pago");
+  }
   renderComposition(analytics);
   renderEngagement(analytics);
 }
@@ -943,7 +1020,7 @@ function renderStackedBar(bar, legend, segments, emptyCopy) {
     const segment = document.createElement("i");
     segment.className = `is-${key}`;
     segment.style.width = `${(safeValue(value) / total) * 100}%`;
-    segment.title = `${label}: ${formatCompactNumber(value)} (${formatPercent((safeValue(value) / total) * 100)})`;
+    setHint(segment, `${label}: ${formatCompactNumber(value)} (${formatPercent((safeValue(value) / total) * 100)})`);
     return segment;
   }));
   legend.replaceChildren(...segments.map(([, label, value]) => {
@@ -984,29 +1061,46 @@ function renderRetention(container, retention, label) {
   const rates = (retention?.rates || [])
     .filter((row) => Number.isFinite(row.rate) && row.month > 0)
     .sort((a, b) => a.month - b.month);
-  if (!rates.length) return emptyMessage(container, "Todavía no hay cohortes suficientes para calcular la retención.", "coverage-empty");
+  const cohorts = (retention?.cohorts || []).filter((cohort) => cohort.points?.length);
+  if (!rates.length && !cohorts.length) {
+    if (retention?.sourceState === "unsupported") {
+      return emptyMessage(container, "Substack devolvió la retención en un formato que PlotStack todavía no reconoce.", "coverage-empty");
+    }
+    if (retention?.sourceState === "partial" || retention?.sourceState === "unavailable") {
+      return emptyMessage(container, "No se pudo completar la retención en esta sincronización. Vuelve a sincronizar para intentarlo de nuevo.", "coverage-empty");
+    }
+    return emptyMessage(container, "Substack todavía no ha calculado la retención. Puede tardar 30 días desde el primer suscriptor de pago.", "coverage-empty");
+  }
   const heading = document.createElement("p");
   heading.className = "retention-label";
   heading.textContent = label;
   container.append(heading);
-  const isFraction = isFractionScale(rates.map((row) => row.rate));
-  for (const rate of rates) {
-    const row = document.createElement("div");
-    const month = document.createElement("span"); month.textContent = `${rate.month} ${rate.month === 1 ? "mes" : "meses"}`;
-    const value = document.createElement("strong"); value.textContent = formatPercent(isFraction ? rate.rate * 100 : rate.rate);
-    row.append(month, value);
-    container.append(row);
+  if (rates.length) {
+    const isFraction = isFractionScale(rates.map((row) => row.rate));
+    for (const rate of rates) {
+      const row = document.createElement("div");
+      const month = document.createElement("span"); month.textContent = `${rate.month} ${rate.month === 1 ? "mes" : "meses"}`;
+      const value = document.createElement("strong"); value.textContent = formatPercent(isFraction ? rate.rate * 100 : rate.rate);
+      row.append(month, value);
+      container.append(row);
+    }
   }
-  renderCohorts(container, retention?.cohorts || []);
+  renderCohorts(container, cohorts);
+  if (retention?.sourceState === "partial") {
+    const warning = document.createElement("p");
+    warning.className = "range-note is-neutral";
+    warning.textContent = "Datos parciales: una de las dos fuentes de retención no respondió.";
+    container.append(warning);
+  }
 }
 
 // Matriz cohorte × mes. `normalizeRetention` la guardaba desde el principio y
-// nadie la pintaba: solo se veían las tasas medias. Con una sola cohorte no hay
-// comparación que hacer, así que no se dibuja. La unidad se decide sobre TODAS
+// nadie la pintaba: solo se veían las tasas medias. Una sola cohorte sigue
+// siendo información válida, aunque todavía no permita comparar. La unidad se decide sobre TODAS
 // las celdas juntas, igual que las tasas medias.
 function renderCohorts(container, cohorts) {
   const withPoints = cohorts.filter((cohort) => cohort.points?.length);
-  if (withPoints.length < 2) return;
+  if (!withPoints.length) return;
   const allRates = withPoints.flatMap((cohort) => cohort.points.map((point) => point.rate));
   const isFraction = isFractionScale(allRates);
   const asPercent = (rate) => (isFraction ? rate * 100 : rate);
@@ -1042,10 +1136,10 @@ function renderCohorts(container, cohorts) {
       // Un mes sin medición no es un 0%: queda vacío y lo dice el tooltip.
       if (rate === undefined) {
         cell.classList.add("is-empty");
-        cell.title = `${cohort.cohort} · mes ${month} · sin dato`;
+        setHint(cell, `${cohort.cohort} · mes ${month} · sin dato`);
       } else {
         cell.style.opacity = String(0.2 + Math.min(1, asPercent(rate) / 100) * 0.8);
-        cell.title = `${cohort.cohort} · mes ${month} · ${formatPercent(asPercent(rate))}`;
+        setHint(cell, `${cohort.cohort} · mes ${month} · ${formatPercent(asPercent(rate))}`);
       }
       grid.append(cell);
     }
@@ -1068,6 +1162,81 @@ const byRange = (source) => {
   if (!source || Array.isArray(source)) return null;
   return isRanged(source) ? source[rangeKey()] || null : source;
 };
+
+function renderDriverBars(container, rows, emptyCopy) {
+  container.replaceChildren();
+  if (!rows.length) {
+    const empty = document.createElement("p");
+    empty.className = "driver-empty";
+    empty.textContent = emptyCopy;
+    container.append(empty);
+    return;
+  }
+  const max = Math.max(1, ...rows.map((row) => row.value));
+  rows.slice(0, 3).forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "driver-row";
+    const label = document.createElement("span");
+    label.textContent = entry.label;
+    const value = document.createElement("strong");
+    value.textContent = entry.display;
+    const track = document.createElement("i");
+    const fill = document.createElement("b");
+    fill.style.width = `${Math.max(4, (entry.value / max) * 100)}%`;
+    track.append(fill);
+    row.append(label, value, track);
+    container.append(row);
+  });
+}
+
+function renderGrowthBrief(snapshot, analytics) {
+  const derived = getDerivedMetrics(snapshot, state.days);
+  const growth = derived.subscriberGrowth;
+  const daily = fillDailyGaps(windowedSubscriberDaily(analytics), (date) => ({ date, signups: 0 }));
+  const gained = daily.reduce((sum, point) => sum + safeNumber(point.signups), 0);
+  $("#brief-period").textContent = rangeLabel();
+
+  if (growth === null) {
+    $("#growth-verdict").textContent = `Tienes ${formatCompactNumber(snapshot.metrics.subscribers)} suscriptores. Necesitamos más historial para decir si el ritmo está mejorando.`;
+  } else if (growth > 1) {
+    $("#growth-verdict").textContent = `Tu audiencia creció ${formatPercent(growth)} en este periodo${gained ? ` y sumó ${formatCompactNumber(gained)} nuevas altas` : ""}.`;
+  } else if (growth >= 0) {
+    $("#growth-verdict").textContent = "Tu audiencia se mantiene estable. El siguiente avance vendrá de repetir lo que mejor convierte.";
+  } else {
+    $("#growth-verdict").textContent = `Tu audiencia retrocedió ${formatPercent(Math.abs(growth))}. Conviene revisar adquisición y bajas antes de aumentar el ritmo.`;
+  }
+
+  const sourceData = byRange(analytics?.growth?.sources);
+  const sources = [...(sourceData?.sources || [])]
+    .filter((source) => safeNumber(source.subscribers) > 0)
+    .sort((a, b) => safeNumber(b.subscribers) - safeNumber(a.subscribers))
+    .slice(0, 3)
+    .map((source) => ({ label: source.label, value: safeNumber(source.subscribers), display: `${formatCompactNumber(source.subscribers)} altas` }));
+  renderDriverBars($("#summary-source-bars"), sources, "Todavía no hay fuentes atribuidas para este periodo.");
+  const totalFromSources = safeNumber(sourceData?.totals?.subscribers);
+  $("#summary-source-insight").textContent = sources.length
+    ? `${sources[0].label} es tu principal puerta de entrada${totalFromSources ? `: aporta ${formatPercent((sources[0].value / totalFromSources) * 100)} de las altas atribuidas` : ""}.`
+    : "Substack no atribuyó nuevas altas a una fuente concreta en este periodo.";
+
+  const rangedCampaigns = withinRange(snapshot.campaigns, (campaign) => campaign.date).kept;
+  const posts = rangedCampaigns
+    .filter((campaign) => safeNumber(campaign.signupsWithin1Day) > 0)
+    .sort((a, b) => safeNumber(b.signupsWithin1Day) - safeNumber(a.signupsWithin1Day))
+    .slice(0, 3)
+    .map((campaign) => ({ label: campaign.title || "Sin título", value: safeNumber(campaign.signupsWithin1Day), display: `${formatCompactNumber(campaign.signupsWithin1Day)} altas` }));
+  renderDriverBars($("#summary-post-bars"), posts, "Aún no hay altas atribuidas a publicaciones.");
+  $("#summary-post-insight").textContent = posts.length
+    ? `“${posts[0].label}” fue la publicación que más lectores convirtió en su primer día.`
+    : "Cuando Substack atribuya altas a un envío, aquí verás cuál conviene estudiar y repetir.";
+
+  if (sources.length) {
+    $("#growth-action").textContent = `Refuerza ${sources[0].label} y estudia qué promesa atrajo a esos lectores.`;
+  } else if (posts.length) {
+    $("#growth-action").textContent = `Revisa “${posts[0].label}” y reutiliza su tema o enfoque.`;
+  } else {
+    $("#growth-action").textContent = "Publica con constancia; aparecerán recomendaciones cuando haya evidencia suficiente.";
+  }
+}
 
 function renderSourcesTable(analytics) {
   const growth = byRange(analytics?.growth?.sources);
@@ -1138,7 +1307,7 @@ function sourceRow(source, isChild) {
     spark.append(...points.map((point) => {
       const bar = document.createElement("i");
       bar.style.height = `${Math.max(6, (point.value / max) * 100)}%`;
-      bar.title = `${shortDate(point.date)}: ${point.value} altas`;
+      setHint(bar, `${shortDate(point.date)}: ${point.value} altas`);
       return bar;
     }));
     trend.append(spark);
@@ -1182,18 +1351,50 @@ function renderRankedList(container, rows, emptyCopy) {
 function renderChurn(snapshot, analytics) {
   const growthDaily = analytics?.growth?.subscribers?.free?.daily || [];
   const daily = analytics?.audience?.timeline?.daily || [];
-  const altasPorDia = new Map((growthDaily.length ? growthDaily : daily).map((point) => [point.date, point.new ?? point.signups]));
+  const sourceDailyMap = new Map();
+  const rangedSources = byRange(analytics?.growth?.sources)?.sources || [];
+  for (const source of rangedSources) {
+    for (const point of source.series || []) {
+      const date = String(point.date || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      sourceDailyMap.set(date, (sourceDailyMap.get(date) || 0) + safeNumber(point.value));
+    }
+  }
+  const sourceDaily = [...sourceDailyMap].map(([date, signups]) => ({ date, signups })).sort((a, b) => a.date.localeCompare(b.date));
+  const campaignDaily = (snapshot.campaigns || [])
+    .map((campaign) => ({
+      date: String(campaign.date || "").slice(0, 10),
+      signups: safeNumber(campaign.signupsWithin1Day),
+      losses: Math.abs(safeNumber(campaign.unsubscribesWithin1Day)) + Math.abs(safeNumber(campaign.disablesWithin1Day)),
+    }))
+    .filter((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && (point.signups || point.losses));
+  // Algunas cuentas reciben una serie de churn con fechas y bajas, pero con
+  // todas las altas a cero. La presencia de filas no demuestra que la métrica
+  // de altas esté cubierta: en ese caso usamos la serie de adquisición.
+  const growthHasSignups = growthDaily.some((point) => safeNumber(point.new) > 0);
+  const primaryDaily = growthHasSignups
+    ? growthDaily
+    : sourceDaily.length
+    ? sourceDaily
+    : daily.length
+    ? daily
+    : campaignDaily;
+  const altasPorDia = new Map();
+  for (const point of primaryDaily) {
+    const altas = safeNumber(point.new ?? point.signups);
+    altasPorDia.set(point.date, (altasPorDia.get(point.date) || 0) + altas);
+  }
 
   const bajasPorDia = new Map();
   if (growthDaily.length) {
-    for (const point of growthDaily) if (point.losses) bajasPorDia.set(point.date, point.losses);
+    for (const point of growthDaily) {
+      const bajas = Math.abs(safeNumber(point.losses));
+      if (bajas) bajasPorDia.set(point.date, bajas);
+    }
   } else {
-    for (const campaign of snapshot.campaigns) {
-      const day = String(campaign.date || "").slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
-      const bajas = campaign.unsubscribesWithin1Day + campaign.disablesWithin1Day;
-      if (!bajas) continue;
-      bajasPorDia.set(day, (bajasPorDia.get(day) || 0) + bajas);
+    for (const point of campaignDaily) {
+      if (!point.losses) continue;
+      bajasPorDia.set(point.date, (bajasPorDia.get(point.date) || 0) + point.losses);
     }
   }
 
@@ -1203,7 +1404,20 @@ function renderChurn(snapshot, analytics) {
     altas: altasPorDia.get(date) || 0,
     bajas: bajasPorDia.get(date) || 0,
   }));
-  const ventana = withinRange(serie, (point) => point.date).kept;
+  const rangeResult = withinRange(serie, (point) => point.date);
+  // Una extensión puede abrirse semanas después de la última sincronización.
+  // En ese caso no escondemos un histórico válido: mostramos el último tramo
+  // disponible y fechamos claramente el corte para no hacerlo pasar por actual.
+  let ventana = rangeResult.kept;
+  let showingLatestAvailable = false;
+  if (!ventana.length && serie.length && state.days !== ALL_TIME) {
+    const lastTime = parseDay(serie.at(-1).date).getTime();
+    if (Number.isFinite(lastTime)) {
+      const cutoff = lastTime - state.days * 86400000;
+      ventana = serie.filter((point) => parseDay(point.date).getTime() >= cutoff);
+      showingLatestAvailable = Boolean(ventana.length);
+    }
+  }
   const totalAltas = ventana.reduce((sum, point) => sum + point.altas, 0);
   const totalBajas = ventana.reduce((sum, point) => sum + point.bajas, 0);
   const neto = totalAltas - totalBajas;
@@ -1254,8 +1468,11 @@ function renderChurn(snapshot, analytics) {
   channelsNote.hidden = !partes.length;
   // `renderLabelledGrid` esconde los ceros, y un neto de 0 o unas bajas de 0 son
   // informacion. Se pintan aparte cuando toque.
+  const churnPeriod = showingLatestAvailable
+    ? `último tramo disponible · hasta ${shortDate(ventana.at(-1).date)}`
+    : rangeLabel();
   $("#churn-net").textContent = ventana.length
-    ? `${neto >= 0 ? "+" : ""}${formatCompactNumber(neto)} neto · ${formatCompactNumber(totalAltas)} altas − ${formatCompactNumber(totalBajas)} bajas en ${rangeLabel()}`
+    ? `${neto >= 0 ? "+" : ""}${formatCompactNumber(neto)} neto · ${formatCompactNumber(totalAltas)} altas − ${formatCompactNumber(totalBajas)} bajas · ${churnPeriod}`
     : "Sin datos de audiencia en este periodo.";
 
   const serieContinua = fillDailyGaps(ventana, (date) => ({ date, altas: 0, bajas: 0 }));
@@ -1265,8 +1482,15 @@ function renderChurn(snapshot, analytics) {
     { primaryLabel: "Altas", secondaryLabel: "Bajas" },
   );
   $("#churn-empty").hidden = dibujado;
-  $("#churn-basis").textContent = growthDaily.length
-    ? `Altas y bajas obtenidas del histórico de crecimiento de suscriptores de Substack.`
+  const stalePrefix = showingLatestAvailable ? "No hay movimientos dentro del rango actual. Se muestra el último tramo con datos. " : "";
+  $("#churn-basis").textContent = growthHasSignups
+    ? `${stalePrefix}Altas y bajas obtenidas del histórico de crecimiento de suscriptores de Substack.`
+    : growthDaily.length && sourceDaily.length
+    ? `${stalePrefix}Altas obtenidas de las fuentes de crecimiento y bajas del histórico de suscriptores de Substack.`
+    : growthDaily.length && daily.length
+    ? `${stalePrefix}Altas reconstruidas del historial de audiencia y bajas del histórico de suscriptores de Substack.`
+    : !daily.length && campaignDaily.length
+    ? `${stalePrefix}Datos atribuidos a las primeras 24 h después de cada envío; no representan todas las altas y bajas de la publicación.`
     : bajasPorDia.size
     ? `Las bajas solo cubren las 24 h siguientes a cada envío porque el histórico general no estuvo disponible.`
     : `Substack no ha devuelto ninguna baja. Solo expone las bajas de las 24 h siguientes a cada envío, así que un cero aquí no prueba que nadie se haya ido.`;
@@ -1320,7 +1544,7 @@ function renderTraffic(analytics) {
       ].forEach((value, index) => {
         const cell = document.createElement("td");
         cell.textContent = value;
-        if (value === "—" && index >= 4) cell.title = "Substack no atribuye altas a esta fuente";
+        if (value === "—" && index >= 4) setHint(cell, "Substack no atribuye altas a esta fuente");
         row.append(cell);
       });
       body.append(row);
@@ -1366,8 +1590,8 @@ function renderGrowth(snapshot, analytics) {
 // consumidor. Vive tras data-sensitive, como todo lo de pago.
 function renderPaidChurn(analytics) {
   const daily = withinRange(analytics?.growth?.subscribers?.paid?.daily || [], (point) => point.date).kept;
-  const totalAltas = daily.reduce((sum, point) => sum + point.new, 0);
-  const totalBajas = daily.reduce((sum, point) => sum + point.losses, 0);
+  const totalAltas = daily.reduce((sum, point) => sum + safeNumber(point.new), 0);
+  const totalBajas = daily.reduce((sum, point) => sum + Math.abs(safeNumber(point.losses)), 0);
   const neto = totalAltas - totalBajas;
   $("#paid-churn-net").textContent = daily.length
     ? `${neto >= 0 ? "+" : ""}${formatCompactNumber(neto)} neto · ${formatCompactNumber(totalAltas)} altas − ${formatCompactNumber(totalBajas)} bajas en ${rangeLabel()}`
@@ -1375,7 +1599,7 @@ function renderPaidChurn(analytics) {
   const serie = fillDailyGaps(daily, (date) => ({ date, new: 0, losses: 0 }));
   const drawn = drawBarChart(
     $("#paid-churn-chart"),
-    serie.map((point) => ({ date: point.date, value: point.new, secondary: point.losses })),
+    serie.map((point) => ({ date: point.date, value: safeNumber(point.new), secondary: Math.abs(safeNumber(point.losses)) })),
     { primaryLabel: "Altas de pago", secondaryLabel: "Bajas de pago" },
   );
   $("#paid-churn-empty").hidden = drawn;
@@ -1392,7 +1616,7 @@ function coverageRow({ label, meta = "", status, statusCopy, title = "" }) {
   detail.textContent = meta;
   const state = document.createElement("strong");
   state.textContent = statusCopy;
-  state.title = title;
+  setHint(state, title);
   row.append(name, detail, state);
   return row;
 }
@@ -1620,7 +1844,7 @@ function renderCampaigns(snapshot) {
         cell.textContent = formatCell(campaign, column);
         if (column.key === "openRate" && ownMedian !== null && campaign.delivered > 0) {
           cell.classList.add(campaign.openRate >= ownMedian ? "is-above-median" : "is-below-median");
-          cell.title = `Tu mediana: ${formatPercent(ownMedian)}`;
+          setHint(cell, `Tu mediana: ${formatPercent(ownMedian)}`);
         }
         row.append(cell);
       });
@@ -1824,7 +2048,7 @@ function renderCadenceTable(content) {
   renderCadenceHeatmap($("#cadence-heatmap"), content?.cadence);
   const busiest = content?.cadence?.busiest;
   $("#cadence-summary").textContent = busiest
-    ? `${DAY_NAMES[busiest.day]} · ${String(busiest.hour).padStart(2, "0")}:00`
+    ? `Publicas más: ${DAY_NAMES[busiest.day]} · ${String(busiest.hour).padStart(2, "0")}:00`
     : "Sin notas fechadas";
   const body = $("#cadence-table-body");
   body.replaceChildren();
@@ -1832,22 +2056,25 @@ function renderCadenceTable(content) {
   if (!weeks.length) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 5; cell.textContent = "Sin semanas con notas fechadas.";
+    cell.colSpan = 4; cell.textContent = "Sin semanas con notas fechadas.";
     row.append(cell); body.append(row); return;
   }
   const max = Math.max(1, ...weeks.map((week) => week.notes));
   weeks.forEach((week) => {
     const row = document.createElement("tr");
     const average = week.scoredNotes ? week.interactions / week.scoredNotes : 0;
-    const values = [shortDate(week.weekStart), week.notes, `${week.scoredNotes}/${week.notes}`, week.interactions, average];
+    const measured = week.scoredNotes
+      ? `${formatCompactNumber(week.interactions)} en ${week.scoredNotes} ${week.scoredNotes === 1 ? "nota" : "notas"}`
+      : "Sin datos todavía";
+    const values = [shortDate(week.weekStart), `${week.notes} notas`, measured, week.scoredNotes ? decimal(average) : "—"];
     values.forEach((value, index) => {
       const cell = document.createElement("td");
       if (index === 1) {
-        const number = document.createElement("strong"); number.textContent = formatCompactNumber(value);
-        const bar = document.createElement("i"); bar.className = "weekly-volume-bar"; bar.style.width = `${(value / max) * 100}%`;
+        const number = document.createElement("strong"); number.textContent = value;
+        const bar = document.createElement("i"); bar.className = "weekly-volume-bar";
         cell.append(number, bar);
-      } else if (index >= 3) cell.textContent = index === 4 ? decimal(value) : formatCompactNumber(value);
-      else cell.textContent = value;
+        bar.style.width = `${(week.notes / max) * 100}%`;
+      } else cell.textContent = value;
       row.append(cell);
     });
     body.append(row);
@@ -1911,11 +2138,28 @@ function renderNotesTable(snapshot) {
     subscribers: nullsLast((note) => (note.detailed ? note.analytics.results.freeSubscribers : null)),
   };
   notes.sort(comparators[state.notesSort] || comparators.interactions);
+  const standoutThreshold = (getter) => {
+    const values = notes.map(getter).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+    return values.length >= 3 ? values[Math.floor((values.length - 1) * 0.75)] : Infinity;
+  };
+  const standout = {
+    likes: standoutThreshold((note) => note.analytics.interactions.likes),
+    replies: standoutThreshold((note) => note.analytics.interactions.replies),
+    restacks: standoutThreshold((note) => note.analytics.interactions.restacks),
+    total: standoutThreshold((note) => note.analytics.interactions.total),
+    profile: standoutThreshold((note) => note.detailed ? note.analytics.interactions.profileVisits : null),
+    impressions: standoutThreshold((note) => note.detailed ? note.analytics.reach.impressions : null),
+    engagement: standoutThreshold((note) => note.detailed && note.analytics.reach.impressions > 0
+      ? (note.analytics.interactions.total / note.analytics.reach.impressions) * 100
+      : null),
+    conversion: standoutThreshold(noteConversion),
+    subscribers: standoutThreshold((note) => note.detailed ? note.analytics.results.freeSubscribers : null),
+  };
   const body = $("#notes-table-body");
   body.replaceChildren();
   if (!notes.length) {
     const row = document.createElement("tr"); const cell = document.createElement("td");
-    cell.colSpan = 10; cell.textContent = search ? "Ninguna nota coincide con la búsqueda." : `No hay notas en ${rangeLabel()}.`;
+    cell.colSpan = 11; cell.textContent = search ? "Ninguna nota coincide con la búsqueda." : `No hay notas en ${rangeLabel()}.`;
     row.append(cell); body.append(row);
     renderNotesPager(0, 0);
     return;
@@ -1942,29 +2186,42 @@ function renderNotesTable(snapshot) {
     const impressions = detailed ? note.analytics.reach.impressions : null;
     const engagementRatio = detailed && impressions > 0 ? (interactions.total / impressions) * 100 : null;
     const conversion = noteConversion(note);
+    const noteDate = note.date
+      ? parseDay(note.date).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "2-digit" }).replace(/\s+de\s+/g, " ")
+      : "Sin fecha";
     [
-      shortDate(note.date),
-      formatCompactNumber(interactions.likes),
-      formatCompactNumber(interactions.replies),
-      formatCompactNumber(interactions.restacks),
-      formatCompactNumber(interactions.total),
-      impressions === null ? "—" : formatCompactNumber(impressions),
-      engagementRatio === null ? "—" : formatPercent(engagementRatio),
-      conversion === null ? "—" : decimal(conversion),
-    ].forEach((value) => {
+      { value: noteDate, raw: null, threshold: Infinity, className: "note-table-date" },
+      { value: formatCompactNumber(interactions.likes), raw: interactions.likes, threshold: standout.likes },
+      { value: formatCompactNumber(interactions.replies), raw: interactions.replies, threshold: standout.replies },
+      { value: formatCompactNumber(interactions.restacks), raw: interactions.restacks, threshold: standout.restacks },
+      { value: formatCompactNumber(interactions.total), raw: interactions.total, threshold: standout.total },
+      { value: detailed ? formatCompactNumber(interactions.profileVisits) : "—", raw: detailed ? interactions.profileVisits : null, threshold: standout.profile },
+      { value: impressions === null ? "—" : formatCompactNumber(impressions), raw: impressions, threshold: standout.impressions },
+      { value: engagementRatio === null ? "—" : formatPercent(engagementRatio), raw: engagementRatio, threshold: standout.engagement },
+      { value: conversion === null ? "—" : decimal(conversion), raw: conversion, threshold: standout.conversion },
+    ].forEach(({ value, raw, threshold, className = "" }) => {
       const cell = document.createElement("td");
       cell.textContent = value;
-      if (value === "—" && !detailed) cell.title = stateCopy;
+      if (className) cell.className = className;
+      if (Number.isFinite(raw) && raw > 0 && raw >= threshold) {
+        cell.classList.add("is-standout");
+        setHint(cell, "Valor destacado dentro del periodo seleccionado");
+      }
+      if (value === "—" && !detailed) setHint(cell, stateCopy);
       row.append(cell);
     });
     const subscribers = document.createElement("td");
     if (!detailed) {
       subscribers.textContent = "—";
-      subscribers.title = stateCopy;
+      setHint(subscribers, stateCopy);
     } else {
       const free = document.createElement("span");
       free.textContent = formatCompactNumber(results.freeSubscribers);
       subscribers.append(free);
+      if (results.freeSubscribers > 0 && results.freeSubscribers >= standout.subscribers) {
+        subscribers.classList.add("is-standout");
+        setHint(subscribers, "Valor destacado dentro del periodo seleccionado");
+      }
       if (state.sensitive.paid && results.paidSubscribers) {
         const paid = document.createElement("span");
         paid.dataset.sensitive = "paid";
@@ -1978,7 +2235,7 @@ function renderNotesTable(snapshot) {
 }
 
 const VIEW_RENDERERS = {
-  resumen: (snapshot) => { renderMetrics(snapshot, state.analytics); renderChart(snapshot, state.analytics); renderSummaryContent(snapshot); },
+  resumen: (snapshot) => { renderMetrics(snapshot, state.analytics); renderChart(snapshot, state.analytics); renderGrowthBrief(snapshot, state.analytics); renderSummaryContent(snapshot); },
   audiencia: (snapshot) => renderAudience(snapshot, state.analytics),
   crecimiento: (snapshot) => renderGrowth(snapshot, state.analytics),
   notas: (snapshot) => {
@@ -2292,13 +2549,15 @@ async function disconnect() {
   state.connection = null;
   state.analytics = null;
   showOnboarding();
+  await connect();
 }
 
 function bindEvents() {
   $("#connect-button").addEventListener("click", connect);
   $("#login-button").addEventListener("click", async () => {
     await sendMessage("PLOTSTACK_OPEN_LOGIN");
-    setConnectionStatus("Inicia sesión en la pestaña nueva y vuelve aquí para conectar.");
+    $("#connect-button").hidden = false;
+    setConnectionStatus("Inicia sesión en la pestaña nueva. Al volver, pulsa Volver a detectar.");
   });
   $("#sync-button").addEventListener("click", sync);
   $("#disconnect-button").addEventListener("click", disconnect);
@@ -2411,6 +2670,7 @@ async function initialize() {
   if (storedRange === "all") state.days = ALL_TIME;
   else if (storedRange && Number.isFinite(Number(storedRange))) state.days = Number(storedRange);
   bindEvents();
+  initializeHints();
   syncRangeButtons();
   // El service worker sigue sincronizando aunque el dashboard estuviera
   // cerrado, así que hay que engancharse a sus cambios antes de leer nada.
@@ -2425,7 +2685,10 @@ async function initialize() {
     $("#dashboard-shell").hidden = false;
     setView(state.view);
     renderProgress();
-  } else showOnboarding();
+  } else {
+    showOnboarding();
+    await connect();
+  }
 }
 
 initialize();
