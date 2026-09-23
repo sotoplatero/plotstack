@@ -653,6 +653,7 @@
                   </div>
                   <div class="postal-option">
                     <span class="field-label">Mostrar</span>
+                    <label class="postal-check"><input type="checkbox" data-postal-show="chart" checked /> Gráfico de crecimiento</label>
                     <label class="postal-check"><input type="checkbox" data-postal-show="tiles" checked /> Cifras del periodo</label>
                     <label class="postal-check"><input type="checkbox" data-postal-show="record" checked /> Mejor semana</label>
                     <label class="postal-check"><input type="checkbox" data-postal-show="milestone" checked /> Próximo hito</label>
@@ -674,6 +675,13 @@
                   <span>suscriptores</span>
                   <p id="postal-growth">—</p>
                 </div>
+                <figure class="postal-chart" id="postal-chart-wrap" hidden>
+                  <svg id="postal-chart" viewBox="0 0 300 100" preserveAspectRatio="none" role="img" aria-label="Crecimiento de suscriptores en el periodo"></svg>
+                  <figcaption class="postal-chart-labels">
+                    <span id="postal-chart-start">—</span>
+                    <span id="postal-chart-end">—</span>
+                  </figcaption>
+                </figure>
                 <div class="postal-tiles" id="postal-tiles"></div>
                 <p class="postal-record" id="postal-record" hidden></p>
                 <div class="postal-milestone" id="postal-milestone" hidden>

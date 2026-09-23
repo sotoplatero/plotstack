@@ -470,7 +470,9 @@ function attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel, fo
 
 function chartGeometry(svg, { fallbackHeight, minHeight }) {
   const bounds = svg.getBoundingClientRect?.() || {};
-  const width = Math.max(320, Math.round(bounds.width || 820));
+  // El viewBox sigue al tamaño real. Con un mínimo de 320 un gráfico de 210 px
+  // en móvil se dibujaba reducido y el texto de los ejes quedaba en ~6 px.
+  const width = Math.max(200, Math.round(bounds.width || 820));
   const height = Math.max(minHeight, Math.round(bounds.height || fallbackHeight));
   const left = 48, right = 18, top = 14, bottom = 34;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -561,7 +563,12 @@ function drawLineChart(svg, points, gradientId, options = {}) {
   area.style.fill = `url(#${gradientId})`; svg.append(area);
   const line = document.createElementNS(ns, "path");
   line.setAttribute("d", linePath); line.setAttribute("class", "chart-line"); svg.append(line);
+  // Con los puntos a menos de 14 px (30 días en un móvil) el trazo se volvía
+  // una cadena de círculos: solo se marca el último. El tooltip no depende de
+  // estos nodos, así que ningún valor deja de poder consultarse.
+  const dense = (width - left - right) / Math.max(1, coords.length - 1) < 14;
   coords.forEach(([px, py], index) => {
+    if (dense && index !== coords.length - 1) return;
     const point = document.createElementNS(ns, "circle");
     point.setAttribute("cx", px); point.setAttribute("cy", py);
     point.setAttribute("r", index === coords.length - 1 ? 5 : 3);
@@ -608,7 +615,7 @@ function drawLineChart(svg, points, gradientId, options = {}) {
       svg.append(mark);
     }
   }
-  appendAxisLabels(svg, points, { height, bottom }, x);
+  appendAxisLabels(svg, points, { width, height, left, right, bottom }, x);
   attachChartTooltip(svg, points, x, { primaryLabel, secondaryLabel: secondaryLabel || "Secundario", formatValue });
   return true;
 }
@@ -620,19 +627,34 @@ const axisDate = (value) => parseDay(value).toLocaleDateString("es-ES", { day: "
 // cuando paso nada, que era el caso de los dos graficos anteriores. Reciben la
 // misma función `x` que usó el gráfico: con eje temporal la etiqueta cae donde
 // cae el punto, no donde caería su índice.
+// Cuántas caben depende del ancho, y se eligen por POSICIÓN: dos fechas nunca
+// quedan a menos de AXIS_LABEL_GAP px, y la última siempre se muestra (si pisa
+// a la anterior, cae la anterior). En móvil "18 sept" y "23 sept" se montaban.
+const AXIS_LABEL_GAP = 64;
+
 function appendAxisLabels(svg, points, geometry, x) {
-  const { height, bottom } = geometry;
-  const step = Math.max(1, Math.ceil(points.length / 5));
-  points.forEach((point, index) => {
+  const { width, height, left, right, bottom } = geometry;
+  const maxLabels = clamp(Math.floor((width - left - right) / AXIS_LABEL_GAP), 2, 5);
+  const step = Math.max(1, Math.ceil(points.length / maxLabels));
+  const chosen = [];
+  points.forEach((_, index) => {
     if (index % step && index !== points.length - 1) return;
+    if (chosen.length && x(index) - x(chosen.at(-1)) < AXIS_LABEL_GAP) {
+      if (index !== points.length - 1) return;
+      if (chosen.length > 1) chosen.pop();
+      else return;
+    }
+    chosen.push(index);
+  });
+  for (const index of chosen) {
     const label = document.createElementNS(SVG_NS, "text");
     label.setAttribute("x", x(index));
     label.setAttribute("y", height - bottom + 18);
     label.setAttribute("text-anchor", index === 0 ? "start" : index === points.length - 1 ? "end" : "middle");
     label.setAttribute("class", "chart-label");
-    label.textContent = axisDate(point.date);
+    label.textContent = axisDate(points[index].date);
     svg.append(label);
-  });
+  }
 }
 
 function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = "Valor", formatValue = formatCompactNumber } = {}) {
@@ -691,7 +713,7 @@ function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = "Valor"
   peak.textContent = formatCompactNumber(max);
   svg.append(peak);
   const xOf = (index) => left + index * slot + slot / 2;
-  appendAxisLabels(svg, points, { height, bottom }, xOf);
+  appendAxisLabels(svg, points, { width, height, left, right, bottom }, xOf);
   attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel: secondaryLabel || "Secundario", formatValue });
   return true;
 }
@@ -1909,8 +1931,8 @@ const POSTAL_WIDTH = 1080;
 const POSTAL_KEY = "plotstack.postal";
 const POSTAL_FORMATS = { portrait: { ratio: 5 / 4, copy: "1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X." }, square: { ratio: 1, copy: "1080 × 1080 px, cuadrado: sirve en cualquier red." } };
 const POSTAL_THEMES = ["ink", "light", "indigo"];
-const POSTAL_SECTIONS = ["tiles", "record", "milestone", "author"];
-const POSTAL_DEFAULTS = { format: "portrait", theme: "ink", show: { tiles: true, record: true, milestone: true, author: true } };
+const POSTAL_SECTIONS = ["chart", "tiles", "record", "milestone", "author"];
+const POSTAL_DEFAULTS = { format: "portrait", theme: "ink", show: { chart: true, tiles: true, record: true, milestone: true, author: true } };
 
 function readPostalConfig() {
   try {
@@ -1940,6 +1962,7 @@ function applyPostalConfig() {
   $$("[data-postal-format]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.postalFormat === config.format)));
   $$("[data-postal-theme]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.postalTheme === config.theme)));
   $$("[data-postal-show]").forEach((input) => { input.checked = config.show[input.dataset.postalShow]; });
+  card.classList.toggle("is-without-chart", !config.show.chart);
   card.classList.toggle("is-without-tiles", !config.show.tiles);
   card.classList.toggle("is-without-record", !config.show.record);
   card.classList.toggle("is-without-milestone", !config.show.milestone);
@@ -1970,6 +1993,44 @@ const substackImage = (url, size = 192) => {
   if (url.startsWith("https://substackcdn.com/image/fetch/")) return url;
   return `https://substackcdn.com/image/fetch/w_${size},h_${size},c_fill,f_png/${encodeURIComponent(url)}`;
 };
+
+// Gráfico de la postal: suscriptores acumulados del periodo, sin ejes. El eje X
+// reparte por fecha (proporcional al tiempo, como todos los gráficos) y la
+// escala no se esconde: el valor inicial y el final van escritos en los
+// extremos, así un tramo de 2,4 a 2,8 mil no parece haberse multiplicado.
+function renderPostalChart(series) {
+  const wrap = $("#postal-chart-wrap");
+  const svg = $("#postal-chart");
+  const points = series
+    .map((point) => ({ time: parseDay(point.date).getTime(), value: safeNumber(point.subscribers), date: point.date }))
+    .filter((point) => Number.isFinite(point.time))
+    .sort((a, b) => a.time - b.time);
+  svg.replaceChildren();
+  if (points.length < 2) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const [first, last] = [points[0], points.at(-1)];
+  const min = Math.min(...points.map((point) => point.value));
+  const max = Math.max(...points.map((point) => point.value));
+  const spanTime = (last.time - first.time) || 1;
+  const spanValue = (max - min) || 1;
+  // 6 unidades de margen arriba y abajo para que el trazo no se corte.
+  const coords = points.map((point) => [
+    ((point.time - first.time) / spanTime) * 300,
+    94 - ((point.value - min) / spanValue) * 88,
+  ]);
+  const line = coords.map(([x, y], index) => `${index ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const ns = "http://www.w3.org/2000/svg";
+  const area = document.createElementNS(ns, "path");
+  area.setAttribute("class", "postal-chart-area");
+  area.setAttribute("d", `${line} L300,100 L0,100 Z`);
+  const stroke = document.createElementNS(ns, "path");
+  stroke.setAttribute("class", "postal-chart-line");
+  stroke.setAttribute("d", line);
+  svg.append(area, stroke);
+  svg.setAttribute("aria-label", `Suscriptores: de ${formatCompactNumber(first.value)} el ${shortDate(first.date)} a ${formatCompactNumber(last.value)} el ${shortDate(last.date)}.`);
+  $("#postal-chart-start").textContent = `${formatCompactNumber(first.value)} · ${shortDate(first.date)}`;
+  $("#postal-chart-end").textContent = `${formatCompactNumber(last.value)} · ${shortDate(last.date)}`;
+}
 
 function setPostalImage(img, initial, url, name) {
   initial.textContent = String(name || "").trim().slice(0, 1).toUpperCase() || "·";
@@ -2005,6 +2066,8 @@ function renderPostal(snapshot, analytics) {
     : `${growth > 0 ? "+" : ""}${formatPercent(growth)} ${versus}`.trim();
   $("#postal-growth").hidden = growth === null;
 
+  renderPostalChart(subscriberSeries(snapshot, analytics));
+
   const gained = fillDailyGaps(windowedSubscriberDaily(analytics), (date) => ({ date, signups: 0 }))
     .reduce((sum, point) => sum + safeNumber(point.signups), 0);
   const openRate = getRateWindows(snapshot, state.days).current.openRate;
@@ -2015,7 +2078,7 @@ function renderPostal(snapshot, analytics) {
     ["subs", "Nuevos lectores", gained > 0 ? `+${formatCompactNumber(gained)}` : null],
     ["open", "Abren tus correos", openRate === null ? null : formatPercent(openRate, 0)],
     ["notes", "De tu lista es núcleo fiel", loyal.coreShare === null ? null : formatPercent(loyal.coreShare, 0)],
-    ["click", "Semanas seguidas publicando", streak > 0 ? String(streak) : null],
+    ["click", "Semanas de racha", streak > 0 ? String(streak) : null],
   ].filter(([, , value]) => value);
   $("#postal-tiles").replaceChildren(...tiles.map(([tone, label, value]) => {
     const tile = document.createElement("div");

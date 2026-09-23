@@ -4,6 +4,46 @@ Las versiones que se han subido a la Chrome Web Store. La tienda **no permite
 bajar** un número de versión, así que cada entrada aquí corresponde a un
 `manifest.json` que ya se publicó o está listo para publicarse.
 
+## 1.2.0 — 23 de septiembre de 2026
+
+### Diseño nuevo
+
+- **«Resumen de salud».** Un solo tema claro, superficies blancas sobre gris,
+  fuente propia (Geist, incluida en el paquete) y un color fijo por métrica que
+  la sigue por todas las vistas: suscriptores índigo, apertura naranja, clics
+  azul, Notas verde. Cada canal de adquisición conserva también su color.
+- **Móvil sin desbordamiento** y gráficos legibles a cualquier ancho.
+- **Accesibilidad:** mapa de calor con una sola parada de tabulación, cabeceras
+  ordenables con teclado, estado anunciado del rango y resumen de datos en
+  cada gráfico.
+
+### Estadísticas nuevas
+
+- **Tus récords y próximo hito:** mejor semana, mejor apertura, envío que más
+  convirtió, racha de publicación y una estimación en rango de cuándo llegarás
+  al siguiente hito.
+- **Tu núcleo fiel:** lectores con la máxima actividad y su evolución entre
+  sincronizaciones.
+- **¿Siguen leyendo los que llegaron?:** actividad por mes de alta, con su
+  sesgo de superviviente declarado.
+- Todo son conteos agregados: ningún dato personal se guarda.
+
+### Postal para compartir
+
+- Una tarjeta con tu estado (suscriptores, crecimiento, gráfico, cifras del
+  periodo, próximo hito, logo y autor) que se descarga o copia como PNG en
+  vertical (1080×1350) o cuadrado (1080×1080), en tres colores. Nunca incluye
+  suscriptores de pago ni ingresos.
+
+### Correcciones
+
+- El Resumen ya no se contradice: las recomendaciones exigen muestra
+  suficiente y un crecimiento enorme se cuenta en suscriptores, no como
+  porcentaje.
+- Envíos obedece al selector de rango, como el resto de vistas.
+- Las etiquetas de Substack («Substack App», «direct to app»…) llegan
+  traducidas.
+
 ## 1.1.0 — 4 de septiembre de 2026
 
 ### La espera ciega desaparece

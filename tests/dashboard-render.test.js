@@ -944,6 +944,11 @@ test("la postal resume el estado sin pago, sin ingresos y sin huecos", async () 
   assert.equal($("#postal-author").textContent, "Por Ana Autora");
   assert.equal($("#postal-avatar-initial").textContent, "A");
   assert.equal($("#postal-avatar").getAttribute("src"), null, "sin URL no se pide ninguna imagen");
+  // Gráfico del periodo: se dibuja y declara su escala en los extremos.
+  assert.equal($("#postal-chart-wrap").hidden, false);
+  assert.equal($$("#postal-chart .postal-chart-line").length, 1);
+  assert.match(txt($("#postal-chart-start").textContent), /mil ·/);
+  assert.match($("#postal-chart").getAttribute("aria-label"), /^Suscriptores: de .+ a .+\.$/);
 });
 
 test("el configurador de la postal cambia formato, color y secciones sin recrearla", async () => {
@@ -957,6 +962,12 @@ test("el configurador de la postal cambia formato, color y secciones sin recrear
   assert.equal($('[data-postal-format="square"]').getAttribute("aria-pressed"), "true");
   $('[data-postal-theme="light"]').click();
   assert.equal(tarjeta.dataset.theme, "light");
+  const grafico = $('[data-postal-show="chart"]');
+  grafico.checked = false;
+  grafico.dispatchEvent({ type: "change", target: grafico });
+  assert.equal(tarjeta.classList.contains("is-without-chart"), true, "el gráfico se puede ocultar");
+  grafico.checked = true;
+  grafico.dispatchEvent({ type: "change", target: grafico });
   const casilla = $('[data-postal-show="milestone"]');
   casilla.checked = false;
   casilla.dispatchEvent({ type: "change", target: casilla });
@@ -971,4 +982,14 @@ test("el configurador de la postal cambia formato, color y secciones sin recrear
   $('[data-postal-theme="ink"]').click();
   casilla.checked = true;
   casilla.dispatchEvent({ type: "change", target: casilla });
+});
+
+test("el eje X de un gráfico nunca lleva más de cinco fechas", async () => {
+  await arrancar();
+  await verVista("resumen");
+  await rango("all");
+  // Las etiquetas de fecha llevan mes abreviado; las del eje Y, no.
+  const fechas = $$("#growth-chart .chart-label").filter((nodo) => /[a-z]{3}/i.test(nodo.textContent) && !/mil/.test(nodo.textContent));
+  assert.ok(fechas.length >= 2, "hay fechas en el eje");
+  assert.ok(fechas.length <= 5, `demasiadas fechas en el eje: ${fechas.length}`);
 });

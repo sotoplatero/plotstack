@@ -62,7 +62,7 @@ body { margin: 0; background: var(--ink); color: var(--paper); font-family: var(
 button, select { font: inherit; }
 button { color: inherit; }
 [hidden] { display: none !important; }
-.noise { position: fixed; inset: 0; opacity: .028; pointer-events: none; z-index: 20; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
 .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 .brand { display: flex; align-items: center; gap: 12px; color: var(--paper); text-decoration: none; font-size: 20px; font-weight: 700; letter-spacing: -.04em; }
@@ -142,10 +142,10 @@ main { grid-column: 2; min-width: 0; }
 
 .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); margin-bottom: 18px; }
 .metric-card { min-width: 0; min-height: 210px; padding: 22px; background: var(--panel); position: relative; overflow: hidden; }.metric-card + .metric-card { border-left: 1px solid var(--line); }.metric-primary { background: var(--accent); color: var(--accent-ink); }.metric-primary .card-label, .metric-primary .delta { color: rgba(21,23,15,.65); }
-.card-label { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 11px; letter-spacing: .1em; }.card-label svg { width: 17px; height: 17px; fill: none; stroke: currentColor; }.metric-glyph { font: 18px var(--serif); }
+.card-label { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 11px; letter-spacing: .1em; }.card-label svg { width: 17px; height: 17px; fill: none; stroke: currentColor; }
 .metric-value { font: 400 clamp(34px, 3.5vw, 53px)/1 var(--serif); letter-spacing: -.05em; margin: 25px 0 8px; }.delta { font-size: 11px; color: var(--muted); }.delta.is-positive { color: var(--accent); }.metric-primary .delta.is-positive { color: var(--accent-ink); }
 .spark-bars { position: absolute; bottom: 0; left: 0; right: 0; height: 54px; display: flex; gap: 2px; align-items: end; opacity: .22; }.spark-bars i { flex: 1; background: var(--accent-ink); min-height: 3px; }
-.benchmark { height: 3px; background: var(--line); margin-top: 27px; }.benchmark span { display: block; height: 100%; background: var(--accent); }.metric-card small { display: block; color: var(--muted); font-size: 10px; margin-top: 8px; }.paid-note { margin-top: 26px; font-size: 10px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }.paid-note span { color: var(--paper); font-weight: 700; }.mini-rule { display: flex; gap: 6px; align-items: end; margin-top: 23px; height: 25px; }.mini-rule i { width: 8px; height: 30%; background: var(--accent); }.mini-rule i:nth-child(2){height:48%}.mini-rule i:nth-child(3){height:40%}.mini-rule i:nth-child(4){height:75%}.mini-rule i:nth-child(5){height:100%}
+.metric-card small { display: block; color: var(--muted); font-size: 10px; margin-top: 8px; }.paid-note { margin-top: 26px; font-size: 10px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }.paid-note span { color: var(--paper); font-weight: 700; }
 
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(260px, .8fr); gap: 18px; margin-bottom: 18px; }.panel { background: var(--panel); border: 1px solid var(--line); padding: var(--pad); }.panel-header { display: flex; align-items: start; justify-content: space-between; gap: 20px; }.panel h2 { font: 400 27px/1.1 var(--serif); margin: 0; letter-spacing: -.035em; }.chart-legend { color: var(--muted); font-size: 10px; }.chart-legend span { display: inline-block; width: 7px; height: 7px; background: var(--accent); border-radius: 50%; margin-right: 6px; }
 .chart-wrap { width: 100%; height: 285px; margin-top: 26px; position: relative; min-width: 0; }.chart-wrap svg { display: block; width: 100%; max-width: none; height: 100%; overflow: visible; }.chart-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 5; }.chart-area { fill: url(#area-gradient); }.chart-line { fill: none; stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; }.chart-point { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }.chart-label { fill: var(--muted); font: 9px var(--sans); }.chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; text-align: center; }
@@ -189,7 +189,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .delta.is-positive,
 .metric-primary .delta.is-positive { color: var(--positive); }
 body { background: var(--ink); }
-.noise { opacity: .018; }
+
 .sidebar { background: var(--ink); padding: 26px 20px 20px; }
 .nav-list { margin-top: 48px; }
 .nav-item { border-left: 0; border-bottom: 1px solid transparent; padding-inline: 10px; }
@@ -214,7 +214,7 @@ body { background: var(--ink); }
   margin-bottom: 0;
   border-bottom: 1px solid var(--paper);
 }
-.brief-date { margin: 0 0 14px; color: var(--accent); font-size: 11px; font-weight: 700; }
+
 .growth-brief h1 { max-width: 720px; margin: 0; font: 400 clamp(42px, 5vw, 72px)/.98 var(--serif); letter-spacing: -.04em; text-wrap: balance; }
 .brief-copy > p:last-child { max-width: 720px; margin: 22px 0 0; color: var(--muted); font: 400 19px/1.55 var(--serif); }
 .brief-action { position: relative; padding: 18px 0 3px 27px; border-left: 1px solid var(--accent); }
@@ -423,8 +423,7 @@ html.is-selecting-capture-card .note-card:hover { outline: 3px solid var(--accen
 html.is-capturing { scroll-behavior: auto; }
 html.is-capturing .sidebar,
 html.is-capturing .topbar,
-html.is-capturing .toast,
-html.is-capturing .noise { display: none !important; }
+html.is-capturing .toast { display: none !important; }
 html.is-capturing .shell { display: block; }
 html.is-capturing main { grid-column: 1; }
 html.is-capturing .content { width: 100%; max-width: none; padding-top: 38px; }
@@ -736,11 +735,11 @@ td, .source-row, .result-stack, .retention-list, .chart-footer, .audience-totals
 
 /* ── Base ─────────────────────────────────────────────────────────────── */
 body { background: var(--ink); color: var(--paper); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-.noise { display: none; }
+
 ::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--paper); }
 * { scrollbar-color: var(--c-neutral) transparent; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
-.metric-glyph, .eyebrow span { display: none; }
+.eyebrow span { display: none; }
 
 /* ── Navegación ───────────────────────────────────────────────────────── */
 .sidebar { background: var(--ink); border-right: 0; }
@@ -801,7 +800,6 @@ tbody tr:hover td { background: color-mix(in srgb, var(--ink) 55%, var(--panel))
 
 /* ── Resumen ──────────────────────────────────────────────────────────── */
 .growth-brief { border-bottom: 0; padding: 8px 0 0; align-items: end; }
-.brief-date, #brief-period { color: var(--muted); font: 600 13px var(--sans); text-transform: none; letter-spacing: 0; }
 .growth-brief h1 { font: 700 clamp(32px, 3.4vw, 44px)/1.08 var(--display); letter-spacing: -.03em; }
 .brief-copy > p:last-child { font: 400 18px/1.5 var(--sans); color: var(--paper); }
 .brief-action { border: 0; border-radius: var(--radius); background: var(--panel); padding: 20px 22px; }
@@ -826,8 +824,8 @@ tbody tr:hover td { background: color-mix(in srgb, var(--ink) 55%, var(--panel))
 .spark-bars { opacity: 1; height: 36px; }
 .spark-bars i { background: color-mix(in srgb, var(--series) 26%, transparent); border-radius: 3px 3px 0 0; }
 .spark-bars i:last-child { background: var(--series); }
-.benchmark { background: var(--ink); border-radius: 999px; height: 6px; }
-.benchmark span { background: var(--series); border-radius: 999px; }
+
+
 .metric-card small { color: var(--muted); }
 
 .summary-growth-panel { --series: var(--c-subs); padding: 24px; }
@@ -1290,3 +1288,55 @@ html.is-capturing .postal { border-radius: 0; }
 .postal > .postal-tiles { margin-top: auto; }
 .postal > .postal-hero { margin-top: 4cqi; }
 .postal-hero span { margin-top: 1.6cqi; }
+
+/* ── Gráfico de la postal y cifras en una fila ─────────────────────────── */
+/* El gráfico ocupa el espacio libre entre la cifra principal y las cifras:
+   no hay huecos que rellenar, y sin gráfico vuelve a empujar la fila de
+   cifras hacia abajo. */
+.postal-chart { flex: 1 1 auto; min-height: 16cqi; margin: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 1.2cqi; --chart-line: #a5a4ff; --chart-fill: rgba(165, 164, 255, .22); }
+.postal-chart[hidden] { display: none; }
+.postal-chart svg { width: 100%; height: 100%; min-height: 0; overflow: visible; }
+.postal-chart-line { fill: none; stroke: var(--chart-line); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.postal-chart-area { fill: var(--chart-fill); stroke: none; }
+.postal-chart-labels { display: flex; justify-content: space-between; gap: 3cqi; font: 600 2.8cqi/1.2 var(--sans); color: rgba(255, 255, 255, .6); font-variant-numeric: tabular-nums; }
+.postal:not(.is-without-chart) > .postal-tiles { margin-top: 2.2cqi; }
+.postal.is-without-chart .postal-chart { display: none; }
+
+/* Cuatro cifras en una fila, en los dos formatos. */
+.postal-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.6cqi; }
+.postal-tile { padding: 2.6cqi 2.8cqi; gap: .8cqi; align-content: start; }
+.postal-tile strong { font-size: 6.4cqi; }
+.postal-tile span { font-size: 2.5cqi; line-height: 1.25; }
+
+.postal[data-theme="light"] .postal-chart { --chart-line: var(--c-subs); --chart-fill: rgba(88, 86, 214, .14); }
+.postal[data-theme="light"] .postal-chart-labels { color: #6c6c70; }
+.postal[data-theme="indigo"] .postal-chart { --chart-line: #fff; --chart-fill: rgba(255, 255, 255, .18); }
+.postal[data-theme="indigo"] .postal-chart-labels { color: rgba(255, 255, 255, .7); }
+/* Cuadrado con gráfico: un escalón más compacto para que quepa el autor. */
+.postal[data-format="square"] .postal-hero strong { font-size: 11cqi; }
+.postal[data-format="square"] .postal-hero span, .postal[data-format="square"] .postal-hero p { font-size: 3.2cqi; }
+.postal[data-format="square"] > .postal-hero { margin-top: 2.4cqi; }
+.postal[data-format="square"] .postal-chart { min-height: 8cqi; gap: .8cqi; }
+.postal[data-format="square"] .postal-chart-labels { font-size: 2.4cqi; }
+.postal[data-format="square"] .postal-milestone { gap: 1.2cqi; }
+
+/* ── Pulido ────────────────────────────────────────────────────────────── */
+/* Una insignia sin texto es una píldora gris vacía (Seguidores sin histórico). */
+.period-badge:empty { display: none; }
+
+/* Texto de datos al rol Data (13 px): filas de listas clasificadas, estado de
+   los datos y retención seguían a 10-11 px, heredados del mundo anterior. */
+.source-detail > div:first-child { font: 500 13px/1.3 var(--sans); margin-bottom: 8px; }
+.source-detail strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.source-row { gap: 12px; }
+.coverage-item { font: 500 13px/1.35 var(--sans); padding: 11px 0; }
+.retention-list span { font: 500 13px var(--sans); }
+.retention-list strong { font: 700 20px/1 var(--display); letter-spacing: -.02em; }
+/* La etiqueta de la lista heredaba el gris de fondo que hace de separador. */
+.retention-list .retention-label { background: var(--panel); margin: 0; padding: 4px 0 8px; }
+.source-empty, .coverage-empty { font: 500 13px/1.5 var(--sans); }
+.driver-empty { font: 500 13px var(--sans); }
+
+/* Cuadrantes: título en el peso del mundo, no en la serif 400 anterior. */
+.quadrant > strong { font: 700 17px/1.25 var(--display); letter-spacing: -.01em; }
+.quadrant small { font: 500 12px/1.4 var(--sans); }
