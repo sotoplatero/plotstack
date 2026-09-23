@@ -37,8 +37,13 @@ const TYPES = {
 // tests para que las vistas de Publicaciones y Crecimiento tengan suficientes
 // filas que enseñar. Todas las cifras son inventadas.
 
+// Anclado a HOY, no a una fecha fija: con un ancla fija la ventana de 30 días
+// se vaciaba con el paso del tiempo y la vista previa enseñaba estados vacíos
+// que un usuario con sincronización diaria nunca ve.
+const TODAY = (() => { const now = new Date(); return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()); })();
+const CAPTURED_AT = new Date(TODAY + 14.5 * 3600000).toISOString();
 const day = (index) => {
-  const date = new Date(Date.UTC(2026, 7, 21) - index * 86400000);
+  const date = new Date(TODAY - index * 86400000);
   return date.toISOString().slice(0, 10);
 };
 
@@ -185,7 +190,7 @@ const trend = [0, 60, 120, 170, 209].map((index) => ({
 
 const SNAPSHOT = {
   publication: "Carta de muestra",
-  capturedAt: "2026-08-21T14:30:00Z",
+  capturedAt: CAPTURED_AT,
   metrics: {
     subscribers: 2840,
     paidSubscribers: 184,
@@ -206,6 +211,7 @@ const SNAPSHOT = {
 };
 
 const ANALYTICS = {
+  syncedAt: CAPTURED_AT,
   period: { from: day(365), to: day(0) },
   audience: {
     total: 2840,
@@ -228,6 +234,21 @@ const ANALYTICS = {
       daily,
       composition: { paid: 184, founding: 12, gift: 4, comp: 3, freeTrial: 8 },
       engagement: { alta: 1240, baja: 980, inactiva: 620 },
+      ratings: [620, 380, 300, 300, 700, 540],
+      // Por mes de alta, a partir de las mismas altas diarias de la muestra:
+      // quedan menos cuanto más antiguo es el mes, y los antiguos leen menos.
+      cohorts: Object.values(daily.reduce((months, row) => {
+        const month = row.date.slice(0, 7);
+        months[month] ||= { month, joined: 0 };
+        months[month].joined += row.signups;
+        return months;
+      }, {})).sort((a, b) => a.month.localeCompare(b.month)).map((row, index, all) => {
+        const age = all.length - 1 - index;
+        const current = Math.round(row.joined * (0.92 - age * 0.04));
+        const alta = Math.round(current * (0.58 - age * 0.05));
+        const inactiva = Math.round(current * (0.08 + age * 0.03));
+        return { month: row.month, current, alta, baja: current - alta - inactiva, inactiva };
+      }),
       byInterval: [
         { interval: "free", count: 2656 },
         { interval: "month", count: 142 },
@@ -261,7 +282,7 @@ const ANALYTICS = {
         .map(([label, subscribers]) => ({ label, subscribers: Math.round(subscribers * factor), share: 0 }));
       const total = rows.reduce((sum, row) => sum + row.subscribers, 0);
       rows.forEach((row) => { row.share = row.subscribers / total; });
-      return [key, { rows, total, updatedAt: "2026-08-21T01:30:00.000Z" }];
+      return [key, { rows, total, updatedAt: `${day(0)}T01:30:00.000Z` }];
     })),
     benchmark: { growthRate: 12.4, periodDays: 30, newSubscribers: 341, expirations: 27, outcome: "above_average", outcomeCopy: "Por encima de la media de Substack" },
     sources: {
@@ -296,15 +317,15 @@ const ANALYTICS = {
   },
   content: { counts: {} },
   coverage: [
-    { source: "audience", label: "Audiencia", status: "ok", rows: 2840 },
-    { source: "subscriberTimeline", label: "Altas por día", status: "ok", rows: 210 },
-    { source: "growthSources", label: "Fuentes de adquisición", status: "ok", rows: 5 },
-    { source: "followerTimeseries", label: "Seguidores", status: "ok", rows: 5 },
-    { source: "audienceLocation", label: "Ubicación", status: "ok", rows: 34 },
-    { source: "freeSubscriberGrowth", label: "Crecimiento gratuito", status: "ok", rows: 210 },
-    { source: "paidSubscriberGrowth", label: "Crecimiento de pago", status: "unavailable", rows: 0 },
-    { source: "freeRetention", label: "Retención gratuita", status: "ok", rows: 2 },
-    { source: "paidRetention", label: "Retención de pago", status: "unavailable", rows: 0 },
+    { key: "audience", label: "Audiencia", status: "ready", records: 2840, error: "" },
+    { key: "subscriberTimeline", label: "Altas por día", status: "ready", records: 210, error: "" },
+    { key: "growthSources", label: "Fuentes de adquisición", status: "ready", records: 5, error: "" },
+    { key: "followerTimeseries", label: "Seguidores", status: "ready", records: 5, error: "" },
+    { key: "audienceLocation", label: "Ubicación", status: "ready", records: 34, error: "" },
+    { key: "freeSubscriberGrowth", label: "Crecimiento gratuito", status: "ready", records: 210, error: "" },
+    { key: "paidSubscriberGrowth", label: "Crecimiento de pago", status: "unavailable", records: 0, error: "No disponible" },
+    { key: "freeRetention", label: "Retención gratuita", status: "ready", records: 2, error: "" },
+    { key: "paidRetention", label: "Retención de pago", status: "unavailable", records: 0, error: "No disponible" },
   ],
 };
 
@@ -317,6 +338,13 @@ const ANALYTICS = {
   });
   ANALYTICS.growth.sources = { 7: scaled(0.06), 30: scaled(0.24), 90: scaled(0.6), all };
 }
+// Capturas del núcleo fiel: las que el service worker va guardando en cada
+// sincronización (una por semana en la muestra, creciendo despacio).
+ANALYTICS.audience.loyaltyHistory = Array.from({ length: 16 }, (_, index) => {
+  const core = 470 + index * 5 - (index % 3 === 2 ? 6 : 0);
+  return { date: day((15 - index) * 7), core, active: core + 700, total: 2700 + index * 9 };
+});
+
 ANALYTICS.traffic = { daily: daily.map((row) => ({ date: row.date, value: Math.round(60 + row.signups * 11 + random() * 40) })) };
 ANALYTICS.audience.overlap = [
   { name: "Mafia IA", subdomain: "aimafia", share: 0.39 },
@@ -330,8 +358,8 @@ const STUB = `
   const DATA = ${JSON.stringify({
     "plotstack.connection": {
       provider: "substack",
-      publication: { name: "Carta de muestra", subdomain: "muestra" },
-      connectedAt: "2026-08-21T14:30:00Z",
+      publication: { name: "Carta de muestra", subdomain: "muestra", logoUrl: "", authorName: "Ana Autora", authorPhotoUrl: "https://substack.com/img/avatars/default-light.png" },
+      connectedAt: CAPTURED_AT,
     },
     "plotstack.snapshot": normalizeSnapshot(SNAPSHOT),
     "plotstack.analytics": ANALYTICS,

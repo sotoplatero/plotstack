@@ -14,7 +14,7 @@ globalThis.chrome = {
     },
     local: {
       get: async () => ({
-        "plotstack.connection": { publication: { name: "Carta de muestra", subdomain: "muestra" } },
+        "plotstack.connection": { publication: { name: "Carta de muestra", subdomain: "muestra", logoUrl: "https://substack-post-media.s3.amazonaws.com/public/images/logo.png", authorName: "Ana Autora", authorPhotoUrl: "" } },
         "plotstack.snapshot": {
           publication: "Carta de muestra",
           capturedAt: "2026-08-21T14:30:00Z",
@@ -67,8 +67,18 @@ globalThis.chrome = {
               ],
               composition: { paid: 184, founding: 12, gift: 4, comp: 3, freeTrial: 8 },
               engagement: { alta: 1240, baja: 980, inactiva: 620 },
+              ratings: [620, 380, 300, 300, 700, 540],
+              cohorts: [
+                { month: "2026-06", current: 60, alta: 20, baja: 25, inactiva: 15 },
+                { month: "2026-07", current: 90, alta: 45, baja: 30, inactiva: 15 },
+                { month: "2026-08", current: 6, alta: 3, baja: 2, inactiva: 1 },
+              ],
               byInterval: [{ interval: "free", count: 2656 }, { interval: "month", count: 142 }, { interval: "year", count: 42 }],
             },
+            loyaltyHistory: [
+              { date: "2026-08-10", core: 510, active: 1190, total: 2800 },
+              { date: "2026-08-21", core: 540, active: 1240, total: 2840 },
+            ],
           },
           growth: {
             sources: {

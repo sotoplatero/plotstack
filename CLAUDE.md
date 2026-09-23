@@ -45,18 +45,39 @@ dashboard/app.js  --chrome.runtime.sendMessage-->  src/background.js
 - **`src/providers/substack-api.js`** — partido en dos: `getCoreSnapshot()` trae escalares y listas (summary/summary-v2/email_stats/posts) y devuelve un snapshot ya pintable más un `context` en memoria con las filas crudas; `enrichSnapshot()` resuelve lo caro (detalle por post, feed de notas, cola de `note_stats`) e informa por `onProgress`. `getPublicationSnapshot()` sigue existiendo como composición de las dos. **Todas** las peticiones pasan por un limitador único de 4 simultáneas con 60 ms de hueco (`configureRequestLimiter` lo desactiva en tests).
 - **`src/providers/substack-extended.js`** — catorce claves de datos. Tres de ellas (`growthSources`, `visitorSources`, `networkAttribution`) se piden **una vez por ventana del selector** (7/30/90/todo): Substack las agrega en servidor y devuelve un único punto por fuente, así que sus totales no se pueden recortar en cliente. `trafficTimeseries` sí es diaria y basta una petición. Claves originales: `subscriberTimeline`, `growthSources`, `followerTimeseries`, `audienceLocation`, `freeSubscriberGrowth`, `paidSubscriberGrowth`, `freeRetention`, `paidRetention`, y `audience`, que **no tiene petición propia**: sus conteos salen de `audienceCounts`, la copia sin PII (`count` + `chartCounts`) que devuelve la primera página de la timeline. Pedirlo aparte con `limit: 1` era un duplicado exacto en cada sync. Se retiraron seis (red 500, recomendaciones 400, payment_pledges 400, planes, inventario y exportaciones) porque no alimentaban ningún renderer. **Una fuente sin consumidor no se sincroniza.** Cada una tiene `request` + `normalize`; se ejecutan con `Promise.allSettled` y producen un array `coverage` que el dashboard muestra en el panel **Cobertura**.
 - **`src/shared/analytics.js`** — capa de saneado y formato, compartida entre service worker y dashboard (importada por ruta relativa `../src/shared/`). `normalizeSnapshot()` define el esquema persistido; los formatters usan locale `es-ES`.
-- **`src/shared/content-analytics.js`** — módulo puro, sin red y sin persistencia. **`getContentFindings()` y la tabla de rasgos se retiraron de la interfaz** (el análisis por medianas no era útil con pocas notas; se sustituirá por IA). Siguen exportadas y con tests, pero **ningún renderer las consume**. Lo que el dashboard sí usa, a través de la fachada `getContentAnalytics()`: `getCadenceHeatmap` (mapa día × hora: las 168 `cells` son lo que se pinta, 7 filas × 24 columnas, con intensidad por recuento y las interacciones en el tooltip; `buckets` por tramo sigue calculado pero sin consumidor). `getCadenceCalendar` (calendario estilo GitHub por día) queda exportado y con tests pero **fuera de la fachada y de la interfaz**: se probó y el usuario prefirió el mapa por hora y `getNoteAttributionTimeline` (panel "Altas atribuidas a notas" de la vista Notas).
+- **`src/shared/content-analytics.js`** — módulo puro, sin red y sin persistencia. **`getContentFindings()` y la tabla de rasgos se retiraron de la interfaz** (el análisis por medianas no era útil con pocas notas; el análisis con IA está descartado, ver `PRODUCT.md`). Siguen exportadas y con tests, pero **ningún renderer las consume**. Lo que el dashboard sí usa, a través de la fachada `getContentAnalytics()`: `getCadenceHeatmap` (mapa día × hora: las 168 `cells` son lo que se pinta, 7 filas × 24 columnas, con intensidad por recuento y las interacciones en el tooltip; `buckets` por tramo sigue calculado pero sin consumidor). `getCadenceCalendar` (calendario estilo GitHub por día) queda exportado y con tests pero **fuera de la fachada y de la interfaz**: se probó y el usuario prefirió el mapa por hora y `getNoteAttributionTimeline` (panel "Altas atribuidas a notas" de la vista Notas).
 - **`dashboard/`** — página completa (no popup), DOM manual sin framework. `app.js` mantiene `state` en memoria y despacha **una sola vista** por render.
 
-## Las seis vistas del dashboard
+## Las siete vistas del dashboard
 
-`dashboard/index.html` contiene seis `div.view[data-view]` dentro de `.content`;
+`dashboard/index.html` contiene siete `div.view[data-view]` dentro de `.content`;
 la barra lateral son `button.nav-item[data-view]` y `setView()` alterna el
 atributo `hidden`. `VIEW_RENDERERS` en `app.js` asocia cada vista con sus
 funciones de render, y `renderDashboard()` ejecuta solo las de la vista activa.
 
 Vistas: `resumen`, `audiencia`, `crecimiento`, `notas`, `publicaciones`,
-`cobertura`. `bindEvents()` engancha además `chrome.storage.onChanged`: la fase
+`postal`, `cobertura`. **La postal** es una tarjeta 4:5 para compartir por
+captura: solo cifras públicas (nunca pago ni ingresos, ni siquiera con
+`data-sensitive` visible), y cada cifra sin base se omite en vez de pintar
+"—". Se mide en unidades de contenedor (`cqi`) y `runCapture` la exporta con
+`outputWidth: 1080, layoutWidth: 540`: el clon se compone siempre a 540 px CSS,
+así el PNG (1080×1350) es idéntico desde cualquier pantalla. Su `<footer>` anula
+la regla global del pie del dashboard. Lleva el **logo de la newsletter**
+(`logo_url`) y la **foto del autor** (`photo_url` del propio perfil, con alias:
+el campo no está documentado en `substack-payloads-observados.md`), que
+`getProfile` guarda en la publicación conectada y se refrescan en cada sync.
+Se sirven por el CDN de imagen de Substack (`substackcdn.com/image/fetch/…`),
+que devuelve CORS abierto también para los buckets antiguos sin CORS: así
+`captureElementPng` puede incrustarlas como `data:`. Si una imagen falla, queda
+la inicial que va debajo; nunca un icono roto ni un permiso de host nuevo.
+Un configurador junto a la tarjeta elige **formato** (vertical 1080×1350 o
+cuadrado 1080×1080), **color** (tinta, claro, índigo) y **qué mostrar** (cifras,
+mejor semana, hito, autor); se guarda en `localStorage` bajo `plotstack.postal`
+con lectura y escritura protegidas, y solo cambia atributos y clases de la
+tarjeta, sin recrearla. Ojo con `cqi`: la `.postal` ES el contenedor, así que
+sus propias propiedades en `cqi` resuelven contra el viewport. El espaciado
+vertical va en los hijos (`.postal > * + *`), nunca en `gap` ni `padding` en
+`cqi` sobre la propia tarjeta. `bindEvents()` engancha además `chrome.storage.onChanged`: la fase
 de detalle escribe el snapshot desde el service worker y el dashboard se repinta
 solo, sin recrear los nodos con listeners. **Sin vista de ingresos: se retiró por decisión de producto, junto a
 toda métrica monetaria.** La activa se persiste en `localStorage` bajo
@@ -182,8 +203,9 @@ listeners quedarían colgando.
   por sección no necesita `publication/post-tag` ni ninguna petición nueva.
 
 - **`chartCounts` de `subscriber-stats` es UN punto agregado, no una serie.** Sus claves son nombres de campo, no fechas. La serie diaria de altas se reconstruye agregando `subscription_created_at` de cada fila con `getSubscriberTimeline`, que descarta email, nombre y foto en memoria y solo devuelve conteos por día. Ver `docs/product/substack-payloads-observados.md`.
-- **Ninguna clave cruda de la API llega a la interfaz.** No hay volcados genéricos de objetos: las rejillas de cifras se construyen con `renderLabelledGrid`, que recibe pares `[etiqueta en español, valor]` escritos en el renderer. El volcado anterior (`renderStatGrid` + `STAT_LABELS`) pintaba `drafts` en inglés y booleanos de control como `publishedIsCapped: false`. Si añades una rejilla, escribe las etiquetas; no itereres el payload.
+- **Ninguna clave cruda de la API llega a la interfaz.** No hay volcados genéricos de objetos: las rejillas de cifras se construyen con `renderLabelledGrid`, que recibe pares `[etiqueta en español, valor]` escritos en el renderer. El volcado anterior (`renderStatGrid` + `STAT_LABELS`) pintaba `drafts` en inglés y booleanos de control como `publishedIsCapped: false`. Si añades una rejilla, escribe las etiquetas; no itereres el payload. Los nombres de fuente y de red que devuelve Substack ("Substack App", "direct to app", "Search") pasan por `sourceLabel()` de `analytics.js` **al pintar**: el snapshot guarda el valor original y una etiqueta desconocida se muestra capitalizada en vez de desaparecer.
 - **El perfil se refresca en cada sync.** `syncConnected` llama a `getProfile()` siempre, no solo cuando falta `userId`: ahí vive `followerCount`, que es un número vivo. Cachearlo desde el momento de la conexión lo dejaba a **0** en cualquier conexión creada antes de mapearlo. Si el perfil falla, se conserva la publicación guardada y `getPublicationSnapshot` cae al `followers` del snapshot anterior. Cubierto en `tests/background.test.js`.
+- **Récords, hito y fidelidad son conteos, nunca personas.** `getSubscriberTimeline` añade `ratings` (reparto 0-5 de `activity_rating`) y `cohorts` (actividad por mes de alta) sin sacar ninguna fila. El núcleo fiel (puntuación 5) solo tiene evolución porque el service worker la guarda: `withLoyaltyHistory` añade una captura por día a `analytics.audience.loyaltyHistory` y, si la fuente falla, conserva la anterior. La permanencia por mes tiene **sesgo de superviviente** (Substack solo lista a quien sigue): «siguen X de Y» cruza con las altas del histórico de crecimiento y queda en `null` si las fuentes no cuadran o el histórico no cubre el mes; con la lista truncada se omite el mes más antiguo. El próximo hito se proyecta con el ritmo **neto** de dos ventanas fijas (30 y 90 días) y da un rango, nunca una fecha única; sin ritmo positivo no proyecta.
 - **Nada de PII en `chrome.storage`.** Solo métricas agregadas y normalizadas; se descartan emails, perfiles individuales de suscriptores y URLs firmadas de exportación.
 - **Notas propias.** El feed del perfil incluye restacks ajenos; se filtran comparando `comment.user_id` con `publication.userId`, no por la URL del perfil.
 - **Campos de la API son inestables.** Los normalizadores usan helpers variádicos (`asNumber(a, b, c)`, `text(...)`, `rowsFrom(payload, keys)`) porque Substack no documenta estos endpoints internos. Al añadir un campo, añade también sus alias plausibles en lugar de asumir un solo nombre.
@@ -198,7 +220,7 @@ listeners quedarían colgando.
 
 `tests/fixtures/dom.js` es un DOM mínimo sin dependencias que **lee los ids reales
 de `index.html`**. `tests/dashboard-render.test.js` importa `dashboard/app.js` (lo
-que dispara `initialize()`) y recorre las seis vistas por los cuatro rangos, así
+que dispara `initialize()`) y recorre las siete vistas por los cuatro rangos, así
 que **una referencia colgante o un `#id` inexistente hace fallar la suite** — es el
 único guardián contra ese fallo, que se colaba tres veces porque `node --check`
 solo valida sintaxis. Si añades un renderer, añade su aserción ahí.

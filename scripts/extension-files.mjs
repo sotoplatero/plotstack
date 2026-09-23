@@ -20,6 +20,10 @@ export const EXTENSION_FILES = [
   "src/providers/substack-api.js",
   "src/providers/substack-extended.js",
   "assets/icon.svg",
+  // Fuente propia del mundo «Resumen de salud» y su licencia OFL, que exige
+  // viajar junto a la fuente.
+  "assets/fonts/Geist-Variable.woff2",
+  "assets/fonts/Geist-LICENSE.txt",
 ];
 
 // Directorios que entran completos. `assets/icons` lo genera

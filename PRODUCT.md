@@ -28,8 +28,12 @@ El autor abre la extensión para revisar el desempeño de su newsletter, sincron
 - Consulta endpoints de solo lectura de Substack con la sesión existente del navegador.
 - Conserva únicamente información agregada y normalizada; descarta PII antes de persistir.
 - Las métricas de pago e ingresos permanecen ocultas por defecto.
+- El alcance de la v1 son las publicaciones bajo `*.substack.com`; los dominios personalizados quedan fuera.
+- Se distribuye como extensión en la Chrome Web Store, con la política de privacidad publicada en GitHub Pages (`docs/privacy/`).
+- No habrá análisis con IA: la decisión está descartada, tampoco en local.
 - El rediseño debe priorizar pocos gráficos importantes para crecimiento y relegar datos diagnósticos o de cobertura.
-- La selección definitiva de recomendaciones y jerarquía secundaria queda abierta a validación posterior con usuarios.
+- Las recomendaciones del Resumen solo se emiten con muestra suficiente: una fuente se nombra como principal y se recomienda reforzarla únicamente con al menos 10 altas y un 30 % de las altas atribuidas. Por debajo, la interfaz dice que no hay una fuente que destaque.
+- La jerarquía de las vistas secundarias queda abierta a validación posterior con usuarios.
 
 ## Brand Commitments
 
@@ -37,7 +41,7 @@ Se conserva el nombre PlotStack y el español como idioma principal de la experi
 
 ## Evidence on Hand
 
-El repositorio contiene el dashboard funcional, datos de prueba realistas, documentación de las fuentes de Substack y una suite automatizada de 165 pruebas. No hay testimonios, benchmarks comerciales ni investigación formal de usuarios que deban presentarse como evidencia.
+El repositorio contiene el dashboard funcional, datos de prueba realistas, documentación de las fuentes de Substack y una suite automatizada de 172 pruebas. La vista previa con la publicación ficticia «Carta de muestra» (`scripts/preview-dashboard.mjs`) es la fuente de las capturas de la tienda: nunca se usan métricas de una cuenta real. No hay testimonios, benchmarks comerciales ni investigación formal de usuarios que deban presentarse como evidencia.
 
 ## Product Principles
 

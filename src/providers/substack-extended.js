@@ -295,6 +295,17 @@ export const normalizeSubscriberTimeline = (value = {}) => ({
     baja: asNumber(value.engagement?.baja),
     inactiva: asNumber(value.engagement?.inactiva),
   },
+  // Sin puntuaciones no hay reparto: `[]`, no seis ceros que parecerían medidos.
+  ratings: Array.isArray(value.ratings) && value.ratings.length === 6 ? value.ratings.map((count) => asNumber(count)) : [],
+  cohorts: (Array.isArray(value.cohorts) ? value.cohorts : [])
+    .map((row) => ({
+      month: text(row?.month),
+      current: asNumber(row?.current),
+      alta: asNumber(row?.alta),
+      baja: asNumber(row?.baja),
+      inactiva: asNumber(row?.inactiva),
+    }))
+    .filter((row) => /^\d{4}-\d{2}$/.test(row.month)),
   byInterval: (Array.isArray(value.byInterval) ? value.byInterval : [])
     .map((row) => ({ interval: text(row?.interval), count: asNumber(row?.count) }))
     .filter((row) => row.interval),
@@ -331,6 +342,10 @@ export async function getSubscriberTimeline(base, { maxPages = SUBSCRIBER_MAX_PA
   const composition = { paid: 0, founding: 0, gift: 0, comp: 0, freeTrial: 0 };
   const byInterval = new Map();
   const engagement = { alta: 0, baja: 0, inactiva: 0 };
+  // Reparto completo de la puntuación 0-5 (el núcleo fiel es el 5) y actividad
+  // por mes de alta. Solo conteos: ninguna fila individual sale de aquí.
+  const ratings = [0, 0, 0, 0, 0, 0];
+  const cohorts = new Map();
   let total = 0;
   let counted = 0;
   let pages = 0;
@@ -359,11 +374,16 @@ export async function getSubscriberTimeline(base, { maxPages = SUBSCRIBER_MAX_PA
       const interval = text(row?.subscription_interval) || "sin definir";
       byInterval.set(interval, (byInterval.get(interval) || 0) + 1);
       const rating = asNumber(row?.activity_rating);
-      if (rating >= 4) engagement.alta += 1;
-      else if (rating >= 1) engagement.baja += 1;
-      else engagement.inactiva += 1;
+      const tier = rating >= 4 ? "alta" : rating >= 1 ? "baja" : "inactiva";
+      engagement[tier] += 1;
+      ratings[Math.min(5, Math.max(0, Math.round(rating)))] += 1;
       const date = String(row?.subscription_created_at || "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      const month = date.slice(0, 7);
+      const cohort = cohorts.get(month) || { month, current: 0, alta: 0, baja: 0, inactiva: 0 };
+      cohort.current += 1;
+      cohort[tier] += 1;
+      cohorts.set(month, cohort);
       const bucket = byDay.get(date) || { date, signups: 0, paidSignups: 0 };
       bucket.signups += 1;
       if (paid) bucket.paidSignups += 1;
@@ -392,6 +412,10 @@ export async function getSubscriberTimeline(base, { maxPages = SUBSCRIBER_MAX_PA
     composition,
     byInterval: [...byInterval.entries()].map(([interval, count]) => ({ interval, count })).sort((a, b) => b.count - a.count),
     engagement,
+    ratings,
+    // Con la serie truncada, el mes más antiguo contado está incompleto: la API
+    // pagina de más reciente a más antiguo y se corta a mitad de ese mes.
+    cohorts: [...cohorts.values()].sort((a, b) => a.month.localeCompare(b.month)),
   };
 }
 

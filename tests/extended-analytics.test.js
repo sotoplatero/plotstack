@@ -190,6 +190,12 @@ test("getSubscriberTimeline reconstruye la serie diaria y descarta la PII", asyn
     assert.equal(timeline.composition.paid, 2, "revenue>0 y is_founding cuentan como pago; is_subscribed no");
     assert.equal(timeline.composition.founding, 1);
     assert.deepEqual(timeline.engagement, { alta: 1, baja: 1, inactiva: 2 });
+    // Reparto 0-5 completo y actividad por mes de alta: solo conteos.
+    assert.deepEqual(timeline.ratings, [2, 1, 0, 0, 0, 1]);
+    assert.deepEqual(timeline.cohorts, [
+      { month: "2026-06", current: 1, alta: 0, baja: 0, inactiva: 1 },
+      { month: "2026-08", current: 2, alta: 1, baja: 1, inactiva: 0 },
+    ], "la fila sin fecha cuenta en el reparto pero no en ningún mes");
     assert.deepEqual(
       timeline.byInterval.map((row) => row.interval).sort(),
       ["free", "lifetime", "month"],

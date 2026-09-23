@@ -48,9 +48,9 @@ const rango = async (dias) => {
   await settle(4);
 };
 
-const VISTAS = ["resumen", "audiencia", "crecimiento", "notas", "publicaciones", "cobertura"];
+const VISTAS = ["resumen", "audiencia", "crecimiento", "notas", "publicaciones", "postal", "cobertura"];
 // Las que dependen de `state.days` y por tanto muestran el selector.
-const CON_RANGO = new Set(["resumen", "audiencia", "crecimiento", "notas"]);
+const CON_RANGO = new Set(["resumen", "audiencia", "crecimiento", "notas", "publicaciones", "postal"]);
 
 test("el dashboard arranca con el snapshot guardado", async () => {
   await arrancar();
@@ -274,6 +274,8 @@ test("Notas usa el detalle real y no inventa lo que no existe", async () => {
 test("Publicaciones ordena y busca sin perder la tabla", async () => {
   await arrancar();
   await verVista("publicaciones");
+  // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
+  await rango("all");
   assert.equal($$("#campaigns-head th").length, 12);
   assert.equal($$("#campaigns-body tr").length, 2);
 
@@ -296,7 +298,9 @@ test("Publicaciones ordena y busca sin perder la tabla", async () => {
 test("las columnas de Publicaciones no incluyen las que la API deja siempre en cero", async () => {
   await arrancar();
   await verVista("publicaciones");
-  const cabeceras = $$("#campaigns-head th").map((th) => th.textContent.replace(/[↑↓\s]+$/, ""));
+  // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
+  await rango("all");
+  const cabeceras = $$("#campaigns-head th").map((th) => th.dataset.label);
   for (const muerta of ["Subtítulo", "Palabras", "Audiencia", "Valor", "Suscripciones", "Bajas D1"]) {
     assert.equal(cabeceras.includes(muerta), false, `${muerta} no debería estar: ${cabeceras.join(", ")}`);
   }
@@ -375,13 +379,19 @@ test("el delta de suscriptores nombra la ventana contra la que compara", async (
 test("Publicaciones dibuja apertura y CTR por envío y marca la mediana propia", async () => {
   await arrancar();
   await verVista("publicaciones");
+  // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
+  await rango("all");
   assert.ok($$("#posts-rate-chart .chart-line").length > 0, "falta la línea de apertura");
   assert.ok($$("#posts-rate-chart .chart-line-secondary").length > 0, "falta la línea de CTR");
-  const cabeceras = $$("#campaigns-head th").map((th) => th.textContent.replace(/[↑↓\s]+$/, ""));
+  const cabeceras = $$("#campaigns-head th").map((th) => th.dataset.label);
   assert.ok(cabeceras.includes("CTOR"), `falta CTOR: ${cabeceras.join(", ")}`);
-  const marcadas = $$("#campaigns-body td").filter((td) =>
-    td.classList.contains("is-above-median") || td.classList.contains("is-below-median"));
-  assert.equal(marcadas.length, 2, "cada envío con entregas marca su apertura contra la mediana");
+  // Un solo sistema de resaltado, el de Notas (P75 por columna, mínimo 3
+  // medidas): la mediana propia de apertura viaja en el hint, sin color propio.
+  const conMediana = $$("#campaigns-body td").filter((td) => /Tu mediana/.test(td.dataset.hint || ""));
+  assert.equal(conMediana.length, 2, "cada envío con entregas cita la mediana en su apertura");
+  assert.equal($$("#campaigns-body td").filter((td) => td.classList.contains("is-above-median") || td.classList.contains("is-below-median")).length, 0);
+  // Con dos envíos no hay cuartil: nada se destaca por azar.
+  assert.equal($$("#campaigns-body td.is-standout").length, 0, "menos de 3 medidas no destacan");
 });
 
 test("Notas no pinta ceros donde no hubo medición y muestra la atribución", async () => {
@@ -446,6 +456,8 @@ test("las altas por canal viven en la tira de KPI del panel de altas y bajas", a
 test("el diagnóstico asunto/contenido no clasifica con muestra escasa", async () => {
   await arrancar();
   await verVista("publicaciones");
+  // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
+  await rango("all");
   assert.equal($("#diagnosis-medians").textContent, "Muestra escasa");
   assert.match($("#diagnosis-grid").textContent, /al menos 4 envíos.*hay 2/,
     "con 2 envíos la mediana no clasifica nada");
@@ -639,6 +651,8 @@ test("los graficos con serie secundaria la declaran en su leyenda", async () => 
   assert.equal($$("#churn-panel .chart-legend .is-secondary").length, 1,
     "el segmento de bajas necesita leyenda junto al dibujo");
   await verVista("publicaciones");
+  // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
+  await rango("all");
   assert.equal($$("#posts-rate-panel .chart-legend .is-secondary").length, 1,
     "la linea discontinua de CTR necesita leyenda junto al dibujo");
 });
@@ -674,7 +688,9 @@ test("Crecimiento reparte la audiencia entre la red de Substack y la propia", as
   await rango("all");
   assert.equal($("#network-bar").hidden, false);
   assert.equal($$("#network-bar i").length, 3);
-  assert.match($("#network-legend").textContent, /Substack App/);
+  // Ninguna clave cruda de la API en la interfaz: "Substack App" llega traducida.
+  assert.match($("#network-legend").textContent, /App de Substack/);
+  assert.doesNotMatch($("#network-legend").textContent, /Substack App/);
   assert.match($("#network-total").textContent, /114/);
 });
 
@@ -709,6 +725,8 @@ test("el panel de Seguidores superpone los suscriptores para ver la divergencia"
 test("Publicaciones separa lo que se lee fuera del correo y corta por seccion", async () => {
   await arrancar();
   await verVista("publicaciones");
+  // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
+  await rango("all");
   assert.match($("#discovery-kpis").textContent, /Se leen fuera del correo/);
   assert.match($("#discovery-median").textContent, /vistas por entrega/);
   assert.match($("#discovery-list").textContent, /×/);
@@ -812,7 +830,7 @@ test("Dónde se ven y Quién las ve son dos cards con pastel y leyenda en españ
     assert.equal($("#notes-audience-legend").textContent.includes(crudo), false, `clave cruda: ${crudo}`);
   }
   assert.match(superficies, /Feed/);
-  assert.match($("#notes-audience-legend").textContent, /Sin conexión/);
+  assert.match($("#notes-audience-legend").textContent, /Fuera de tu audiencia/);
   // El centro del pastel de audiencia lleva la cifra que importa del reparto.
   assert.match($("#notes-audience-center").textContent, /fuera de tu audiencia/);
   assert.match(txt($("#notes-audience-center").textContent), /^\d+%/);
@@ -828,4 +846,129 @@ test("el eje Y no repite etiquetas cuando el recorrido es estrecho", async () =>
   const etiquetas = $$("#audience-chart .chart-label").map((node) => node.textContent);
   const marcasY = etiquetas.slice(0, 4);
   assert.equal(new Set(marcasY).size, marcasY.length, `eje con etiquetas repetidas: ${marcasY.join(" / ")}`);
+});
+
+test("el Resumen no cuenta un crecimiento enorme como porcentaje", async () => {
+  await arrancar();
+  await verVista("resumen");
+  for (const dias of ["7", "30", "90", "all"]) {
+    await rango(dias);
+    // "creció 2798,0%" no se lee: a partir de +100% se dice "pasó de X a Y".
+    assert.doesNotMatch($("#growth-verdict").textContent, /\d{3,}(,\d+)?\s?%/, `veredicto en ${dias}`);
+    assert.doesNotMatch($("#delta-subscribers").textContent, /\+\d{3,}(,\d+)?\s?%/, `delta en ${dias}`);
+  }
+});
+
+test("accesibilidad: una sola parada de tabulación en el mapa y estado anunciado", async () => {
+  await arrancar();
+  await verVista("notas");
+  await rango("all");
+  const celdas = $$("#cadence-heatmap .heatmap-cell");
+  assert.equal(celdas.length, 168);
+  // 168 paradas de tabulación hacían intransitable el panel con teclado.
+  assert.equal(celdas.filter((celda) => celda.tabIndex === 0).length, 1, "tabulación itinerante");
+  assert.equal($("#cadence-heatmap").getAttribute("role"), "grid");
+
+  const pulsados = $$("[data-days]").filter((boton) => boton.getAttribute("aria-pressed") === "true");
+  assert.equal(pulsados.length, 1, "el rango activo se anuncia con aria-pressed");
+
+  await verVista("publicaciones");
+  await rango("all");
+  const ordenada = $$("#campaigns-head th").filter((th) => th.getAttribute("aria-sort"));
+  assert.equal(ordenada.length, 1, "la columna ordenada declara aria-sort");
+  assert.ok($$("#campaigns-head th").every((th) => th.querySelector("button")), "cada cabecera ordena con teclado");
+  // El gráfico resume sus datos para quien no ve el tooltip.
+  assert.match($("#posts-rate-chart").getAttribute("aria-label"), /último valor/);
+});
+
+test("el Resumen da a la recomendación su acción y un pie igual a cada tarjeta", async () => {
+  await arrancar();
+  await verVista("resumen");
+  await rango("all");
+  const boton = $("#growth-action-button");
+  // Con fuente principal o envío que convierte, la acción abre su vista.
+  if (!boton.hidden) {
+    assert.ok(["crecimiento", "publicaciones"].includes(boton.dataset.goto), `destino: ${boton.dataset.goto}`);
+    boton.click();
+    await settle(4);
+    assert.equal($(`.view[data-view="${boton.dataset.goto}"]`).hidden, false, "la acción abre la vista de la evidencia");
+  }
+  await verVista("resumen");
+  assert.equal($$(".view[data-view=\"resumen\"] .metric-foot").length, 3, "las tres tarjetas comparten pie");
+});
+
+test("Crecimiento abre con tus récords y el próximo hito", async () => {
+  await arrancar();
+  await verVista("crecimiento");
+  await rango("all");
+  assert.ok($$("#records-grid div").length >= 2, "hay récords con datos");
+  assert.match($("#records-grid").textContent, /Mejor semana de altas/);
+  // El formato compacto separa "5" y "mil" con un espacio duro.
+  assert.match($("#milestone-target").textContent, /^5\smil suscriptores$/);
+  assert.match($("#milestone-copy").textContent, /Te faltan/);
+  assert.doesNotMatch($("#milestone-copy").textContent, /NaN|undefined|Infinity/);
+});
+
+test("Tus lectores mide el núcleo fiel y la actividad por mes de alta", async () => {
+  await arrancar();
+  await verVista("audiencia");
+  await rango("all");
+  assert.match($("#loyal-kpis").textContent, /Núcleo fiel/);
+  assert.match($("#loyal-kpis").textContent, /540/);
+  // Con dos capturas en el rango hay delta, nombrado contra su fecha.
+  assert.match($("#loyal-change").textContent, /\+30 desde el/);
+  assert.equal($$("#loyal-bar i").length, 6, "reparto completo de la puntuación 0-5");
+  const filas = $$("#cohort-list .cohort-row");
+  assert.equal(filas.length, 3);
+  assert.ok(filas.some((fila) => fila.classList.contains("is-scarce")), "un mes con 6 suscriptores se marca como muestra escasa");
+  assert.equal($("#cohort-note").hidden, false, "la nota declara el sesgo de superviviente");
+});
+
+test("la postal resume el estado sin pago, sin ingresos y sin huecos", async () => {
+  await arrancar();
+  await verVista("postal");
+  await rango("all");
+  assert.equal(txt($("#postal-name").textContent), "Carta de muestra");
+  assert.equal(txt($("#postal-subscribers").textContent), "2,8 mil");
+  assert.match($("#postal-period").textContent, /Desde el principio/);
+  assert.ok($$("#postal-tiles .postal-tile").length >= 2, "al menos dos cifras con base");
+  const texto = txt($("#postal-card").textContent);
+  // Una postal se comparte: nada de pago ni de ingresos, y ninguna cifra vacía.
+  assert.doesNotMatch(texto, /pago|ingreso|US\$|\$/i);
+  assert.doesNotMatch($("#postal-tiles").textContent, /—|NaN|undefined/);
+  assert.equal($$("#postal-card [data-sensitive]").length, 0);
+  // Logo por el CDN de imagen de Substack (cuadrado y con CORS, incrustable en
+  // la captura); sin foto del autor, queda su inicial y su nombre.
+  assert.match($("#postal-logo").getAttribute("src"), /^https:\/\/substackcdn\.com\/image\/fetch\/w_192,h_192,c_fill,f_png\/https%3A%2F%2Fsubstack-post-media/);
+  assert.equal($("#postal-logo-initial").textContent, "C");
+  assert.equal($("#postal-author").textContent, "Por Ana Autora");
+  assert.equal($("#postal-avatar-initial").textContent, "A");
+  assert.equal($("#postal-avatar").getAttribute("src"), null, "sin URL no se pide ninguna imagen");
+});
+
+test("el configurador de la postal cambia formato, color y secciones sin recrearla", async () => {
+  await arrancar();
+  await verVista("postal");
+  const tarjeta = $("#postal-card");
+  const cifras = $("#postal-tiles");
+  $('[data-postal-format="square"]').click();
+  assert.equal(tarjeta.dataset.format, "square");
+  assert.match($("#postal-size").textContent, /1080 × 1080/);
+  assert.equal($('[data-postal-format="square"]').getAttribute("aria-pressed"), "true");
+  $('[data-postal-theme="light"]').click();
+  assert.equal(tarjeta.dataset.theme, "light");
+  const casilla = $('[data-postal-show="milestone"]');
+  casilla.checked = false;
+  casilla.dispatchEvent({ type: "change", target: casilla });
+  assert.equal(tarjeta.classList.contains("is-without-milestone"), true);
+  // Volver a pintar la vista respeta la configuración y no recrea los nodos.
+  await rango("30");
+  assert.equal(tarjeta.dataset.format, "square");
+  assert.equal(tarjeta.classList.contains("is-without-milestone"), true);
+  assert.equal($("#postal-tiles"), cifras);
+  // Restaura la configuración de fábrica para no afectar a otros casos.
+  $('[data-postal-format="portrait"]').click();
+  $('[data-postal-theme="ink"]').click();
+  casilla.checked = true;
+  casilla.dispatchEvent({ type: "change", target: casilla });
 });

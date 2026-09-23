@@ -1,4 +1,4 @@
-import { normalizeSnapshot } from "./shared/analytics.js";
+import { normalizeSnapshot, withLoyaltyHistory } from "./shared/analytics.js";
 import { enrichSnapshot, getCoreSnapshot, getProfile, SubstackApiError } from "./providers/substack-api.js";
 import { getExtendedAnalytics } from "./providers/substack-extended.js";
 
@@ -180,14 +180,14 @@ async function syncPublication(publication) {
     const startedAt = new Date().toISOString();
     try {
       await writeProgress({ phase: "core", step: "Resumen, publicaciones y audiencia", detail: { done: 0, total: 0 }, startedAt, finishedAt: "", error: "" });
-      const stored = await chrome.storage.local.get([SNAPSHOT_KEY]);
+      const stored = await chrome.storage.local.get([SNAPSHOT_KEY, ANALYTICS_KEY]);
       // Fase rápida: escalares y listas. Devuelve un snapshot completo y válido
       // para pintar sin esperar a una sola petición de detalle.
       // La fase rápida lanza ~50 peticiones (13 fuentes ampliadas, varias por
       // ventana, más la paginación de suscriptores). Con un plazo por petición
       // pero ninguno para el conjunto, una racha de cortes suma minutos y el
       // usuario no distingue eso de un cuelgue.
-      const [core, analytics] = await withDeadline(
+      const [core, freshAnalytics] = await withDeadline(
         Promise.all([
           getCoreSnapshot(publication, stored[SNAPSHOT_KEY]),
           getExtendedAnalytics(publication),
@@ -196,6 +196,9 @@ async function syncPublication(publication) {
         "La fase rápida tardó demasiado y se detuvo.",
       );
       const snapshot = normalizeSnapshot(core.snapshot);
+      // El núcleo fiel solo tiene evolución si PlotStack la guarda: Substack da
+      // la foto de hoy. Una captura por día, heredada de la anterior.
+      const analytics = withLoyaltyHistory(freshAnalytics, stored[ANALYTICS_KEY]);
       const connection = { provider: "substack", publication, connectedAt: new Date().toISOString() };
       await chrome.storage.local.set({ [SNAPSHOT_KEY]: snapshot, [CONNECTION_KEY]: connection, [ANALYTICS_KEY]: analytics });
       // La fase de detalle sigue sin bloquear la respuesta: el dashboard pinta

@@ -1,13 +1,61 @@
 const XHTML_NS = "http://www.w3.org/1999/xhtml";
 
-function pageStyles(document) {
-  return [...document.styleSheets].map((sheet) => {
+// Una imagen SVG no carga recursos externos: sin incrustarla, la fuente propia
+// no llegaba a la captura y el PNG salía con la del sistema. Cada url() de un
+// @font-face se resuelve contra su hoja y se sustituye por una data URL.
+const fontCache = new Map();
+
+function inlineAsset(url) {
+  if (!fontCache.has(url)) {
+    fontCache.set(url, fetch(url)
+      .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(response.statusText))))
+      .then((blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      }))
+      // Si la fuente no se puede leer, la captura sigue con la del sistema.
+      .catch(() => url));
+  }
+  return fontCache.get(url);
+}
+
+async function ruleText(rule, base) {
+  if (typeof CSSFontFaceRule === "undefined" || !(rule instanceof CSSFontFaceRule)) return rule.cssText;
+  let text = rule.cssText;
+  for (const [match, raw] of text.matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
+    if (raw.startsWith("data:")) continue;
+    text = text.replace(match, `url("${await inlineAsset(new URL(raw, base).href)}")`);
+  }
+  return text;
+}
+
+async function pageStyles(document) {
+  const sheets = await Promise.all([...document.styleSheets].map(async (sheet) => {
     try {
-      return [...sheet.cssRules].map((rule) => rule.cssText).join("\n");
+      const base = sheet.href || document.baseURI;
+      return (await Promise.all([...sheet.cssRules].map((rule) => ruleText(rule, base)))).join("\n");
     } catch {
       return "";
     }
-  }).join("\n");
+  }));
+  return sheets.join("\n");
+}
+
+// Lo mismo con las <img> del clon (logo y avatar de la postal). Una imagen que
+// no se puede leer se quita: debajo queda la inicial, nunca un icono roto.
+async function inlineImages(clone) {
+  await Promise.all([...clone.querySelectorAll("img")].map(async (img) => {
+    const src = img.getAttribute("src") || "";
+    if (img.hidden || !/^https?:/.test(src)) {
+      if (!src.startsWith("data:")) img.remove();
+      return;
+    }
+    const inlined = await inlineAsset(src);
+    if (inlined.startsWith("data:")) img.setAttribute("src", inlined);
+    else img.remove();
+  }));
 }
 
 function loadSvg(svg) {
@@ -78,25 +126,37 @@ export const captureFilename = (publication, view, day, cardLabel = "") =>
   ["plotstack", publication || "dashboard", view, cardLabel, day]
     .filter(Boolean).map(slug).join("-") + ".png";
 
-export async function captureElementPng(element, { theme = "ink" } = {}) {
+// `outputWidth` fija el ancho del PNG en píxeles: la postal sale siempre a
+// 1080 px, se vea en la pantalla que se vea. Sin él, la escala es la del
+// dispositivo, con tope en 2.
+// `layoutWidth` compone el clon a ese ancho CSS antes de escalar: un formato
+// cerrado sale idéntico desde un móvil o desde un escritorio.
+export async function captureElementPng(element, { outputWidth, layoutWidth } = {}) {
   if (!element) throw new Error("No se encontró la vista para capturar.");
   await document.fonts?.ready;
-  const width = Math.ceil(element.getBoundingClientRect().width);
-  const height = Math.ceil(element.scrollHeight);
+  const box = element.getBoundingClientRect();
+  const width = Math.ceil(layoutWidth || box.width);
+  // Un formato cerrado (la postal, 4:5) se captura por su caja: `scrollHeight`
+  // cuenta el desbordamiento recortado y añadía una franja al pie del PNG.
+  const height = outputWidth
+    ? Math.round((box.height / box.width) * width)
+    : Math.ceil(element.scrollHeight);
   if (!width || !height) throw new Error("La vista no tiene contenido visible.");
 
-  const scale = Math.min(window.devicePixelRatio || 1, 2, 32767 / width, 32767 / height);
+  const preferred = outputWidth ? outputWidth / width : Math.min(window.devicePixelRatio || 1, 2);
+  const scale = Math.min(preferred, 32767 / width, 32767 / height);
   if (scale < 0.35) throw new Error("Esta vista es demasiado larga para un solo PNG.");
 
   const clone = createPrivateCaptureClone(element);
   clone.style.width = `${width}px`;
   clone.style.margin = "0";
-  const styles = pageStyles(document).replaceAll("</style", "<\\/style");
+  await inlineImages(clone);
+  const styles = (await pageStyles(document)).replaceAll("</style", "<\\/style");
   const markup = new XMLSerializer().serializeToString(clone);
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
       <foreignObject width="100%" height="100%">
-        <html xmlns="${XHTML_NS}" lang="es" class="is-capturing" data-theme="${theme}">
+        <html xmlns="${XHTML_NS}" lang="es" class="is-capturing">
           <head><meta charset="UTF-8"/><style>${styles}</style></head>
           <body>${markup}</body>
         </html>

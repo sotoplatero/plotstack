@@ -276,6 +276,52 @@ export function formatPercent(value, digits = 1) {
   })}%`;
 }
 
+// Etiquetas de fuente y de red tal como las devuelve Substack, en inglés y a
+// veces en minúsculas ("direct to app", "Substack existing accounts"). Se
+// traducen AL PINTAR, no al guardar: el snapshot conserva el valor original y
+// una etiqueta nueva que Substack añada sigue viéndose, capitalizada, en lugar
+// de desaparecer. La clave se compara sin mayúsculas ni espacios extra.
+const SOURCE_LABELS = new Map(Object.entries({
+  // network_attribution
+  "substack app": "App de Substack",
+  "substack existing accounts": "Cuentas que ya usaban Substack",
+  "other substack network": "Resto de la red de Substack",
+  "imported accounts": "Suscriptores importados",
+  // visitor_sources: fuente
+  "direct to app": "Directo a la app",
+  "direct": "Directo",
+  "email opens": "Aperturas de email",
+  "email": "Email",
+  "google": "Google",
+  "bing": "Bing",
+  "duckduckgo": "DuckDuckGo",
+  "twitter": "X (Twitter)",
+  "x": "X (Twitter)",
+  "facebook": "Facebook",
+  "linkedin": "LinkedIn",
+  "reddit": "Reddit",
+  "instagram": "Instagram",
+  "threads": "Threads",
+  "bluesky": "Bluesky",
+  // visitor_sources: categoría
+  "search": "Buscadores",
+  "social": "Redes sociales",
+  "other": "Otros",
+  "substack": "Substack",
+  // growth/sources: hijos de la fuente `substack`
+  "notes": "Notas",
+  "recommendations": "Recomendaciones",
+  "onboarding": "Registro en Substack",
+  "trackbacks": "Menciones en otras publicaciones",
+}));
+
+export function sourceLabel(raw) {
+  const value = String(raw ?? "").trim();
+  if (!value) return "Sin identificar";
+  const known = SOURCE_LABELS.get(value.toLowerCase().replace(/\s+/g, " "));
+  return known || value.charAt(0).toLocaleUpperCase("es-ES") + value.slice(1);
+}
+
 export function formatCurrency(value) {
   return safeNumber(value).toLocaleString("es-ES", {
     style: "currency",
@@ -701,4 +747,218 @@ export function getDerivedMetrics(snapshot, days = 30) {
         ? (metrics.paidSubscribers / metrics.subscribers) * 100
         : 0,
   };
+}
+
+// ── Récords, hitos y fidelidad ─────────────────────────────────────────────
+// Todo lo de este bloque son conteos agregados: ninguna función recibe ni
+// devuelve datos de una persona.
+
+// Fecha civil local "YYYY-MM-DD". No `toISOString()`: en zonas negativas la
+// medianoche UTC cae en el día anterior.
+export const civilDay = (value = Date.now()) => {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+// Lunes de la semana de una fecha civil, como "YYYY-MM-DD".
+const weekStartOf = (day) => {
+  const date = parseDay(day);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return civilDay(date);
+};
+
+const inWindow = (day, days, now) => !Number.isFinite(days) || parseDay(day).getTime() >= now - days * 86400000;
+const signupsOf = (point) => safeNumber(point?.new ?? point?.signups);
+
+// Semanas consecutivas con al menos un envío o una nota. La racha actual cuenta
+// hacia atrás desde la semana en curso; si esta semana aún no hay nada, la
+// racha sigue viva si la semana anterior sí tuvo (la semana no ha terminado).
+function getStreaks(days = []) {
+  const weeks = [...new Set(days.map(weekStartOf))].sort();
+  if (!weeks.length) return { current: 0, longest: 0 };
+  const next = (week) => { const date = parseDay(week); date.setDate(date.getDate() + 7); return civilDay(date); };
+  let longest = 1;
+  let run = 1;
+  for (let index = 1; index < weeks.length; index += 1) {
+    run = weeks[index] === next(weeks[index - 1]) ? run + 1 : 1;
+    longest = Math.max(longest, run);
+  }
+  return { current: run, longest, lastWeek: weeks.at(-1) };
+}
+
+// Récords dentro del rango elegido. `null` en cada récord que no tenga base:
+// un récord de cero no es un récord.
+export function getRecords({ snapshot = {}, subscriberDaily = [], days = 30, now = Date.now() } = {}) {
+  const { campaigns, notes } = normalizeSnapshot(snapshot);
+
+  const weekly = new Map();
+  for (const point of subscriberDaily) {
+    if (!point?.date || !inWindow(point.date, days, now)) continue;
+    const week = weekStartOf(String(point.date).slice(0, 10));
+    weekly.set(week, (weekly.get(week) || 0) + signupsOf(point));
+  }
+  const bestWeekEntry = [...weekly.entries()].sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0];
+  const bestWeek = bestWeekEntry && bestWeekEntry[1] > 0 ? { weekStart: bestWeekEntry[0], signups: bestWeekEntry[1] } : null;
+
+  const ranged = campaigns.filter((campaign) => campaign.date && inWindow(String(campaign.date).slice(0, 10), days, now));
+  // Un envío a 5 personas con un 80% de apertura no es un récord: se exige una
+  // entrega de al menos la mitad de la mediana de entregas del rango.
+  const delivered = ranged.map((campaign) => campaign.delivered).filter((value) => value > 0).sort((a, b) => a - b);
+  const medianDelivered = delivered.length ? delivered[Math.floor((delivered.length - 1) / 2)] : 0;
+  const bestOf = (rows, valueOf) => {
+    const best = [...rows].filter((row) => valueOf(row) > 0).sort((a, b) => valueOf(b) - valueOf(a))[0];
+    return best ? { title: best.title, date: String(best.date).slice(0, 10), value: valueOf(best) } : null;
+  };
+  const bestOpen = bestOf(ranged.filter((campaign) => campaign.delivered > 0 && campaign.delivered >= medianDelivered / 2), (campaign) => campaign.openRate);
+  const bestSignups = bestOf(ranged, (campaign) => campaign.signupsWithin1Day);
+
+  const rangedNotes = notes.filter((note) => note.date && inWindow(String(note.date).slice(0, 10), days, now));
+  const noteScore = (note) => safeNumber(note.reactions) + safeNumber(note.replies) + safeNumber(note.restacks);
+  const topNote = [...rangedNotes].filter((note) => noteScore(note) > 0).sort((a, b) => noteScore(b) - noteScore(a))[0];
+  const bestNote = topNote ? { body: topNote.body, date: String(topNote.date).slice(0, 10), value: noteScore(topNote) } : null;
+
+  // La racha actual no depende del rango (es "hoy"); la más larga sí.
+  const allDays = [...campaigns, ...notes].map((row) => String(row.date || "").slice(0, 10)).filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day));
+  const all = getStreaks(allDays);
+  const thisWeek = weekStartOf(civilDay(now));
+  const lastWeekDate = parseDay(thisWeek); lastWeekDate.setDate(lastWeekDate.getDate() - 7);
+  const alive = all.lastWeek === thisWeek || all.lastWeek === civilDay(lastWeekDate);
+  const inRange = getStreaks(allDays.filter((day) => inWindow(day, days, now)));
+
+  return {
+    bestWeek,
+    bestOpen,
+    bestSignups,
+    bestNote,
+    streak: { current: alive ? all.current : 0, longest: inRange.longest },
+  };
+}
+
+// Hitos redondos que una autora celebra. Pasado el último, cada 50.000.
+const MILESTONES = [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+export const nextMilestone = (current) => MILESTONES.find((value) => value > current)
+  ?? (Math.floor(current / 50000) + 1) * 50000;
+
+// Proyección al próximo hito con el ritmo NETO (altas − bajas) de dos ventanas
+// fijas, 30 y 90 días. Dos ventanas dan un rango, nunca una promesa. Sin ritmo
+// positivo no se proyecta: "a este ritmo, nunca" no es una fecha.
+export function getMilestoneProjection({ current = 0, growthDaily = [], now = Date.now() } = {}) {
+  const target = nextMilestone(current);
+  const previous = [...MILESTONES].reverse().find((value) => value <= current) ?? 0;
+  const remaining = target - current;
+  const rateOver = (windowDays) => {
+    const rows = growthDaily.filter((row) => row?.date && inWindow(row.date, windowDays, now));
+    if (!rows.length) return null;
+    const oldest = Math.min(...rows.map((row) => parseDay(row.date).getTime()));
+    // Una serie que solo cubre 10 de los 90 días no mide el ritmo de 90 días.
+    if (now - oldest < windowDays * 0.6 * 86400000) return null;
+    const net = rows.reduce((sum, row) => sum + safeNumber(row.net ?? (signupsOf(row) - safeNumber(row.losses))), 0);
+    return net / windowDays;
+  };
+  const estimates = [30, 90].map((windowDays) => {
+    const rate = rateOver(windowDays);
+    if (rate === null) return { windowDays, rate: null, date: null };
+    if (rate <= 0) return { windowDays, rate, date: null };
+    return { windowDays, rate, date: civilDay(now + Math.ceil(remaining / rate) * 86400000) };
+  });
+  const dated = estimates.filter((row) => row.date);
+  return {
+    current,
+    target,
+    previous,
+    remaining,
+    progress: ratio(current - previous, target - previous),
+    estimates,
+    state: dated.length ? "projected" : estimates.some((row) => row.rate !== null) ? "flat" : "nodata",
+  };
+}
+
+// Núcleo fiel: puntuación 5 de Substack; muy activos: 4 o 5. La evolución sale
+// del histórico que guarda PlotStack en cada sincronización, recortado al rango.
+export function getLoyalCore(timeline = {}, history = [], days = 30, now = Date.now()) {
+  const ratings = Array.isArray(timeline?.ratings) && timeline.ratings.length === 6 ? timeline.ratings.map(safeNumber) : [];
+  const total = ratings.reduce((sum, count) => sum + count, 0);
+  if (!total) return { state: "nodata", total: 0, core: 0, active: 0, coreShare: null, activeShare: null, ratings: [], history: [], change: null, partial: Boolean(timeline?.partial) };
+  const core = ratings[5];
+  const active = ratings[4] + ratings[5];
+  const ranged = history.filter((point) => point?.date && inWindow(point.date, days, now));
+  const base = ranged.length > 1 ? ranged[0] : null;
+  return {
+    state: "ready",
+    total,
+    core,
+    active,
+    coreShare: ratio(core, total) === null ? null : ratio(core, total) * 100,
+    activeShare: ratio(active, total) === null ? null : ratio(active, total) * 100,
+    ratings,
+    history: ranged,
+    // `null` sin una captura anterior en el rango: un delta sin base no es +0.
+    change: base ? core - safeNumber(base.core) : null,
+    changeSince: base ? base.date : "",
+    partial: Boolean(timeline?.partial),
+  };
+}
+
+// Mínimo de suscriptores actuales de un mes para leer su actividad sin que un
+// par de personas mueva el porcentaje. Umbral de producto, como MIN_CUT_N.
+export const MIN_COHORT_N = 10;
+
+// ¿Siguen leyendo los que llegaron cada mes? De los suscriptores ACTUALES que
+// se dieron de alta ese mes, qué parte tiene actividad alta. `subscriber-stats`
+// solo lista a quienes siguen suscritos: para saber cuántos se fueron se cruza
+// con las altas del histórico de crecimiento de ese mes, y si las dos fuentes no
+// cuadran (más actuales que altas) el dato de permanencia queda en `null`.
+export function getCohortActivity(timeline = {}, growthDaily = [], days = 30, now = Date.now()) {
+  const cohorts = Array.isArray(timeline?.cohorts) ? timeline.cohorts : [];
+  // Serie truncada: el mes más antiguo contado está a medias.
+  const complete = timeline?.partial ? cohorts.slice(1) : cohorts;
+  const joinedByMonth = new Map();
+  let growthFrom = "";
+  for (const row of growthDaily) {
+    if (!row?.date) continue;
+    const month = String(row.date).slice(0, 7);
+    joinedByMonth.set(month, (joinedByMonth.get(month) || 0) + signupsOf(row));
+    if (!growthFrom || row.date < growthFrom) growthFrom = String(row.date);
+  }
+  const cutoffMonth = Number.isFinite(days) ? civilDay(now - days * 86400000).slice(0, 7) : "";
+  const rows = complete
+    .filter((cohort) => !cutoffMonth || cohort.month >= cutoffMonth)
+    .map((cohort) => {
+      const current = safeNumber(cohort.current);
+      // El primer mes del histórico de crecimiento puede empezar a mitad: sus
+      // altas estarían infracontadas y la permanencia saldría inflada.
+      const growthCovers = growthFrom && cohort.month > growthFrom.slice(0, 7);
+      const joined = growthCovers ? joinedByMonth.get(cohort.month) ?? null : null;
+      const stayed = joined && current <= joined ? ratio(current, joined) : null;
+      return {
+        month: cohort.month,
+        current,
+        alta: safeNumber(cohort.alta),
+        baja: safeNumber(cohort.baja),
+        inactiva: safeNumber(cohort.inactiva),
+        activeShare: ratio(safeNumber(cohort.alta), current) === null ? null : ratio(safeNumber(cohort.alta), current) * 100,
+        joined,
+        stayedShare: stayed === null ? null : stayed * 100,
+        scarce: current < MIN_COHORT_N,
+      };
+    })
+    .filter((row) => row.current > 0);
+  return { rows, partial: Boolean(timeline?.partial) };
+}
+
+// Una captura del núcleo por día civil, heredada de la sincronización anterior.
+// Si esta sincronización no trajo puntuaciones, se conserva el histórico tal
+// cual: un fallo parcial nunca borra lo que ya había.
+export function withLoyaltyHistory(fresh = {}, previous = {}, now = Date.now()) {
+  const prior = (Array.isArray(previous?.audience?.loyaltyHistory) ? previous.audience.loyaltyHistory : [])
+    .filter((point) => point && /^\d{4}-\d{2}-\d{2}$/.test(String(point.date)))
+    .map((point) => ({ date: String(point.date), core: safeNumber(point.core), active: safeNumber(point.active), total: safeNumber(point.total) }));
+  const ratings = fresh?.audience?.timeline?.ratings;
+  const total = Array.isArray(ratings) ? ratings.reduce((sum, count) => sum + safeNumber(count), 0) : 0;
+  const today = civilDay(now);
+  const history = total > 0
+    ? [...prior.filter((point) => point.date !== today), { date: today, core: safeNumber(ratings[5]), active: safeNumber(ratings[4]) + safeNumber(ratings[5]), total }]
+    : prior;
+  history.sort((a, b) => a.date.localeCompare(b.date));
+  return { ...fresh, audience: { ...(fresh?.audience || {}), loyaltyHistory: history.slice(-400) } };
 }

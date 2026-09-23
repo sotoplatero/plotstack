@@ -1,15 +1,22 @@
 <!doctype html>
-<html lang="es" data-theme="ink">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
-    <title>PlotStack — Newsletter Analytics</title>
+    <title>PlotStack · Analítica de tu newsletter</title>
     <link rel="icon" href="../assets/icon.svg" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="noise" aria-hidden="true"></div>
+    <!--
+    THESIS: cada métrica tiene su color y lo conserva en toda la app; el panel se lee como un resumen de salud personal, no como un periódico ni como un SaaS azul.
+    OWN-WORLD: fondo gris agrupado #F2F2F7, superficies blancas de radio 16 sin borde ni sombra, tinta #1C1C1E, sans de sistema en negrita para cifras y títulos. Tonos fijos: suscriptores índigo, apertura naranja, clics azul, notas verde, visitas morado, seguidores rosa, bajas rojo. Color plano, estados invertidos, rango en cápsula llena.
+    STORY: la autora ve en segundos qué creció, en qué color vive cada cosa y de dónde vino; sigue un color de vista en vista.
+    FIRST VIEWPORT: veredicto en negrita a clamp(32px, 3.4vw, 44px) (34px pedía demasiado poco peso junto a cifras de 46px), tres tarjetas de métrica con su tono y tendencia, gráfico de suscriptores en índigo; acción en la tarjeta de recomendación.
+    FORM: Resumen de salud, candidato 1 de 7 (elegido por la usuaria); seed 765e042d.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+    -->
     <section class="onboarding" id="onboarding" aria-labelledby="onboarding-title">
       <div class="onboarding-brand brand">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -21,7 +28,7 @@
             <span class="detecting-mark" aria-hidden="true"></span>
             <h1 id="onboarding-title">Buscando tus newsletters…</h1>
             <p>Estamos comprobando la sesión de Substack abierta en este navegador.</p>
-            <button class="connect-button" id="connect-button" type="button" hidden><span>Volver a detectar</span><b>→</b></button>
+            <button class="connect-button" id="connect-button" type="button" hidden><span>Volver a detectar</span><svg aria-hidden="true"><use href="#icon-next"></use></svg></button>
             <button class="login-button" id="login-button" type="button" hidden>Iniciar sesión en Substack ↗</button>
           </div>
           <div class="publication-picker" id="publication-picker" hidden>
@@ -58,6 +65,9 @@
           <button class="nav-item button-reset" type="button" data-view="publicaciones">
             <svg aria-hidden="true"><use href="#icon-mail"></use></svg><span>Envíos</span>
           </button>
+          <button class="nav-item button-reset" type="button" data-view="postal">
+            <svg aria-hidden="true"><use href="#icon-card"></use></svg><span>Postal</span>
+          </button>
           <button class="nav-item button-reset" type="button" data-view="cobertura">
             <svg aria-hidden="true"><use href="#icon-database"></use></svg><span>Estado de datos</span>
           </button>
@@ -68,9 +78,6 @@
             <span class="source-dot"></span>
             <div><small>Fuente activa</small><strong id="source-name">Substack</strong></div>
           </div>
-          <button class="nav-item button-reset" id="theme-button" type="button">
-            <svg aria-hidden="true"><use href="#icon-sun"></use></svg><span>Cambiar tema</span>
-          </button>
           <button class="nav-item button-reset" id="disconnect-button" type="button">
             <svg aria-hidden="true"><use href="#icon-exit"></use></svg><span>Desconectar</span>
           </button>
@@ -79,7 +86,7 @@
 
       <main>
         <header class="topbar">
-          <div class="eyebrow"><span></span> Tu informe de crecimiento</div>
+          <div class="eyebrow" id="topbar-publication">Tu newsletter</div>
           <div class="top-actions">
             <div class="range-control" id="range-control" aria-label="Periodo analizado">
               <button type="button" data-days="7">7D</button>
@@ -134,13 +141,12 @@
           <div class="view" data-view="resumen">
             <section class="growth-brief reveal" aria-labelledby="growth-brief-title">
               <div class="brief-copy">
-                <p class="brief-date" id="brief-period">Últimos 30 días</p>
                 <h1 id="growth-brief-title">Así está creciendo tu newsletter</h1>
                 <p id="growth-verdict">Sincroniza para preparar una lectura sencilla de tu crecimiento.</p>
               </div>
               <div class="brief-action">
-                <span>Lo más útil ahora</span>
                 <strong id="growth-action">Sigue publicando y vuelve después de la próxima edición.</strong>
+                <button class="action-button" id="growth-action-button" type="button" hidden>Ver detalle</button>
               </div>
             </section>
 
@@ -149,20 +155,28 @@
                 <div class="card-label"><span>Suscriptores</span><svg aria-hidden="true"><use href="#icon-arrow"></use></svg></div>
                 <p class="metric-value" id="metric-subscribers">—</p>
                 <p class="delta" id="delta-subscribers">—</p>
-                <div class="spark-bars" id="subscriber-bars" aria-hidden="true"></div>
+                <div class="metric-foot">
+                  <div class="spark-bars" id="subscriber-bars" aria-hidden="true"></div>
+                  <small id="subscriber-caption">Altas por día</small>
+                </div>
               </article>
               <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
-                <div class="card-label"><span>Lectores que abren</span><span class="metric-glyph">◒</span></div>
+                <div class="card-label"><span>Lectores que abren</span></div>
                 <p class="metric-value" id="metric-open-rate">—</p>
                 <p class="delta" id="delta-open-rate">—</p>
-                <div class="benchmark"><span id="open-progress"></span></div>
-                <small id="open-reference">—</small>
+                <div class="metric-foot">
+                  <div class="spark-bars" id="open-bars" aria-hidden="true"></div>
+                  <small id="open-reference">—</small>
+                </div>
               </article>
               <article class="metric-card reveal" data-goto="publicaciones" role="link" tabindex="0">
-                <div class="card-label"><span>Lectores que hacen clic</span><span class="metric-glyph">⇱</span></div>
+                <div class="card-label"><span>Lectores que hacen clic</span></div>
                 <p class="metric-value" id="metric-click-rate">—</p>
                 <p class="delta" id="delta-click-rate">—</p>
-                <div class="paid-note"><span id="click-basis">—</span></div>
+                <div class="metric-foot">
+                  <div class="spark-bars" id="click-bars" aria-hidden="true"></div>
+                  <small id="click-basis">—</small>
+                </div>
               </article>
               <article class="metric-card reveal metric-secondary" data-goto="publicaciones" role="link" tabindex="0">
                 <div class="card-label"><span>Vistas</span><span class="period-badge">30 días · fijo</span></div>
@@ -171,13 +185,13 @@
                 <div class="paid-note"><span>Lecturas en web y app que cuenta Substack</span></div>
               </article>
               <article class="metric-card reveal" data-goto="audiencia" data-sensitive="paid" role="link" tabindex="0" hidden>
-                <div class="card-label"><span>Suscriptores de pago</span><span class="metric-glyph">↗</span></div>
+                <div class="card-label"><span>Suscriptores de pago</span></div>
                 <p class="metric-value" id="metric-paid">—</p>
                 <p class="delta" id="delta-paid">—</p>
                 <div class="paid-note"><span id="paid-conversion">—</span> conversión total</div>
               </article>
               <article class="metric-card reveal" data-sensitive="revenue" hidden>
-                <div class="card-label"><span>Ingreso mensual</span><span class="metric-glyph">$</span></div>
+                <div class="card-label"><span>Ingreso mensual</span></div>
                 <p class="metric-value" id="metric-revenue">—</p>
                 <p class="delta" id="delta-revenue">—</p>
                 <div class="paid-note"><span>Estimado desde el ARR actual</span></div>
@@ -259,7 +273,7 @@
               <div class="audience-totals" id="audience-totals"></div>
               <div class="chart-wrap">
                 <svg id="audience-chart" viewBox="0 0 820 270" role="img" aria-label="Suscriptores acumulados por día"></svg>
-                <div class="chart-empty" id="audience-empty" hidden>Substack no devolvió fechas de alta para esta cuenta.</div>
+                <div class="chart-empty" id="audience-empty" hidden>Substack no devolvió fechas de alta para esta cuenta. Sincroniza de nuevo; si persiste, revisa Estado de los datos.</div>
               </div>
               <p class="panel-copy" id="audience-note" hidden></p>
             </section>
@@ -279,7 +293,7 @@
               </div>
               <div class="chart-wrap">
                 <svg id="followers-chart" viewBox="0 0 820 200" role="img" aria-label="Seguidores en el tiempo"></svg>
-                <div class="chart-empty" id="followers-empty" hidden>Substack no devolvió histórico de seguidores.</div>
+                <div class="chart-empty" id="followers-empty" hidden>Sin histórico de seguidores en este periodo. Prueba con un rango más amplio.</div>
               </div>
             </section>
 
@@ -305,9 +319,50 @@
               </article>
             </section>
 
+            <section class="panel chart-panel reveal" id="loyal-panel">
+              <div class="panel-header">
+                <div><h2>Tu núcleo fiel</h2><p class="panel-copy">Lectores con la máxima puntuación de actividad de Substack: 5 de 5.</p></div>
+                <span class="period-badge" id="loyal-change">—</span>
+              </div>
+              <div class="audience-totals" id="loyal-kpis"></div>
+              <p class="retention-label">Cómo se reparte tu lista por actividad</p>
+              <div class="engagement-bar loyal-bar" id="loyal-bar"></div>
+              <div class="engagement-legend loyal-legend" id="loyal-legend"></div>
+              <div class="chart-wrap loyal-chart-wrap">
+                <svg id="loyal-chart" viewBox="0 0 820 200" role="img" aria-label="Tamaño del núcleo fiel en cada sincronización"></svg>
+                <div class="chart-empty" id="loyal-empty" hidden>La evolución se construye con cada sincronización: vuelve en unos días.</div>
+              </div>
+              <p class="panel-copy" id="loyal-note" hidden></p>
+            </section>
+
+            <section class="panel reveal" id="cohorts-panel">
+              <div class="panel-header">
+                <div><h2>¿Siguen leyendo los que llegaron?</h2><p class="panel-copy">Por mes de alta: qué parte de quienes siguen suscritos lee con frecuencia y, cuando el histórico lo permite, cuántos siguen de los que llegaron.</p></div>
+              </div>
+              <div class="cohort-legend" aria-hidden="true"><span class="is-alta">Actividad alta</span><span class="is-baja">Actividad baja</span><span class="is-inactiva">Inactivos</span></div>
+              <div class="cohort-list" id="cohort-list"></div>
+              <p class="panel-copy" id="cohort-note" hidden></p>
+            </section>
+
           </div>
 
           <div class="view" data-view="crecimiento" hidden>
+            <section class="panel reveal" id="records-panel">
+              <div class="panel-header">
+                <div><h2>Tus récords</h2><p class="panel-copy">Lo mejor que has conseguido en <span id="records-period">el periodo</span>.</p></div>
+                <span class="period-badge" id="records-streak">—</span>
+              </div>
+              <div class="milestone" id="milestone">
+                <div class="milestone-head">
+                  <span>Próximo hito</span>
+                  <strong id="milestone-target">—</strong>
+                </div>
+                <div class="milestone-track" aria-hidden="true"><i id="milestone-progress"></i></div>
+                <p class="panel-copy" id="milestone-copy">Sincroniza para calcular tu próximo hito.</p>
+              </div>
+              <div class="records-grid" id="records-grid"></div>
+            </section>
+
             <section class="panel chart-panel reveal" id="traffic-panel">
               <div class="panel-header">
                 <div><h2>Visitas</h2><div class="chart-legend"><span></span>Visitas por día</div></div>
@@ -315,7 +370,7 @@
               </div>
               <div class="chart-wrap">
                 <svg id="traffic-chart" viewBox="0 0 820 200" role="img" aria-label="Visitas por día"></svg>
-                <div class="chart-empty" id="traffic-empty" hidden>Substack no devolvió visitas para este periodo.</div>
+                <div class="chart-empty" id="traffic-empty" hidden>Sin visitas registradas en este periodo. Prueba con un rango más amplio.</div>
               </div>
               <div class="audience-totals" id="traffic-kpis"></div>
               <div class="table-wrap">
@@ -345,13 +400,13 @@
                 <span class="period-badge" id="acquisition-period">—</span>
               </div>
               <div class="audience-totals">
-                <div><span>Altas atribuidas</span><strong id="acquisition-total">—</strong></div>
+                <div><span>Altas por fuente</span><strong id="acquisition-total">—</strong></div>
                 <div><span>Visitas</span><strong id="acquisition-visitors">—</strong></div>
                 <div><span>Conversión visita → alta</span><strong id="acquisition-conversion">—</strong></div>
               </div>
               <p class="panel-copy" id="acquisition-leader">Esperando fuentes de crecimiento…</p>
               <div class="table-wrap">
-                <table>
+                <table class="sources-table">
                   <thead><tr><th>Fuente</th><th>Visitas</th><th>Altas</th><th>Conversión</th><th>Tendencia</th></tr></thead>
                   <tbody id="sources-body"></tbody>
                 </table>
@@ -512,10 +567,11 @@
                 <div><span>Aperturas únicas</span><strong id="posts-opened">—</strong></div>
                 <div><span>Clics únicos</span><strong id="posts-clicked">—</strong></div>
                 <div><span>Altas atribuidas</span><strong id="posts-signups">—</strong></div>
-                <div><span>Detalle API</span><strong id="posts-detail">—</strong></div>
+                <div><span>Con detalle</span><strong id="posts-detail">—</strong></div>
               </div>
               <div class="table-wrap">
-                <table>
+                <table class="posts-data-table">
+                  <colgroup><col class="posts-col-title"><col class="posts-col-date"><col span="10" class="posts-col-metric"></colgroup>
                   <thead><tr id="campaigns-head"></tr></thead>
                   <tbody id="campaigns-body"></tbody>
                 </table>
@@ -544,7 +600,7 @@
 
             <section class="panel reveal" id="diagnosis-panel">
               <div class="panel-header">
-                <div><h2>Diagnóstico asunto / contenido</h2><p class="panel-copy">La apertura mide el asunto; el CTOR mide el cuerpo. El umbral es tu propia mediana en cada eje.</p></div>
+                <div><h2>Diagnóstico asunto / contenido</h2><p class="panel-copy">La apertura mide el asunto; el CTOR (clics de quienes abren) mide el contenido. La línea que separa cada eje es tu propia mediana.</p></div>
                 <span class="period-badge" id="diagnosis-medians">—</span>
               </div>
               <div class="quadrant-grid" id="diagnosis-grid"></div>
@@ -562,6 +618,75 @@
               <article class="panel list-panel" id="posts-by-length">
                 <div class="panel-header"><div><h2>Rendimiento por longitud</h2></div></div>
                 <div class="source-list" id="posts-length-list"></div>
+              </article>
+            </section>
+          </div>
+
+          <div class="view" data-view="postal" hidden>
+            <section class="postal-stage" aria-labelledby="postal-title">
+              <div class="postal-intro">
+                <h2 id="postal-title">Tu postal</h2>
+                <p class="panel-copy">Tu newsletter en una imagen para compartir. Usa el periodo que elijas arriba y nunca incluye suscriptores de pago ni ingresos.</p>
+                <div class="postal-actions">
+                  <button class="action-button" id="postal-download" type="button">Descargar imagen</button>
+                  <button class="icon-button postal-copy" id="postal-copy" type="button" aria-label="Copiar imagen al portapapeles" title="Copiar imagen">
+                    <svg aria-hidden="true"><use href="#icon-copy"></use></svg>
+                  </button>
+                </div>
+                <p class="postal-size" id="postal-size">1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X.</p>
+
+                <div class="postal-config" aria-label="Personaliza la postal">
+                  <div class="postal-option">
+                    <span class="field-label" id="postal-format-label">Formato</span>
+                    <div class="postal-segment" role="group" aria-labelledby="postal-format-label">
+                      <button type="button" data-postal-format="portrait" aria-pressed="true">Vertical</button>
+                      <button type="button" data-postal-format="square" aria-pressed="false">Cuadrado</button>
+                    </div>
+                  </div>
+                  <div class="postal-option">
+                    <span class="field-label" id="postal-theme-label">Color</span>
+                    <div class="postal-swatches" role="group" aria-labelledby="postal-theme-label">
+                      <button type="button" class="is-ink" data-postal-theme="ink" aria-pressed="true" aria-label="Tinta" title="Tinta"></button>
+                      <button type="button" class="is-light" data-postal-theme="light" aria-pressed="false" aria-label="Claro" title="Claro"></button>
+                      <button type="button" class="is-indigo" data-postal-theme="indigo" aria-pressed="false" aria-label="Índigo" title="Índigo"></button>
+                    </div>
+                  </div>
+                  <div class="postal-option">
+                    <span class="field-label">Mostrar</span>
+                    <label class="postal-check"><input type="checkbox" data-postal-show="tiles" checked /> Cifras del periodo</label>
+                    <label class="postal-check"><input type="checkbox" data-postal-show="record" checked /> Mejor semana</label>
+                    <label class="postal-check"><input type="checkbox" data-postal-show="milestone" checked /> Próximo hito</label>
+                    <label class="postal-check"><input type="checkbox" data-postal-show="author" checked /> Autor</label>
+                  </div>
+                </div>
+              </div>
+
+              <article class="postal" id="postal-card" aria-label="Postal de tu newsletter">
+                <header class="postal-head">
+                  <span class="postal-logo" aria-hidden="true"><b id="postal-logo-initial">P</b><img id="postal-logo" alt="" hidden /></span>
+                  <div>
+                    <p class="postal-period" id="postal-period">—</p>
+                    <h3 class="postal-name" id="postal-name">Tu newsletter</h3>
+                  </div>
+                </header>
+                <div class="postal-hero">
+                  <strong id="postal-subscribers">—</strong>
+                  <span>suscriptores</span>
+                  <p id="postal-growth">—</p>
+                </div>
+                <div class="postal-tiles" id="postal-tiles"></div>
+                <p class="postal-record" id="postal-record" hidden></p>
+                <div class="postal-milestone" id="postal-milestone" hidden>
+                  <div><span>Próximo hito</span><strong id="postal-milestone-target">—</strong></div>
+                  <div class="postal-track" aria-hidden="true"><i id="postal-milestone-progress"></i></div>
+                </div>
+                <footer class="postal-foot">
+                  <span class="postal-author">
+                    <span class="postal-avatar" aria-hidden="true"><b id="postal-avatar-initial">·</b><img id="postal-avatar" alt="" hidden /></span>
+                    <span id="postal-author">—</span>
+                  </span>
+                  <span class="postal-credit">Hecho con PlotStack</span>
+                </footer>
               </article>
             </section>
           </div>
@@ -598,6 +723,9 @@
       <symbol id="icon-camera" viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></symbol>
       <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
       <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></symbol>
+      <symbol id="icon-card" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+      <symbol id="icon-next" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
       <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="m7 17 10-10M7 7h10v10"/></symbol>
       <symbol id="icon-exit" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></symbol>
       <symbol id="icon-note" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 9h8M8 13h5"/></symbol>

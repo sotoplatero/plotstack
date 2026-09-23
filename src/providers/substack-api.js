@@ -135,13 +135,19 @@ const asNumber = (...values) => {
 
 export async function getProfile() {
   const profile = await requestJson(`${API_ROOT}/user/profile/self`);
+  // Nombre y foto del propio autor, para la postal. Es el perfil de quien usa
+  // la extensión, no el de ningún suscriptor. Alias por si el campo cambia.
+  const authorName = text(profile.name, profile.handle) || "Creador";
+  const authorPhotoUrl = text(profile.photo_url, profile.photoUrl, profile.profile_photo_url);
   const publications = (profile.publicationUsers || [])
     .filter((entry) => entry?.publication?.subdomain)
     .map((entry) => ({
       id: entry.publication.id,
       name: entry.publication.name || entry.publication.subdomain,
       subdomain: entry.publication.subdomain,
-      logoUrl: entry.publication.logo_url || "",
+      logoUrl: text(entry.publication.logo_url, entry.publication.logoUrl),
+      authorName,
+      authorPhotoUrl,
       role: entry.role || "",
       primary: Boolean(entry.is_primary),
       userId: profile.id,

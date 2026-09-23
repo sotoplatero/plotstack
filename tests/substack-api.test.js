@@ -20,7 +20,8 @@ test("getProfile uses browser credentials and returns administered publications"
     return jsonResponse({
       id: 7,
       name: "Ada",
-      publicationUsers: [{ role: "admin", is_primary: true, publication: { id: 4, name: "Carta", subdomain: "carta" } }],
+      photo_url: "https://substack-post-media.s3.amazonaws.com/public/images/ada.jpg",
+      publicationUsers: [{ role: "admin", is_primary: true, publication: { id: 4, name: "Carta", subdomain: "carta", logo_url: "https://substackcdn.com/logo.png" } }],
     });
   };
   try {
@@ -28,6 +29,10 @@ test("getProfile uses browser credentials and returns administered publications"
     assert.equal(requestOptions.credentials, "include");
     assert.equal(result.publications[0].subdomain, "carta");
     assert.equal(result.publications[0].userId, 7);
+    // La postal lleva logo y autor: viajan con la publicación conectada.
+    assert.equal(result.publications[0].logoUrl, "https://substackcdn.com/logo.png");
+    assert.equal(result.publications[0].authorName, "Ada");
+    assert.equal(result.publications[0].authorPhotoUrl, "https://substack-post-media.s3.amazonaws.com/public/images/ada.jpg");
   } finally {
     globalThis.fetch = originalFetch;
   }

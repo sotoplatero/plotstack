@@ -1,47 +1,676 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-13T00:00:00-04:00",
+  "generatedAt": "2026-09-23T16:13:15.012Z",
   "title": "Design System: PlotStack",
   "extensions": {
     "colorMeta": {
-      "warm-lime": { "role": "primary", "displayName": "Verde lima cálido", "canonical": "#92ad28", "tonalRamp": ["#222b08", "#3d4d0d", "#627b0f", "#92ad28", "#afca3b", "#cbe75d", "#e1ef9d", "#f5f9dd"] },
-      "paper-ground": { "role": "neutral", "displayName": "Papel de archivo", "canonical": "#f2ede1", "tonalRamp": ["#28251f", "#4f493e", "#766e5f", "#9e9583", "#c2b9a8", "#ded6c8", "#f2ede1", "#fdfbf6"] }
+      "grouped-gray": {
+        "role": "neutral",
+        "displayName": "Gris agrupado",
+        "canonical": "#f2f2f7",
+        "tonalRamp": [
+          "oklch(0.15 0.005 286)",
+          "oklch(0.27 0.005 286)",
+          "oklch(0.39 0.005 286)",
+          "oklch(0.51 0.005 286)",
+          "oklch(0.63 0.005 286)",
+          "oklch(0.75 0.005 286)",
+          "oklch(0.87 0.005 286)",
+          "oklch(0.95 0.005 286)"
+        ]
+      },
+      "grouped-gray-deep": {
+        "role": "neutral",
+        "displayName": "Gris agrupado hondo",
+        "canonical": "#e9e9ef",
+        "tonalRamp": [
+          "oklch(0.15 0.007 286)",
+          "oklch(0.27 0.007 286)",
+          "oklch(0.39 0.007 286)",
+          "oklch(0.51 0.007 286)",
+          "oklch(0.63 0.007 286)",
+          "oklch(0.75 0.007 286)",
+          "oklch(0.87 0.007 286)",
+          "oklch(0.95 0.007 286)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Superficie blanca",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.27 0 0)",
+          "oklch(0.39 0 0)",
+          "oklch(0.51 0 0)",
+          "oklch(0.63 0 0)",
+          "oklch(0.75 0 0)",
+          "oklch(0.87 0 0)",
+          "oklch(0.95 0 0)"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Tinta de acción",
+        "canonical": "#1c1c1e",
+        "tonalRamp": [
+          "oklch(0.15 0.004 286)",
+          "oklch(0.27 0.004 286)",
+          "oklch(0.39 0.004 286)",
+          "oklch(0.51 0.004 286)",
+          "oklch(0.63 0.004 286)",
+          "oklch(0.75 0.004 286)",
+          "oklch(0.87 0.004 286)",
+          "oklch(0.95 0.004 286)"
+        ]
+      },
+      "muted-ink": {
+        "role": "neutral",
+        "displayName": "Tinta atenuada",
+        "canonical": "#6c6c70",
+        "tonalRamp": [
+          "oklch(0.15 0.007 286)",
+          "oklch(0.27 0.007 286)",
+          "oklch(0.39 0.007 286)",
+          "oklch(0.51 0.007 286)",
+          "oklch(0.63 0.007 286)",
+          "oklch(0.75 0.007 286)",
+          "oklch(0.87 0.007 286)",
+          "oklch(0.95 0.007 286)"
+        ]
+      },
+      "separator": {
+        "role": "neutral",
+        "displayName": "Separador",
+        "canonical": "rgba(60, 60, 67, 0.12)"
+      },
+      "track-fill": {
+        "role": "neutral",
+        "displayName": "Relleno de carril",
+        "canonical": "rgba(118, 118, 128, 0.12)"
+      },
+      "subs-indigo": {
+        "role": "secondary",
+        "displayName": "Índigo de suscriptores",
+        "canonical": "#5856d6",
+        "tonalRamp": [
+          "oklch(0.15 0.19 283)",
+          "oklch(0.27 0.19 283)",
+          "oklch(0.39 0.19 283)",
+          "oklch(0.51 0.19 283)",
+          "oklch(0.63 0.19 283)",
+          "oklch(0.75 0.19 283)",
+          "oklch(0.87 0.19 283)",
+          "oklch(0.95 0.19 283)"
+        ]
+      },
+      "subs-indigo-text": {
+        "role": "secondary",
+        "displayName": "Índigo de suscriptores (texto)",
+        "canonical": "#4a48c4"
+      },
+      "open-orange": {
+        "role": "secondary",
+        "displayName": "Naranja de apertura",
+        "canonical": "#ff9500",
+        "tonalRamp": [
+          "oklch(0.15 0.17 63)",
+          "oklch(0.27 0.17 63)",
+          "oklch(0.39 0.17 63)",
+          "oklch(0.51 0.17 63)",
+          "oklch(0.63 0.17 63)",
+          "oklch(0.75 0.17 63)",
+          "oklch(0.87 0.17 63)",
+          "oklch(0.95 0.17 63)"
+        ]
+      },
+      "open-orange-text": {
+        "role": "secondary",
+        "displayName": "Naranja de apertura (texto)",
+        "canonical": "#b35900"
+      },
+      "click-blue": {
+        "role": "secondary",
+        "displayName": "Azul de clics",
+        "canonical": "#007aff",
+        "tonalRamp": [
+          "oklch(0.15 0.21 256)",
+          "oklch(0.27 0.21 256)",
+          "oklch(0.39 0.21 256)",
+          "oklch(0.51 0.21 256)",
+          "oklch(0.63 0.21 256)",
+          "oklch(0.75 0.21 256)",
+          "oklch(0.87 0.21 256)",
+          "oklch(0.95 0.21 256)"
+        ]
+      },
+      "click-blue-text": {
+        "role": "secondary",
+        "displayName": "Azul de clics (texto)",
+        "canonical": "#0062cc"
+      },
+      "notes-green": {
+        "role": "secondary",
+        "displayName": "Verde de notas",
+        "canonical": "#34c759",
+        "tonalRamp": [
+          "oklch(0.15 0.19 147)",
+          "oklch(0.27 0.19 147)",
+          "oklch(0.39 0.19 147)",
+          "oklch(0.51 0.19 147)",
+          "oklch(0.63 0.19 147)",
+          "oklch(0.75 0.19 147)",
+          "oklch(0.87 0.19 147)",
+          "oklch(0.95 0.19 147)"
+        ]
+      },
+      "notes-green-text": {
+        "role": "secondary",
+        "displayName": "Verde de notas (texto)",
+        "canonical": "#1f7a36"
+      },
+      "views-purple": {
+        "role": "secondary",
+        "displayName": "Morado de visitas",
+        "canonical": "#af52de",
+        "tonalRamp": [
+          "oklch(0.15 0.2 312)",
+          "oklch(0.27 0.2 312)",
+          "oklch(0.39 0.2 312)",
+          "oklch(0.51 0.2 312)",
+          "oklch(0.63 0.2 312)",
+          "oklch(0.75 0.2 312)",
+          "oklch(0.87 0.2 312)",
+          "oklch(0.95 0.2 312)"
+        ]
+      },
+      "views-purple-text": {
+        "role": "secondary",
+        "displayName": "Morado de visitas (texto)",
+        "canonical": "#8a3cb3"
+      },
+      "followers-pink": {
+        "role": "secondary",
+        "displayName": "Rosa de seguidores",
+        "canonical": "#ff2d55",
+        "tonalRamp": [
+          "oklch(0.15 0.24 15)",
+          "oklch(0.27 0.24 15)",
+          "oklch(0.39 0.24 15)",
+          "oklch(0.51 0.24 15)",
+          "oklch(0.63 0.24 15)",
+          "oklch(0.75 0.24 15)",
+          "oklch(0.87 0.24 15)",
+          "oklch(0.95 0.24 15)"
+        ]
+      },
+      "followers-pink-text": {
+        "role": "secondary",
+        "displayName": "Rosa de seguidores (texto)",
+        "canonical": "#c9143a"
+      },
+      "loss-red": {
+        "role": "secondary",
+        "displayName": "Rojo de bajas",
+        "canonical": "#ff3b30",
+        "tonalRamp": [
+          "oklch(0.15 0.23 29)",
+          "oklch(0.27 0.23 29)",
+          "oklch(0.39 0.23 29)",
+          "oklch(0.51 0.23 29)",
+          "oklch(0.63 0.23 29)",
+          "oklch(0.75 0.23 29)",
+          "oklch(0.87 0.23 29)",
+          "oklch(0.95 0.23 29)"
+        ]
+      },
+      "level-1": {
+        "role": "neutral",
+        "displayName": "Nivel 1 (lleno)",
+        "canonical": "#1c1c1e",
+        "tonalRamp": [
+          "oklch(0.15 0.004 286)",
+          "oklch(0.27 0.004 286)",
+          "oklch(0.39 0.004 286)",
+          "oklch(0.51 0.004 286)",
+          "oklch(0.63 0.004 286)",
+          "oklch(0.75 0.004 286)",
+          "oklch(0.87 0.004 286)",
+          "oklch(0.95 0.004 286)"
+        ]
+      },
+      "level-2": {
+        "role": "neutral",
+        "displayName": "Nivel 2 (medio)",
+        "canonical": "#8e8e93",
+        "tonalRamp": [
+          "oklch(0.15 0.01 286)",
+          "oklch(0.27 0.01 286)",
+          "oklch(0.39 0.01 286)",
+          "oklch(0.51 0.01 286)",
+          "oklch(0.63 0.01 286)",
+          "oklch(0.75 0.01 286)",
+          "oklch(0.87 0.01 286)",
+          "oklch(0.95 0.01 286)"
+        ]
+      },
+      "level-3": {
+        "role": "neutral",
+        "displayName": "Nivel 3 (claro)",
+        "canonical": "#d1d1d6",
+        "tonalRamp": [
+          "oklch(0.15 0.006 286)",
+          "oklch(0.27 0.006 286)",
+          "oklch(0.39 0.006 286)",
+          "oklch(0.51 0.006 286)",
+          "oklch(0.63 0.006 286)",
+          "oklch(0.75 0.006 286)",
+          "oklch(0.87 0.006 286)",
+          "oklch(0.95 0.006 286)"
+        ]
+      },
+      "danger-text": {
+        "role": "neutral",
+        "displayName": "Peligro",
+        "canonical": "#d70015"
+      },
+      "positive-text": {
+        "role": "neutral",
+        "displayName": "Positivo",
+        "canonical": "#248a3d"
+      },
+      "neutral-gray": {
+        "role": "neutral",
+        "displayName": "Gris neutro",
+        "canonical": "#aeaeb2",
+        "tonalRamp": [
+          "oklch(0.15 0.007 286)",
+          "oklch(0.27 0.007 286)",
+          "oklch(0.39 0.007 286)",
+          "oklch(0.51 0.007 286)",
+          "oklch(0.63 0.007 286)",
+          "oklch(0.75 0.007 286)",
+          "oklch(0.87 0.007 286)",
+          "oklch(0.95 0.007 286)"
+        ]
+      },
+      "channel-notes": {
+        "role": "tertiary",
+        "displayName": "Canal Notas (= métrica Notas)",
+        "canonical": "#34c759"
+      },
+      "channel-recs": {
+        "role": "tertiary",
+        "displayName": "Canal Recomendaciones",
+        "canonical": "oklch(0.68 0.11 185)",
+        "tonalRamp": [
+          "oklch(0.15 0.11 185)",
+          "oklch(0.27 0.11 185)",
+          "oklch(0.39 0.11 185)",
+          "oklch(0.51 0.11 185)",
+          "oklch(0.63 0.11 185)",
+          "oklch(0.75 0.11 185)",
+          "oklch(0.87 0.11 185)",
+          "oklch(0.95 0.11 185)"
+        ]
+      },
+      "channel-substack": {
+        "role": "tertiary",
+        "displayName": "Canal Red de Substack",
+        "canonical": "oklch(0.76 0.14 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.14 90)",
+          "oklch(0.27 0.14 90)",
+          "oklch(0.39 0.14 90)",
+          "oklch(0.51 0.14 90)",
+          "oklch(0.63 0.14 90)",
+          "oklch(0.75 0.14 90)",
+          "oklch(0.87 0.14 90)",
+          "oklch(0.95 0.14 90)"
+        ]
+      },
+      "channel-email": {
+        "role": "tertiary",
+        "displayName": "Canal Email",
+        "canonical": "oklch(0.58 0.09 220)",
+        "tonalRamp": [
+          "oklch(0.15 0.09 220)",
+          "oklch(0.27 0.09 220)",
+          "oklch(0.39 0.09 220)",
+          "oklch(0.51 0.09 220)",
+          "oklch(0.63 0.09 220)",
+          "oklch(0.75 0.09 220)",
+          "oklch(0.87 0.09 220)",
+          "oklch(0.95 0.09 220)"
+        ]
+      },
+      "channel-social": {
+        "role": "tertiary",
+        "displayName": "Canal Social",
+        "canonical": "oklch(0.44 0.12 355)",
+        "tonalRamp": [
+          "oklch(0.15 0.12 355)",
+          "oklch(0.27 0.12 355)",
+          "oklch(0.39 0.12 355)",
+          "oklch(0.51 0.12 355)",
+          "oklch(0.63 0.12 355)",
+          "oklch(0.75 0.12 355)",
+          "oklch(0.87 0.12 355)",
+          "oklch(0.95 0.12 355)"
+        ]
+      },
+      "channel-search": {
+        "role": "tertiary",
+        "displayName": "Canal Búsqueda",
+        "canonical": "oklch(0.52 0.02 260)",
+        "tonalRamp": [
+          "oklch(0.15 0.02 260)",
+          "oklch(0.27 0.02 260)",
+          "oklch(0.39 0.02 260)",
+          "oklch(0.51 0.02 260)",
+          "oklch(0.63 0.02 260)",
+          "oklch(0.75 0.02 260)",
+          "oklch(0.87 0.02 260)",
+          "oklch(0.95 0.02 260)"
+        ]
+      },
+      "channel-direct": {
+        "role": "tertiary",
+        "displayName": "Canal Directo",
+        "canonical": "oklch(0.50 0.05 55)",
+        "tonalRamp": [
+          "oklch(0.15 0.05 55)",
+          "oklch(0.27 0.05 55)",
+          "oklch(0.39 0.05 55)",
+          "oklch(0.51 0.05 55)",
+          "oklch(0.63 0.05 55)",
+          "oklch(0.75 0.05 55)",
+          "oklch(0.87 0.05 55)",
+          "oklch(0.95 0.05 55)"
+        ]
+      },
+      "channel-other": {
+        "role": "tertiary",
+        "displayName": "Canal Otros",
+        "canonical": "oklch(0.74 0 0)",
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.27 0 0)",
+          "oklch(0.39 0 0)",
+          "oklch(0.51 0 0)",
+          "oklch(0.63 0 0)",
+          "oklch(0.75 0 0)",
+          "oklch(0.87 0 0)",
+          "oklch(0.95 0 0)"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Voz editorial", "purpose": "Conclusiones y encabezados." },
-      "body": { "displayName": "Lectura funcional", "purpose": "Controles, etiquetas y explicaciones." }
+      "display": {
+        "displayName": "Veredicto",
+        "purpose": "El veredicto del Resumen y los titulares del onboarding; una vez por pantalla."
+      },
+      "headline": {
+        "displayName": "Titular de vista",
+        "purpose": "Título del primer panel de cada vista secundaria (26px en móvil)."
+      },
+      "title": {
+        "displayName": "Título de panel",
+        "purpose": "Los demás títulos de panel."
+      },
+      "data": {
+        "displayName": "Cifra",
+        "purpose": "Cifra de las tarjetas de métrica; el resto de cifras usa 36/24/18px con el mismo peso y numerales tabulares."
+      },
+      "dek": {
+        "displayName": "Explicación",
+        "purpose": "Lenguaje llano bajo cada título, máx. 64ch, tinta atenuada."
+      },
+      "label": {
+        "displayName": "Etiqueta",
+        "purpose": "Nombres de campo y columna, caja de frase; 700 14px en el color de la métrica en las tarjetas."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Fechas, leyendas, insignias y pies; los ejes bajan a 10px, el suelo del sistema."
+      }
     },
-    "shadows": [],
-    "motion": [{ "name": "state", "value": "180ms ease-out", "purpose": "Cambios de estado breves; el contenido permanece visible por defecto." }],
-    "breakpoints": [{ "name": "compact", "value": "760px" }, { "name": "single-column", "value": "960px" }]
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 12px 40px rgba(0, 0, 0, .14)",
+        "purpose": "Solo menús flotantes (captura, privacidad). Nunca tarjetas."
+      },
+      {
+        "name": "status-halo",
+        "value": "0 0 0 4px rgba(28, 28, 30, .08)",
+        "purpose": "Punto de conexión activa en la barra lateral."
+      },
+      {
+        "name": "hollow-ring",
+        "value": "inset 0 0 0 1.5px var(--level-2)",
+        "purpose": "Punto de estado no disponible en Cobertura."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state",
+        "value": "180–200ms ease",
+        "purpose": "Cambios de fondo y color en hover y estados activos."
+      },
+      {
+        "name": "spin",
+        "value": "is-loading",
+        "purpose": "Único indicador de sincronización: el icono gira, el botón no cambia de ancho."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Anula animaciones y transiciones."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "notes-stack",
+        "value": "1180px"
+      },
+      {
+        "name": "two-column",
+        "value": "1050px"
+      },
+      {
+        "name": "single-column",
+        "value": "960px"
+      },
+      {
+        "name": "interaction-stack",
+        "value": "850px"
+      },
+      {
+        "name": "compact",
+        "value": "760px"
+      },
+      {
+        "name": "narrow",
+        "value": "560px"
+      }
+    ],
+    "fonts": [
+      {
+        "family": "Geist",
+        "source": "assets/fonts/Geist-Variable.woff2",
+        "license": "OFL (assets/fonts/Geist-LICENSE.txt)",
+        "weights": "100 900",
+        "display": "swap",
+        "purpose": "Única familia: cifras y títulos en negrita, texto en 400–600. La captura PNG la incrusta como data URL."
+      }
+    ]
   },
   "components": [
     {
-      "name": "Primary Button",
+      "name": "Botón Sincronizar",
       "kind": "button",
-      "refersTo": "button-primary",
-      "description": "Acción principal directa.",
-      "html": "<button class=\"ds-primary\">Sincronizar</button>",
-      "css": ".ds-primary{background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent);border-radius:2px;padding:12px 18px;font-weight:800}.ds-primary:hover{filter:brightness(.94)}.ds-primary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}"
+      "refersTo": "button-sync",
+      "description": "Acción principal de la topbar: cápsula índigo llena.",
+      "html": "<button class=\"ds-btn-sync\" type=\"button\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" aria-hidden=\"true\"><path d=\"M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>Sincronizar</span></button>",
+      "css": ".ds-btn-sync{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;background:var(--accent,#1c1c1e);color:#fff;font:600 13px var(--sans,system-ui);padding:10px 16px;cursor:pointer;transition:background .18s}.ds-btn-sync:hover{background:color-mix(in srgb,var(--accent,#1c1c1e) 88%,#000)}.ds-btn-sync:focus-visible{outline:2px solid var(--accent,#1c1c1e);outline-offset:3px}"
     },
     {
-      "name": "Editorial Panel",
+      "name": "Botón de acción",
+      "kind": "button",
+      "refersTo": "button-action",
+      "description": "La acción de la tarjeta de recomendación del Resumen.",
+      "html": "<button class=\"ds-btn-action\" type=\"button\">Ver detalle</button>",
+      "css": ".ds-btn-action{border:0;border-radius:999px;background:var(--accent,#1c1c1e);color:#fff;font:600 13px var(--sans,system-ui);padding:9px 16px;cursor:pointer;transition:background .18s}.ds-btn-action:hover{background:color-mix(in srgb,var(--accent,#1c1c1e) 88%,#000)}.ds-btn-action:focus-visible{outline:2px solid var(--accent,#1c1c1e);outline-offset:3px}"
+    },
+    {
+      "name": "Botón de icono",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "Cámara y privacidad: cápsula blanca con tinta.",
+      "html": "<button class=\"ds-btn-icon\" type=\"button\" aria-label=\"Capturar\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M4 8h3l2-3h6l2 3h3v11H4z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/><circle cx=\"12\" cy=\"13\" r=\"3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg></button>",
+      "css": ".ds-btn-icon{display:inline-grid;place-items:center;width:39px;height:39px;border:0;border-radius:999px;background:#fff;color:#1c1c1e;cursor:pointer;transition:background .18s}.ds-btn-icon:hover{background:#e9e9ef}.ds-btn-icon:focus-visible{outline:2px solid #1c1c1e;outline-offset:3px}"
+    },
+    {
+      "name": "Selector de rango",
+      "kind": "chip",
+      "refersTo": "range-control",
+      "description": "Cápsula de relleno gris; la opción activa se invierte en tinta llena.",
+      "html": "<div class=\"ds-range\" role=\"group\" aria-label=\"Periodo\"><button type=\"button\">7 días</button><button type=\"button\" class=\"is-active\" aria-pressed=\"true\">30 días</button><button type=\"button\">90 días</button><button type=\"button\">Todo</button></div>",
+      "css": ".ds-range{display:inline-flex;gap:2px;background:rgba(118,118,128,.12);border-radius:999px;padding:3px}.ds-range button{border:0;background:transparent;border-radius:999px;color:#1c1c1e;font:600 12px var(--sans,system-ui);padding:7px 14px;cursor:pointer;transition:background .18s,color .18s}.ds-range button:hover{background:rgba(60,60,67,.06)}.ds-range button.is-active{background:#1c1c1e;color:#fff}.ds-range button:focus-visible{outline:2px solid #1c1c1e;outline-offset:2px}"
+    },
+    {
+      "name": "Navegación lateral",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Elementos atenuados; el activo es un bloque de tinta con texto blanco.",
+      "html": "<nav class=\"ds-nav\"><button type=\"button\" class=\"is-active\">Resumen</button><button type=\"button\">Audiencia</button><button type=\"button\">Crecimiento</button><button type=\"button\">Notas</button></nav>",
+      "css": ".ds-nav{display:grid;gap:4px;width:200px;background:#f2f2f7;padding:12px}.ds-nav button{border:0;background:transparent;text-align:left;border-radius:10px;color:#6c6c70;font:500 14px var(--sans,system-ui);padding:10px 12px;cursor:pointer;transition:background .2s,color .2s}.ds-nav button:hover{background:rgba(60,60,67,.06);color:#1c1c1e}.ds-nav button.is-active{background:#1c1c1e;color:#fff}.ds-nav button:focus-visible{outline:2px solid #1c1c1e;outline-offset:3px}"
+    },
+    {
+      "name": "Insignia de periodo",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Cápsula gris con meta atenuada.",
+      "html": "<span class=\"ds-badge\">Últimos 30 días</span>",
+      "css": ".ds-badge{display:inline-block;border-radius:999px;background:#f2f2f7;color:#6c6c70;font:500 12px var(--sans,system-ui);padding:6px 12px}"
+    },
+    {
+      "name": "Tarjeta de métrica",
       "kind": "card",
-      "refersTo": "panel",
-      "description": "Superficie plana para evidencia.",
-      "html": "<section class=\"ds-panel\"><h2>Crecimiento</h2><p>La evidencia que sostiene la lectura.</p></section>",
-      "css": ".ds-panel{background:var(--panel);color:var(--paper);border:1px solid var(--line);border-radius:0;padding:27px}.ds-panel h2{font-family:var(--serif);font-weight:400}.ds-panel:focus-within{outline:2px solid var(--accent);outline-offset:2px}"
+      "refersTo": "metric-card",
+      "description": "Firma del Resumen: nombre en el color de la métrica, cifra en negrita, delta y pie compartido con barras de la serie.",
+      "html": "<article class=\"ds-metric\" style=\"--series:#5856d6;--series-text:#4a48c4\"><div class=\"ds-metric-label\">Suscriptores</div><p class=\"ds-metric-value\">1.284</p><p class=\"ds-metric-delta\">+42 vs. hace 30 días</p><div class=\"ds-metric-foot\"><div class=\"ds-spark\"><i style=\"height:30%\"></i><i style=\"height:45%\"></i><i style=\"height:35%\"></i><i style=\"height:60%\"></i><i style=\"height:50%\"></i><i style=\"height:80%\"></i><i style=\"height:100%\"></i></div><small>Altas por día</small></div></article>",
+      "css": ".ds-metric{display:flex;flex-direction:column;background:#fff;border-radius:16px;padding:20px 22px;min-height:170px;width:260px;color:#1c1c1e}.ds-metric-label{color:var(--series-text);font:700 14px var(--sans,system-ui)}.ds-metric-label::before{content:\"\";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--series);margin-right:8px;vertical-align:1px}.ds-metric-value{margin:10px 0 4px;font:700 40px/1 var(--display,system-ui);letter-spacing:-.02em;font-variant-numeric:lining-nums tabular-nums}.ds-metric-delta{margin:0;color:#248a3d;font:500 13px var(--sans,system-ui)}.ds-metric-foot{margin-top:auto;padding-top:16px;display:grid;gap:8px}.ds-spark{display:flex;align-items:end;gap:2px;height:32px}.ds-spark i{flex:1;background:color-mix(in srgb,var(--series) 26%,transparent);border-radius:3px 3px 1px 1px}.ds-spark i:last-child{background:var(--series)}.ds-metric-foot small{font:600 12px/1.3 var(--sans,system-ui);color:#6c6c70}"
+    },
+    {
+      "name": "Rejilla KPI",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Celdas blancas separadas por huecos de 2px del gris agrupado, sin reglas.",
+      "html": "<div class=\"ds-kpis\"><div><span>Altas</span><strong>312</strong></div><div><span>Bajas</span><strong>41</strong></div><div><span>Neto</span><strong>271</strong></div></div>",
+      "css": ".ds-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:#f2f2f7;border-radius:16px;overflow:hidden;width:420px}.ds-kpis div{background:#fff;padding:16px}.ds-kpis span{display:block;font:600 12px/1.3 var(--sans,system-ui);color:#6c6c70}.ds-kpis strong{display:block;margin-top:6px;font:700 24px/1 var(--display,system-ui);letter-spacing:-.02em;color:#1c1c1e;font-variant-numeric:lining-nums tabular-nums}"
+    },
+    {
+      "name": "Leyenda de canales",
+      "kind": "custom",
+      "refersTo": "channel-recs",
+      "description": "Cada canal con su color de la regla OKLCH; Notas comparte el verde de la métrica.",
+      "html": "<ul class=\"ds-channels\"><li><i style=\"background:#34c759\"></i>Notas</li><li><i style=\"background:oklch(0.68 0.11 185)\"></i>Recomendaciones</li><li><i style=\"background:oklch(0.76 0.14 90)\"></i>Red de Substack</li><li><i style=\"background:oklch(0.58 0.09 220)\"></i>Email</li><li><i style=\"background:oklch(0.44 0.12 355)\"></i>Social</li><li><i style=\"background:oklch(0.52 0.02 260)\"></i>Búsqueda</li><li><i style=\"background:oklch(0.50 0.05 55)\"></i>Directo</li><li><i style=\"background:oklch(0.74 0 0)\"></i>Otros</li></ul>",
+      "css": ".ds-channels{list-style:none;margin:0;padding:16px;display:grid;gap:10px;background:#fff;border-radius:16px;width:240px;font:500 14px var(--sans,system-ui);color:#1c1c1e}.ds-channels li{display:flex;align-items:center}.ds-channels i{width:8px;height:8px;border-radius:50%;margin-right:10px}"
+    },
+    {
+      "name": "Leyenda de barra apilada",
+      "kind": "custom",
+      "refersTo": "level-2",
+      "description": "Actividad de la lista: segmentos y puntos de leyenda con la escala neutra de niveles.",
+      "html": "<div class=\"ds-stack\"><div class=\"ds-stack-bar\"><i style=\"flex:5;background:#1c1c1e\"></i><i style=\"flex:3;background:#8e8e93\"></i><i style=\"flex:2;background:#d1d1d6\"></i></div><div class=\"ds-stack-legend\"><span><i style=\"background:#1c1c1e\"></i>Actividad alta <b>50 %</b></span><span><i style=\"background:#8e8e93\"></i>Actividad baja <b>30 %</b></span><span><i style=\"background:#d1d1d6\"></i>Inactivos <b>20 %</b></span></div></div>",
+      "css": ".ds-stack{background:#fff;border-radius:16px;padding:24px;width:420px;font-family:var(--sans,system-ui);color:#1c1c1e}.ds-stack-bar{display:flex;gap:2px;height:12px;border-radius:999px;overflow:hidden;background:#f2f2f7}.ds-stack-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font:500 12px var(--sans,system-ui);color:#6c6c70}.ds-stack-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.ds-stack-legend b{display:block;margin-top:4px;font:700 18px/1.1 var(--display,system-ui);color:#1c1c1e;font-variant-numeric:lining-nums tabular-nums}"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Aviso invertido: bloque de tinta con texto blanco.",
+      "html": "<div class=\"ds-toast\" role=\"status\">No se pudo sincronizar. Se conservan los datos anteriores.</div>",
+      "css": ".ds-toast{display:inline-block;border-radius:14px;background:#1c1c1e;color:#fff;font:500 14px/1.4 var(--sans,system-ui);padding:12px 16px}"
     }
   ],
   "narrative": {
-    "northStar": "La edición comentada",
-    "overview": "Una lectura editorial de los datos del autor: conclusión primero, evidencia después y detalle bajo demanda.",
-    "keyCharacteristics": ["Papel y tinta de alto contraste", "Verde musgo cálido", "Serif para conclusiones", "Reglas finas y superficies planas"],
-    "rules": [
-      { "name": "The Rubric Rule", "body": "El verde musgo señala dónde mirar o actuar; no colorea grandes superficies informativas.", "section": "colors" },
-      { "name": "The Meaning Rule", "body": "El verde comunica marca y avance; el rojo queda reservado para retrocesos y errores.", "section": "colors" }
+    "northStar": "El resumen de salud",
+    "overview": "PlotStack se lee como el resumen de salud personal de una newsletter, no como un periódico ni como un SaaS azul. Cada métrica tiene un color propio y lo conserva en toda la app: quien ve los suscriptores en índigo en el Resumen los encuentra en índigo en Audiencia, en la leyenda de un gráfico y en el punto de una lista. El color no decora; es la dirección de cada cifra.\n\nEl mundo es plano y agrupado. Superficies blancas de radio 16 descansan sobre un gris agrupado, sin borde ni sombra: el cambio de tono es lo único que separa. La tinta es casi negra, las cifras y los títulos van en Geist en negrita, y todas las etiquetas están en caja de frase. Los estados se invierten (el elemento activo es un bloque lleno de tinta con texto blanco), las acciones también van en tinta, y los controles son cápsulas.\n\nLa densidad es moderada: pocas cifras grandes arriba, detalle en paneles debajo. La primera pantalla del Resumen es un veredicto en negrita, tres tarjetas de métrica con su tono y su tendencia, y el gráfico de suscriptores en índigo; la acción vive en la tarjeta de recomendación.",
+    "keyCharacteristics": [
+      "Un solo tema claro; no hay conmutador de tema.",
+      "Un color fijo por métrica, con variante `-text` para texto sobre blanco.",
+      "Tarjetas blancas de radio 16 sin borde ni sombra sobre gris agrupado.",
+      "Estados activos invertidos y acciones en tinta: bloque de tinta, texto blanco.",
+      "Controles en cápsula: rango, sincronizar, acción, insignias.",
+      "Geist autoalojada en negrita para cifras y títulos; numerales tabulares.",
+      "Caja de frase en todas partes; ningún texto por debajo de 10px."
     ],
-    "dos": ["Comenzar cada vista principal con la pregunta que responde.", "Traducir tasas y fuentes a frases accionables.", "Plegar el detalle que no cambie una decisión inmediata."],
-    "donts": ["Llenar la primera pantalla con métricas de cobertura o diagnóstico.", "Usar color sin significado.", "Presentar correlación como recomendación con muestra insuficiente."]
+    "rules": [
+      {
+        "name": "The Un Color, Un Significado Rule",
+        "body": "Un tono de métrica solo significa esa métrica. Antes el email era el azul de los clics y la red de Substack el naranja de la apertura; se corrigió porque un mismo color decía dos cosas. Un color nuevo necesita un hueco de tono o una separación clara de luminosidad y croma.",
+        "section": "colors"
+      },
+      {
+        "name": "The Panel Declara Su Serie Rule",
+        "body": "El color de un gráfico no se escribe en el gráfico. Cada panel declara `--series` (y `--series-2` para la serie secundaria, `--series-text` para texto); líneas, puntos, barras, degradados, leyendas y pistas de lista lo leen de ahí, con el acento como respaldo.",
+        "section": "colors"
+      },
+      {
+        "name": "The Niveles en Neutro Rule",
+        "body": "Un nivel o un estado que no es una métrica (actividad alta/baja/inactiva, listo/pendiente/no disponible) se pinta con la escala neutra level-1/2/3, nunca con un tono de métrica. La palabra dice el estado; el punto lo repite.",
+        "section": "colors"
+      },
+      {
+        "name": "The Variante de Texto Rule",
+        "body": "Un tono pleno nunca escribe texto sobre blanco; para eso existe su variante `-text` (4,5:1).",
+        "section": "colors"
+      },
+      {
+        "name": "The Caja de Frase Rule",
+        "body": "Todo texto va en caja de frase, sin mayúsculas espaciadas. Las abreviaturas siguen siendo siglas.",
+        "section": "typography"
+      },
+      {
+        "name": "The Suelo de 10px Rule",
+        "body": "Ningún texto de la interfaz baja de 10px; 10px está reservado a etiquetas de eje.",
+        "section": "typography"
+      },
+      {
+        "name": "The Cifra Tabular Rule",
+        "body": "Toda cifra en tarjeta, rejilla, tabla, eje o pie usa `lining-nums tabular-nums`, incluso cuando un atajo `font` la reiniciaría.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tono Separa Rule",
+        "body": "Una superficie se distingue por su tono, no por un borde ni una sombra. Si dos zonas necesitan separarse, cambia el fondo o abre un hueco del gris.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** mantener el significado único de cada color: suscriptores índigo, apertura naranja, clics azul, notas verde, visitas morado, seguidores rosa, bajas rojo.",
+      "**Do** declarar el color en el panel (`--series`, `--series-2`, `--series-text`) y dejar que gráficos, barras, puntos y leyendas lo lean.",
+      "**Do** pintar acciones y estados activos en tinta, y niveles o estados que no son métricas con la escala level-1/2/3.",
+      "**Do** dar a cada elemento de una leyenda de barra apilada el punto del color de su segmento.",
+      "**Do** usar la variante `-text` de un tono para cualquier texto coloreado sobre blanco.",
+      "**Do** añadir un canal nuevo dentro de la regla OKLCH de canales: tono libre, o separación por luminosidad y croma si comparte zona con una métrica.",
+      "**Do** separar superficies por tono: tarjeta blanca de 16px sobre gris agrupado, rejillas KPI con huecos de 2px.",
+      "**Do** invertir el estado activo (bloque de tinta, texto blanco) y dar forma de cápsula a todo control.",
+      "**Do** escribir cifras en Geist negrita con numerales tabulares, y todo texto en caja de frase.",
+      "**Do** derivar sangrados de `--pad` (24px / 16px), y usar 16px dentro de un grupo y 32px entre grupos."
+    ],
+    "donts": [
+      "**Don't** reintroducir el papel crema, la serif display, las reglas editoriales finas entre secciones ni el grano del mundo anterior.",
+      "**Don't** usar etiquetas en mayúsculas con tracking.",
+      "**Don't** poner a la vez borde y sombra en una tarjeta; las tarjetas no llevan ninguno de los dos.",
+      "**Don't** reutilizar un tono de métrica para un estado, una acción o una categoría que no sea esa métrica; en particular, no vuelvas a usar el índigo como acento.",
+      "**Don't** cargar fuentes desde una red: la fuente viaja en `assets/fonts`.",
+      "**Don't** pintar texto con un tono pleno sobre blanco.",
+      "**Don't** bajar ningún texto de 10px.",
+      "**Don't** cambiar la geometría de la topbar para comunicar sincronización."
+    ]
   }
 }

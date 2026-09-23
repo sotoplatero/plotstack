@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   formatCompactNumber,
   formatPercent,
+  sourceLabel,
   getCampaignCuts,
   getCampaignSections,
   getConcentration,
@@ -10,6 +11,13 @@ import {
   getPublishingRhythm,
   getCampaignDiagnosis,
   getChannelAttribution,
+  getRecords,
+  getMilestoneProjection,
+  nextMilestone,
+  getLoyalCore,
+  getCohortActivity,
+  withLoyaltyHistory,
+  civilDay,
   getComparisonBase,
   getDerivedMetrics,
   getNotesEngagement,
@@ -414,4 +422,118 @@ test("getReachBeyondBubble mide el alcance fuera de tu audiencia", () => {
   assert.equal(burbuja.share, 75);
   // Sin ninguna nota medida no hay 0% de alcance nuevo: no hay dato.
   assert.equal(getReachBeyondBubble([]).share, null);
+});
+
+test("sourceLabel traduce las etiquetas de Substack y capitaliza las desconocidas", () => {
+  assert.equal(sourceLabel("Substack App"), "App de Substack");
+  assert.equal(sourceLabel("substack app"), "App de Substack");
+  assert.equal(sourceLabel("Substack existing accounts"), "Cuentas que ya usaban Substack");
+  assert.equal(sourceLabel("direct to app"), "Directo a la app");
+  assert.equal(sourceLabel("  Direct  "), "Directo");
+  assert.equal(sourceLabel("Search"), "Buscadores");
+  // Una fuente nueva no desaparece: se ve tal cual, con mayúscula inicial.
+  assert.equal(sourceLabel("mastodon"), "Mastodon");
+  assert.equal(sourceLabel(""), "Sin identificar");
+  assert.equal(sourceLabel(null), "Sin identificar");
+});
+
+// ── Récords, hitos y fidelidad ─────────────────────────────────────────────
+const NOW = new Date(2026, 8, 23, 12).getTime(); // miércoles 23 sept 2026
+const dayAgo = (n) => civilDay(NOW - n * 86400000);
+
+test("getRecords encuentra la mejor semana, envío y nota del rango", () => {
+  const snapshot = {
+    campaigns: [
+      { title: "Grande", date: dayAgo(3), delivered: 1000, openRate: 48, signupsWithin1Day: 12 },
+      { title: "Diminuto", date: dayAgo(5), delivered: 10, openRate: 90, signupsWithin1Day: 0 },
+      { title: "Otro", date: dayAgo(10), delivered: 900, openRate: 44, signupsWithin1Day: 30 },
+      { title: "Antiguo", date: dayAgo(200), delivered: 900, openRate: 70, signupsWithin1Day: 99 },
+    ],
+    notes: [{ body: "Nota", date: `${dayAgo(2)}T10:00:00Z`, reactions: 5, replies: 2, restacks: 1 }],
+  };
+  const daily = [
+    { date: dayAgo(1), new: 4 }, { date: dayAgo(2), new: 3 },
+    { date: dayAgo(9), new: 20 }, { date: dayAgo(40), new: 500 },
+  ];
+  const records = getRecords({ snapshot, subscriberDaily: daily, days: 30, now: NOW });
+  assert.equal(records.bestWeek.signups, 20, "la semana de 40 días atrás queda fuera del rango");
+  // Un envío a 10 personas no bate récords de apertura.
+  assert.equal(records.bestOpen.title, "Grande");
+  assert.equal(records.bestSignups.title, "Otro");
+  assert.equal(records.bestNote.value, 8);
+  assert.equal(getRecords({ snapshot: {}, subscriberDaily: [], days: 30, now: NOW }).bestWeek, null, "sin altas no hay récord de cero");
+});
+
+test("getRecords cuenta la racha actual solo si sigue viva", () => {
+  const weekly = [0, 7, 14, 21].map((n) => ({ title: `S${n}`, date: dayAgo(n), delivered: 100, openRate: 40 }));
+  assert.equal(getRecords({ snapshot: { campaigns: weekly }, days: Infinity, now: NOW }).streak.current, 4);
+  const stale = [30, 37].map((n) => ({ title: `S${n}`, date: dayAgo(n), delivered: 100, openRate: 40 }));
+  const records = getRecords({ snapshot: { campaigns: stale }, days: Infinity, now: NOW });
+  assert.equal(records.streak.current, 0, "sin publicar esta semana ni la anterior, la racha se rompió");
+  assert.equal(records.streak.longest, 2);
+});
+
+test("getMilestoneProjection da un rango con dos ventanas y no proyecta sin ritmo", () => {
+  assert.equal(nextMilestone(2840), 5000);
+  assert.equal(nextMilestone(1000), 2500);
+  assert.equal(nextMilestone(120000), 150000);
+  const growing = Array.from({ length: 95 }, (_, n) => ({ date: dayAgo(n), new: n < 30 ? 12 : 6, losses: 2 }));
+  const projection = getMilestoneProjection({ current: 2840, growthDaily: growing, now: NOW });
+  assert.equal(projection.state, "projected");
+  assert.equal(projection.target, 5000);
+  assert.equal(projection.estimates.length, 2);
+  assert.ok(projection.estimates.every((row) => row.date), "las dos ventanas dan fecha");
+  assert.ok(projection.estimates[0].date < projection.estimates[1].date, "el ritmo reciente, más alto, llega antes");
+  const shrinking = growing.map((row) => ({ ...row, new: 1, losses: 3 }));
+  assert.equal(getMilestoneProjection({ current: 2840, growthDaily: shrinking, now: NOW }).state, "flat");
+  assert.equal(getMilestoneProjection({ current: 2840, growthDaily: [], now: NOW }).state, "nodata");
+  // 10 días de serie no miden un ritmo de 90 días.
+  const short = growing.slice(0, 10);
+  assert.equal(getMilestoneProjection({ current: 2840, growthDaily: short, now: NOW }).estimates[1].rate, null);
+});
+
+test("getLoyalCore mide el núcleo y su cambio solo con base previa", () => {
+  const timeline = { ratings: [100, 200, 150, 100, 300, 150] };
+  const core = getLoyalCore(timeline, [{ date: dayAgo(20), core: 120 }, { date: dayAgo(0), core: 150 }], 30, NOW);
+  assert.equal(core.total, 1000);
+  assert.equal(core.core, 150);
+  assert.equal(core.active, 450);
+  assert.equal(core.coreShare, 15);
+  assert.equal(core.change, 30);
+  assert.equal(getLoyalCore(timeline, [{ date: dayAgo(0), core: 150 }], 30, NOW).change, null, "sin captura anterior no hay delta");
+  assert.equal(getLoyalCore({ ratings: [] }, [], 30, NOW).state, "nodata");
+});
+
+test("getCohortActivity cruza actividad y permanencia sin inventar", () => {
+  const timeline = {
+    partial: true,
+    cohorts: [
+      { month: "2026-05", current: 40, alta: 10, baja: 20, inactiva: 10 },
+      { month: "2026-07", current: 80, alta: 40, baja: 30, inactiva: 10 },
+      { month: "2026-08", current: 5, alta: 5, baja: 0, inactiva: 0 },
+      { month: "2026-09", current: 60, alta: 30, baja: 20, inactiva: 10 },
+    ],
+  };
+  const growth = [
+    { date: "2026-06-15", new: 10 }, { date: "2026-07-03", new: 100 }, { date: "2026-08-10", new: 4 }, { date: "2026-09-02", new: 75 },
+  ];
+  const { rows } = getCohortActivity(timeline, growth, Infinity, NOW);
+  assert.equal(rows[0].month, "2026-07", "el mes más antiguo de una serie truncada queda fuera");
+  assert.equal(rows[0].activeShare, 50);
+  assert.equal(rows[0].stayedShare, 80, "80 siguen de 100 que llegaron");
+  assert.equal(rows[1].stayedShare, null, "más actuales que altas: las fuentes no cuadran");
+  assert.equal(rows[1].scarce, true, "5 suscriptores es muestra escasa");
+  assert.equal(rows[2].stayedShare, 80);
+});
+
+test("withLoyaltyHistory añade una captura por día y conserva el histórico si falla", () => {
+  const previous = { audience: { loyaltyHistory: [{ date: dayAgo(1), core: 140, active: 400, total: 990 }] } };
+  const fresh = { audience: { timeline: { ratings: [100, 200, 150, 100, 300, 150] } } };
+  const merged = withLoyaltyHistory(fresh, previous, NOW);
+  assert.deepEqual(merged.audience.loyaltyHistory.map((point) => point.core), [140, 150]);
+  // Dos sincronizaciones el mismo día: una sola captura, la última.
+  assert.equal(withLoyaltyHistory(fresh, merged, NOW).audience.loyaltyHistory.length, 2);
+  // Sin puntuaciones (fuente caída), no se pierde lo guardado.
+  const failed = withLoyaltyHistory({ audience: { timeline: { ratings: [] } } }, previous, NOW);
+  assert.equal(failed.audience.loyaltyHistory.length, 1);
 });
