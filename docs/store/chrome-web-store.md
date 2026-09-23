@@ -169,7 +169,7 @@ Lo que la tienda exige y lo que ya está resuelto:
 | Recurso | Tamaño | Estado |
 | --- | --- | --- |
 | Icono de la tienda | 128×128 PNG | ✅ `assets/icons/icon-128.png` |
-| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/`, regeneradas para 1.1.0 |
+| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/`, regeneradas para 1.2.0: Resumen, Tus récords, Tu núcleo fiel, Notas y Postal |
 | Mosaico pequeño | 440×280 PNG | ⏳ opcional |
 | Imagen destacada | 1400×560 PNG | ⏳ opcional |
 

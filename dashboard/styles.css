@@ -1340,3 +1340,5 @@ html.is-capturing .postal { border-radius: 0; }
 /* Cuadrantes: título en el peso del mundo, no en la serif 400 anterior. */
 .quadrant > strong { font: 700 17px/1.25 var(--display); letter-spacing: -.01em; }
 .quadrant small { font: 500 12px/1.4 var(--sans); }
+/* Cinco récords caben en una fila a partir de ~850 px de panel. */
+.records-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
