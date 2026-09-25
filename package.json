@@ -1,6 +1,6 @@
 {
   "name": "plotstack",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "description": "A local-first newsletter analytics dashboard for Chrome.",
