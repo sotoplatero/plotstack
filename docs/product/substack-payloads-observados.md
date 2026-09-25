@@ -279,6 +279,11 @@ renderer no se sincroniza.**
   devuelve `subscriberGrowth`. `new_free`, `num_unsubs` y `num_expirations`
   permiten calcular altas, bajas y neto sin limitarse a las 24 horas posteriores
   a un envío. `is_subscribed=true` es la variante de pago.
+  Forma observada en septiembre de 2026 (sotoplatero): cada fila es
+  `{dt: "2026/08/19", total_new_subs, num_upgrades, num_unsubs, num_expirations, num_free_trials}`,
+  **sin `new_free`**; las altas están en `total_new_subs` y `num_unsubs` llega
+  negativo. Contrastado: 35 altas y 5 bajas en 30 días, igual que el salto
+  108 → 138 de `summary-v2?range=30`.
 - `GET publication/stats/subscriber_retention?...` devuelve `cohortStats`; su
   ruta `/summary` devuelve `rates` con `months_since_subscription`, `rate` y
   `comparison`. Cohortes vacías se presentan como no disponibles, no como 0%.

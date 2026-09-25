@@ -52,6 +52,14 @@ test("normaliza ubicación, crecimiento y retención sin fabricar datos", () => 
     { dt: "2026-08-23", new_subscribers: 4, unsubscribes: 2 },
   ] });
   assert.deepEqual(alias.totals, { new: 4, losses: 2, net: 2 });
+  // Forma real observada en paid_subscriber_growth: fecha con barras y las altas
+  // en `total_new_subs`. Ignorarla dejaba todas las altas a cero.
+  const real = normalizeSubscriberGrowth({ subscriberGrowth: [
+    { dt: "2026/08/19", total_new_subs: 5, num_upgrades: 0, num_unsubs: -1, num_expirations: 0, num_free_trials: 0 },
+    { dt: "2026/08/20", total_new_subs: 0, new_free: 7, num_unsubs: 0 },
+  ] });
+  assert.deepEqual(real.totals, { new: 5, losses: 1, net: 4 }, "total_new_subs es el total y no se suma a new_free");
+  assert.equal(real.daily[0].date, "2026-08-19");
   assert.deepEqual(normalizeRetention({ cohortStats: {} }).cohorts, []);
   assert.deepEqual(normalizeRetention({ rates: [{ months_since_subscription: 1, rate: 0.82, comparison: 0.04 }] }).rates,
     [{ month: 1, rate: 0.82, comparison: 0.04 }]);

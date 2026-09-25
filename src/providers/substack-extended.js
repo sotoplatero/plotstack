@@ -112,7 +112,13 @@ const sumPresent = (row, keys, fallbackKeys = []) => {
 
 export function normalizeSubscriberGrowth(payload = {}) {
   const daily = rowsFrom(payload, ["subscriberGrowth"]).map((row) => {
-    const gained = sumPresent(row, ["new_free", "new_paid"], ["new_subscribers", "new"]);
+    // La forma observada trae `total_new_subs` y ninguna de las otras: sin esta
+    // clave las altas salían siempre a 0 y el panel caía a una serie de respaldo
+    // (fuentes de adquisición) que no cuadra con el total de Substack. Es un
+    // total, así que se usa solo y nunca se suma a `new_free`/`new_paid`.
+    const gained = row?.total_new_subs !== undefined && row?.total_new_subs !== null
+      ? sumPresent(row, ["total_new_subs"])
+      : sumPresent(row, ["new_free", "new_paid"], ["new_subscribers", "new"]);
     // Substack devuelve estas salidas con signo negativo en algunas cuentas.
     // En PlotStack `losses` siempre es una magnitud positiva.
     const losses = Math.abs(sumPresent(row, ["num_unsubs", "num_expirations"], ["unsubscribes", "cancellations_finalized"]));
