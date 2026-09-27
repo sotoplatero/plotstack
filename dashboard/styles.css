@@ -225,7 +225,6 @@ body { background: var(--ink); }
 .view[data-view="resumen"] .metric-primary .card-label,
 .view[data-view="resumen"] .metric-primary .delta { color: var(--muted); }
 .view[data-view="resumen"] .metric-value { margin-top: 20px; }
-.view[data-view="resumen"] .metric-secondary { display: none; }
 .card-label { font-weight: 700; letter-spacing: .07em; }
 .metric-primary .delta.is-positive { color: var(--accent); }
 .spark-bars { height: 42px; opacity: .13; }
@@ -768,7 +767,6 @@ tbody tr:hover td { background: color-mix(in srgb, var(--ink) 55%, var(--panel))
 .metric-card { --series: var(--c-subs); --series-text: var(--c-subs-text); }
 .metric-card:has(#metric-open-rate) { --series: var(--c-open); --series-text: var(--c-open-text); }
 .metric-card:has(#metric-click-rate) { --series: var(--c-click); --series-text: var(--c-click-text); }
-.metric-card:has(#metric-views) { --series: var(--c-views); --series-text: var(--c-views-text); }
 /* El nombre de la métrica lleva su color, como en una app de salud. */
 .metric-card .card-label, .view[data-view="resumen"] .metric-primary .card-label { color: var(--series-text); font: 700 14px var(--sans); }
 .metric-card .card-label > span:first-child::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--series); margin-right: 8px; vertical-align: 1px; }
@@ -940,7 +938,6 @@ th.is-sorted { color: var(--paper); }
 .topbar .eyebrow { color: var(--paper); font: 600 14px var(--sans); }
 .connect-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
 .metric-foot small { margin: 0; }
-.view[data-view="resumen"] .metric-card.metric-secondary { display: none; }
 
 @media (max-width: 760px) { .growth-brief h1 { font-size: 32px; } }
 

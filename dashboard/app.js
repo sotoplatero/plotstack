@@ -18,7 +18,6 @@ import {
   ratio,
   safeNumber,
   sourceLabel,
-  viewsPerDelivery,
   normalizeSnapshot,
   parseDay,
   getRecords,
@@ -60,7 +59,6 @@ const state = {
   analytics: null,
   progress: null,
   days: 30,
-  rangeExcluded: { notes: 0, campaigns: 0 },
   view: "resumen",
   notesSearch: "",
   notesSort: "interactions",
@@ -142,13 +140,13 @@ function initializeHints() {
 // Corta por fecha con la ventana activa. Las filas sin fecha se conservan
 // siempre: excluirlas seria tratar "no se sabe cuando" como "fuera de rango".
 function withinRange(rows, getDate) {
-  if (state.days === ALL_TIME) return { kept: rows, excluded: 0 };
+  if (state.days === ALL_TIME) return { kept: rows };
   const cutoff = Date.now() - state.days * 86400000;
   const kept = rows.filter((row) => {
     const time = parseDay(getDate(row)).getTime();
     return !Number.isFinite(time) || time >= cutoff;
   });
-  return { kept, excluded: rows.length - kept.length };
+  return { kept };
 }
 
 function showToast(message) {
@@ -350,16 +348,6 @@ function renderMetrics(snapshot, analytics) {
   const windows = getRateWindows(snapshot, state.days);
   const openNow = windows.current.openRate;
   $("#metric-open-rate").textContent = openNow === null ? "Sin dato" : formatPercent(openNow);
-  // Vistas: la única métrica de tráfico que publica Substack. Su ventana es la
-  // fija de 30 días del endpoint, así que la tarjeta lo declara en vez de
-  // fingir que obedece al selector, y el delta va en unidades, no en puntos.
-  $("#metric-views").textContent = formatCompactNumber(metrics.totalViews);
-  setDelta("#delta-views", metrics.viewsDelta || null, {
-    suffix: "",
-    versus: "vs. los 30 días anteriores",
-    missing: "Sin variación de vistas publicada",
-    format: formatCompactNumber,
-  });
   $("#metric-paid").textContent = formatCompactNumber(metrics.paidSubscribers);
   $("#paid-conversion").textContent = formatPercent(derived.paidConversion);
   $("#metric-revenue").textContent = formatCurrency(metrics.monthlyRevenue);
@@ -2267,7 +2255,6 @@ const withCtor = (campaigns) => campaigns.map((campaign) => ({
 function renderCampaigns(snapshot) {
   const ranged = withinRange(snapshot.campaigns, (campaign) => campaign.date);
   const all = withCtor(ranged.kept);
-  state.rangeExcluded.campaigns = ranged.excluded;
   const search = state.postsSearch.trim().toLowerCase();
   const campaigns = search
     ? all.filter((campaign) => `${campaign.title} ${campaign.subtitle}`.toLowerCase().includes(search))
@@ -2615,7 +2602,6 @@ function renderNotesPager(total, totalPages) {
 
 function renderNotesTable(snapshot) {
   const ranged = withinRange(snapshot.notes, (note) => note.date);
-  state.rangeExcluded.notes = ranged.excluded;
   const analytics = getNotesAnalytics({ notes: ranged.kept });
   const search = state.notesSearch.trim().toLocaleLowerCase("es");
   const filter = state.notesFilter;
@@ -2997,7 +2983,7 @@ function applyPrivacy() {
   );
 }
 
-const CAPTURE_CARD_CLASSES = ["metric-card", "panel", "note-card"];
+const CAPTURE_CARD_CLASSES = ["metric-card", "panel"];
 
 export function findCaptureCard(element) {
   for (let node = element; node && node !== document.body; node = node.parentNode) {
@@ -3007,7 +2993,7 @@ export function findCaptureCard(element) {
 }
 
 const captureLabel = (element) => {
-  for (const selector of ["h2", ".card-label", ".note-body"]) {
+  for (const selector of ["h2", ".card-label"]) {
     const text = element.querySelector(selector)?.textContent?.trim();
     if (text) return text.slice(0, 60);
   }

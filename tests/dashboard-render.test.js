@@ -628,18 +628,6 @@ test("un snapshot escrito por la fase de detalle repinta sin recrear los nodos c
   assert.equal(txt($("#metric-subscribers").textContent), txt(antes), "el fixture queda restaurado para los demás casos");
 });
 
-test("Resumen pinta las vistas con su ventana fija declarada", async () => {
-  await arrancar();
-  await verVista("resumen");
-  assert.equal(txt($("#metric-views").textContent), "41,2 mil", "las vistas ya se capturaban y no se pintaban");
-  // El delta de vistas va en unidades y puede ser negativo.
-  assert.match(txt($("#delta-views").textContent), /^-3,1 mil vs\. los 30 días anteriores$/);
-  const tarjeta = $("#metric-views").parentNode;
-  assert.equal(tarjeta.querySelectorAll(".period-badge").length, 1,
-    "la ventana de vistas es fija y la tarjeta tiene que declararlo");
-});
-
-
 test("Cobertura declara el estado del snapshot, no solo de las fuentes ampliadas", async () => {
   await arrancar();
   await verVista("cobertura");
