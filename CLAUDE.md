@@ -147,10 +147,13 @@ listeners quedarían colgando.
   envíos o devuelve `insufficient`: con dos posts la mediana no clasifica nada.
 - **Las atribuciones por canal no se fuerzan a sumar el total.**
   `getChannelAttribution` compara altas de emails (24 h por envío) y de notas
-  (acumulado por nota con detalle): ventanas distintas de Substack. Sus celdas
-  viven en el stat-grid del panel "Altas y bajas" (una sección, una cabecera,
-  un formato; nada de paneles con layout propio) y la nota del panel declara
-  las ventanas. La eficiencia por pieza se calcula sobre las piezas *medidas*, y la
+  (acumulado por nota con detalle): ventanas distintas de Substack. Sus cifras
+  (altas por canal y por pieza) van **escritas en la nota del panel "Altas y
+  bajas"** (`#channels-note`), junto a la comparación de días con y sin envío,
+  y la misma frase declara las ventanas. No son celdas de la tira: esa solo
+  responde "¿cuántos llegaron y cuántos se fueron?" (altas, bajas, neto, tasa
+  de bajas), y poner las atribuciones como celdas hermanas de "Altas" invitaba
+  a sumarlas. Nada de paneles con layout propio. La eficiencia por pieza se calcula sobre las piezas *medidas*, y la
   conversión de una nota (`altas/1000 impresiones`) es `null` sin detalle — en
   los órdenes de la tabla, los nulos van al final, no compiten como ceros.
 - **Un delta sin base previa es `null`, no +100%.** `getDerivedMetrics.change()`
@@ -224,6 +227,12 @@ listeners quedarían colgando.
   por sección no necesita `publication/post-tag` ni ninguna petición nueva.
 
 - **`chartCounts` de `subscriber-stats` es UN punto agregado, no una serie.** Sus claves son nombres de campo, no fechas. La serie diaria de altas se reconstruye agregando `subscription_created_at` de cada fila con `getSubscriberTimeline`, que descarta email, nombre y foto en memoria y solo devuelve conteos por día. Ver `docs/product/substack-payloads-observados.md`.
+- **Ninguna tira de cifras ocupa dos filas, en ninguna vista.** Una
+  `.audience-totals` o `.post-kpi-strip` lleva como mucho `MAX_STRIP_CELLS` (6)
+  celdas, y el test "ninguna tira de cifras pasa de una fila" lo comprueba en
+  todas las vistas y rangos (el DOM de tests no hace layout: cuenta celdas). Si
+  una cifra no cabe, va en frase a la `panel-copy` del panel o se quita si ya
+  está en la misma vista; nunca a una segunda fila ni a un panel nuevo.
 - **Ninguna clave cruda de la API llega a la interfaz.** No hay volcados genéricos de objetos: las rejillas de cifras se construyen con `renderLabelledGrid`, que recibe pares `[etiqueta en español, valor]` escritos en el renderer. El volcado anterior (`renderStatGrid` + `STAT_LABELS`) pintaba `drafts` en inglés y booleanos de control como `publishedIsCapped: false`. Si añades una rejilla, escribe las etiquetas; no itereres el payload. Los nombres de fuente y de red que devuelve Substack ("Substack App", "direct to app", "Search") pasan por `sourceLabel()` de `analytics.js` **al pintar**: el snapshot guarda el valor original y una etiqueta desconocida se muestra capitalizada en vez de desaparecer.
 - **El perfil se refresca en cada sync.** `syncConnected` llama a `getProfile()` siempre, no solo cuando falta `userId`: ahí vive `followerCount`, que es un número vivo. Cachearlo desde el momento de la conexión lo dejaba a **0** en cualquier conexión creada antes de mapearlo. Si el perfil falla, se conserva la publicación guardada y `getPublicationSnapshot` cae al `followers` del snapshot anterior. Cubierto en `tests/background.test.js`.
 - **Récords, hito y fidelidad son conteos, nunca personas.** `getSubscriberTimeline` añade `ratings` (reparto 0-5 de `activity_rating`) y `cohorts` (actividad por mes de alta) sin sacar ninguna fila. El núcleo fiel (puntuación 5) solo tiene evolución porque el service worker la guarda: `withLoyaltyHistory` añade una captura por día a `analytics.audience.loyaltyHistory` y, si la fuente falla, conserva la anterior. La permanencia por mes tiene **sesgo de superviviente** (Substack solo lista a quien sigue): «siguen X de Y» cruza con las altas del histórico de crecimiento y queda en `null` si las fuentes no cuadran o el histórico no cubre el mes; con la lista truncada se omite el mes más antiguo. El próximo hito se proyecta con el ritmo **neto** de dos ventanas fijas (30 y 90 días) y da un rango, nunca una fecha única; sin ritmo positivo no proyecta.

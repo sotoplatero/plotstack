@@ -118,6 +118,28 @@ test("capturar una página no recrea el DOM visible ni usa is-capturing", async 
 // El test que faltaba. Los renderers se ejecutan de verdad, así que una
 // referencia a una función borrada o a un `#id` inexistente lanza y falla aquí:
 // es exactamente el fallo que se colaba tres veces sin que los tests lo vieran.
+// Ninguna tira de cifras ocupa dos filas, en ninguna vista. El DOM de tests no
+// hace layout, así que se cuentan celdas: `.audience-totals` es
+// `auto-fit, minmax(120px, 1fr)` y a anchos de escritorio (~880 px de tira, y
+// menos en portátiles) seis celdas son el máximo que cabe en una fila sin
+// apretar las etiquetas. Lo que no quepa va a la nota del panel, no a una
+// segunda fila.
+const MAX_STRIP_CELLS = 6;
+
+test("ninguna tira de cifras pasa de una fila", async () => {
+  await arrancar();
+  for (const vista of VISTAS) {
+    await verVista(vista);
+    for (const dias of CON_RANGO.has(vista) ? ["7", "30", "90", "all"] : [null]) {
+      if (dias) await rango(dias);
+      for (const tira of [...$$(".audience-totals"), ...$$(".post-kpi-strip")]) {
+        const celdas = tira.children.length;
+        assert.ok(celdas <= MAX_STRIP_CELLS, `${vista}/${dias}: ${tira.attributes?.id || "tira"} pinta ${celdas} celdas (máx. ${MAX_STRIP_CELLS})`);
+      }
+    }
+  }
+});
+
 test("las seis vistas se renderizan sin lanzar", async () => {
   await arrancar();
   for (const vista of VISTAS) {
@@ -439,17 +461,19 @@ test("Crecimiento aplica el rango a las fuentes y añade la tasa de bajas", asyn
   assert.match($("#churn-kpis").textContent, /Tasa de bajas/);
 });
 
-test("las altas por canal viven en la tira de KPI del panel de altas y bajas", async () => {
+test("las altas por canal viven en la nota del panel de altas y bajas, no en su tira", async () => {
   await arrancar();
   await verVista("crecimiento");
   await rango("all");
   assert.equal($("#channels-panel"), null, "sin panel propio: una sección, una cabecera, un formato");
-  const texto = txt($("#churn-kpis").textContent);
-  assert.match(texto, /Altas vía email \(D1\)60/, "36 + 24 altas D1 de los dos envíos");
-  assert.match(texto, /Altas por envío30/, "la eficiencia por pieza es el conocimiento");
-  assert.match(texto, /Altas vía notas11/, "7 + 4 altas atribuidas a notas con detalle");
-  assert.match(texto, /Altas por nota medida5,5/, "eficiencia sobre las notas medidas, no sobre todas");
-  assert.match($("#channels-note").textContent, /no suman el total/);
+  // La tira solo responde "¿cuántos llegaron y cuántos se fueron?".
+  const tira = $("#churn-kpis").children.map((celda) => celda.children[0].textContent);
+  assert.deepEqual(tira.filter((etiqueta) => !["Altas", "Bajas", "Neto", "Tasa de bajas"].includes(etiqueta)), []);
+  assert.doesNotMatch($("#churn-kpis").textContent, /vía|por envío|por nota/);
+  const nota = $("#channels-note").textContent;
+  assert.match(nota, /60 a tus envíos en sus primeras 24 h \(30 por envío\)/, "36 + 24 altas D1 y la eficiencia por pieza");
+  assert.match(nota, /11 a tus notas \(5,5 por nota medida\)/, "7 + 4 altas, sobre las notas medidas, no sobre todas");
+  assert.match(nota, /no suman el total/);
   assert.match($("#channels-note").textContent, /2 de 3/, "la cobertura se declara");
 });
 
@@ -698,8 +722,8 @@ test("el panel de altas y bajas compara dias con envio y cita el veredicto de Su
   await arrancar();
   await verVista("crecimiento");
   await rango("all");
-  assert.match($("#churn-kpis").textContent, /Altas en día de envío/);
   const nota = $("#channels-note").textContent;
+  assert.match(nota, /Un día con envío trae de media/, "la comparación va en frase, no en celdas de la tira");
   assert.match(nota, /media de Substack/, "el veredicto comparativo no se puede derivar de datos propios");
   assert.match(nota, /40,7%/);
 });
