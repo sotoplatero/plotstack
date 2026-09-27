@@ -300,8 +300,6 @@ export const mapNote = (item, index = 0) => {
   };
 };
 
-const labelKey = (value = "") => String(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
 const NOTE_SURFACES = ["Feed", "Notifications", "Profile page", "Permalinks", "Notes", "Search", "Other"];
 const NOTE_AUDIENCES = ["Subscribers", "Followers", "Unconnected"];
 

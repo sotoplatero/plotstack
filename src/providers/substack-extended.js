@@ -27,20 +27,6 @@ const isoDay = (value) => {
   return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
 };
 
-
-// Forma real: `{pubEvents: [{id, date, title, slug, type}]}`. La clave `pubEvents`
-// no estaba en la lista de `rowsFrom`, asi que la vista Crecimiento salia vacia.
-// Los eventos NO traen conteos de suscriptores: son solo hitos de publicación.
-export function normalizeGrowthEvents(payload) {
-  return rowsFrom(payload, ["pubEvents", "events"]).map((event, index) => ({
-    id: String(event.id ?? index),
-    date: text(event.date, event.created_at, event.timestamp, event.event_date),
-    label: text(event.title, event.label, event.name, event.type, "Evento"),
-    slug: text(event.slug),
-    type: text(event.type, event.event_type),
-  })).filter((event) => event.date || event.label).slice(0, 250);
-}
-
 // Forma real: `{sourceMetrics: [...], totals: [{name, total}]}`. Cada fuente trae
 // `metrics: [{name:"Traffic"|"Subscribers"|"Revenue", timeseries, total}]` y
 // `children` con el desglose (ahí viven las recomendaciones y las notas).

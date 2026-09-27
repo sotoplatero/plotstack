@@ -20,14 +20,10 @@ import {
   civilDay,
   getComparisonBase,
   getDerivedMetrics,
-  getNotesEngagement,
   getNotesAnalytics,
   getOwnOpenRateMedian,
-  getPublicationEngagement,
   getRateWindows,
   getReachBeyondBubble,
-  getSurfaceYield,
-  getTrendSeries,
   normalizeSnapshot,
   viewsPerDelivery,
 } from "../src/shared/analytics.js";
@@ -69,13 +65,8 @@ test("formatters produce compact Spanish labels", () => {
   assert.equal(formatPercent(42.56), "42,6%");
 });
 
-test("getTrendSeries returns the requested tail and metric", () => {
-  const trend = Array.from({ length: 5 }, (_, index) => ({
-    date: `2026-08-0${index + 1}`,
-    subscribers: 100 + index,
-    paidSubscribers: 20 + index,
-  }));
-  assert.deepEqual(getTrendSeries({ trend }, "paidSubscribers", 2).map((item) => item.value), [23, 24]);
+test("normalizeSnapshot no rellena trend.opens", () => {
+  const trend = [{ date: "2026-08-01", subscribers: 100, paidSubscribers: 20 }];
   assert.equal("opens" in normalizeSnapshot({ trend }).trend[0], false, "trend.opens nunca se rellenaba: campo muerto");
 });
 
@@ -128,31 +119,6 @@ test("getComparisonBase usa el histórico local con Todo y admite que no hay bas
   const sinBase = getComparisonBase({ metrics: { subscribers: 1200 }, previousByRange: {} }, 90);
   assert.equal(sinBase.basis, "none");
   assert.equal(getDerivedMetrics({ metrics: { subscribers: 1200 } }, 90).subscriberGrowth, null);
-});
-
-test("getPublicationEngagement agrega interacciones de publicaciones en la ventana", () => {
-  const now = new Date("2026-08-21T12:00:00Z").getTime();
-  const result = getPublicationEngagement({ campaigns: [
-    { date: "2026-08-20", views: 200, reactions: 8, comments: 3, shares: 2 },
-    { date: "2026-08-01", views: 100, reactions: 4, comments: 1, shares: 1 },
-    { date: "2026-06-01", views: 999, reactions: 99, comments: 99, shares: 99 },
-  ] }, 30, now);
-  assert.deepEqual(result, { posts: 2, views: 300, reactions: 12, comments: 4, shares: 3, interactions: 19 });
-});
-
-test("getNotesEngagement agrega senales publicas y detalle sin duplicarlas", () => {
-  const now = new Date("2026-08-21T12:00:00Z").getTime();
-  const result = getNotesEngagement({ notes: [
-    { date: "2026-08-20", reactions: 7, replies: 2, restacks: 1, stats: { available: false } },
-    { date: "2026-08-19", reactions: 0, replies: 0, restacks: 0, stats: { available: true, interactions: { total: 20, likes: 12, replies: 5, restacks: 3 }, reach: { impressions: 400 } } },
-    { date: "2026-06-01", reactions: 99, replies: 99, restacks: 99 },
-  ] }, 30, now);
-  assert.deepEqual(result, { notes: 2, interactions: 30, likes: 19, comments: 7, restacks: 4, impressions: 400 });
-});
-
-test("los resúmenes conservan filas sin fecha porque ausencia no significa fuera de rango", () => {
-  assert.equal(getPublicationEngagement({ campaigns: [{ reactions: 1 }] }, 7, Date.now()).posts, 1);
-  assert.equal(getNotesEngagement({ notes: [{ reactions: 1 }] }, 7, Date.now()).notes, 1);
 });
 
 test("normalizeSnapshot preserves normalized Notes engagement", () => {
@@ -373,38 +339,6 @@ test("getConcentration dice si el crecimiento depende de un solo canal", () => {
   // Sin total medido no se inventa un porcentaje.
   assert.equal(getConcentration([]).share, null);
   assert.equal(getConcentration([{ value: 0 }]).share, null);
-});
-
-test("getSurfaceYield reparte las altas en proporcion y lo declara estimado", () => {
-  const notas = normalizeSnapshot({
-    notes: [
-      {
-        id: "1",
-        stats: {
-          available: true,
-          reach: { impressions: 1000 },
-          results: { freeSubscribers: 10 },
-          surfaces: { Feed: 800, Notifications: 200 },
-        },
-      },
-      // Sin detalle: no aporta ceros al reparto.
-      { id: "2", stats: { available: false } },
-      // Con detalle pero sin impresiones: sin denominador no hay reparto.
-      { id: "3", stats: { available: true, reach: { impressions: 0 }, results: { freeSubscribers: 5 }, surfaces: { Feed: 10 } } },
-    ],
-  }).notes;
-  const rendimiento = getSurfaceYield(notas);
-  assert.equal(rendimiento.scoredNotes, 1);
-  assert.equal(rendimiento.estimated, true, "el reparto es proporcional, no medido");
-  const feed = rendimiento.rows.find((row) => row.surface === "Feed");
-  const notif = rendimiento.rows.find((row) => row.surface === "Notifications");
-  assert.equal(feed.impressions, 800);
-  // 10 altas x 0,8 = 8 sobre 800 impresiones = 10 por millar.
-  assert.equal(Math.round(feed.per1000 * 100) / 100, 10);
-  assert.equal(Math.round(notif.per1000 * 100) / 100, 10);
-  // Las superficies sin impresiones no se listan como cero.
-  assert.equal(rendimiento.rows.some((row) => row.surface === "Search"), false);
-  assert.deepEqual(getSurfaceYield([]).rows, []);
 });
 
 test("getReachBeyondBubble mide el alcance fuera de tu audiencia", () => {

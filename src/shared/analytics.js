@@ -239,32 +239,6 @@ const rowsInPeriod = (rows, getDate, days, now = Date.now()) => {
   });
 };
 
-export function getPublicationEngagement(snapshot = {}, days = 30, now = Date.now()) {
-  const campaigns = rowsInPeriod(normalizeSnapshot(snapshot).campaigns, (row) => row.date, days, now);
-  return campaigns.reduce((total, campaign) => {
-    total.posts += 1;
-    total.views += safeNumber(campaign.views);
-    total.reactions += safeNumber(campaign.reactions);
-    total.comments += safeNumber(campaign.comments);
-    total.shares += safeNumber(campaign.shares);
-    total.interactions += safeNumber(campaign.reactions) + safeNumber(campaign.comments) + safeNumber(campaign.shares);
-    return total;
-  }, { posts: 0, views: 0, reactions: 0, comments: 0, shares: 0, interactions: 0 });
-}
-
-export function getNotesEngagement(snapshot = {}, days = 30, now = Date.now()) {
-  const notes = rowsInPeriod(normalizeSnapshot(snapshot).notes, (row) => row.date, days, now);
-  const analytics = getNotesAnalytics({ notes });
-  return {
-    notes: analytics.ranked.length,
-    interactions: analytics.total.interactions,
-    likes: analytics.total.likes,
-    comments: analytics.total.replies,
-    restacks: analytics.total.restacks,
-    impressions: analytics.total.impressions,
-  };
-}
-
 export function formatCompactNumber(value) {
   return NUMBER_FORMAT.format(safeNumber(value));
 }
@@ -622,50 +596,6 @@ export function getConcentration(rows = [], valueOf = (row) => row.value, top = 
   return { share: (head / total) * 100, total, counted: values.length, top: Math.min(top, values.length) };
 }
 
-// Que superficie CONVIERTE, no cual da mas alcance. Substack reparte las
-// impresiones de cada nota entre Feed, Notificaciones, Perfil, etc., pero solo
-// da las altas de la nota entera, no por superficie. Asi que la conversion por
-// superficie no se puede medir: lo que si se puede es repartir las altas de
-// cada nota en proporcion a sus impresiones por superficie, y decirlo.
-//
-// Solo entran notas con detalle Y con impresiones: sin denominador no hay
-// reparto, y una nota sin estadisticas no aporta ceros.
-export function getSurfaceYield(notes = [], surfaceKeys = NOTE_SURFACE_KEYS) {
-  const totals = Object.fromEntries(surfaceKeys.map((key) => [key, { impressions: 0, signups: 0 }]));
-  let scoredNotes = 0;
-  for (const note of notes) {
-    const stats = note?.stats;
-    if (!stats?.available) continue;
-    const impressions = safeNumber(stats.reach?.impressions);
-    const surfaceTotal = surfaceKeys.reduce((sum, key) => sum + safeNumber(stats.surfaces?.[key]), 0);
-    if (impressions <= 0 || surfaceTotal <= 0) continue;
-    scoredNotes += 1;
-    const signups = safeNumber(stats.results?.freeSubscribers);
-    for (const key of surfaceKeys) {
-      const share = safeNumber(stats.surfaces?.[key]) / surfaceTotal;
-      totals[key].impressions += safeNumber(stats.surfaces?.[key]);
-      totals[key].signups += signups * share;
-    }
-  }
-  const rows = surfaceKeys.map((key) => {
-    const bucket = totals[key];
-    const per1000 = ratio(bucket.signups, bucket.impressions);
-    return {
-      surface: key,
-      impressions: Math.round(bucket.impressions),
-      signups: bucket.signups,
-      // Altas por cada mil impresiones. `null` sin impresiones medidas.
-      per1000: per1000 === null ? null : per1000 * 1000,
-    };
-  }).filter((row) => row.impressions > 0);
-  return {
-    rows: rows.sort((a, b) => (b.per1000 ?? -1) - (a.per1000 ?? -1)),
-    scoredNotes,
-    // El reparto es proporcional, no medido: la interfaz TIENE que decirlo.
-    estimated: true,
-  };
-}
-
 // Cuanto sales de tu burbuja. `Unconnected` son impresiones de gente que no te
 // sigue ni te lee: la unica senal de alcance nuevo que da `note_stats`.
 export function getReachBeyondBubble(notes = []) {
@@ -690,14 +620,6 @@ export function getReachBeyondBubble(notes = []) {
     // `null` sin ninguna nota medida: no es un 0% de alcance nuevo.
     share: share === null ? null : share * 100,
   };
-}
-
-export function getTrendSeries(snapshot, metric = "subscribers", days = 30) {
-  const points = normalizeSnapshot(snapshot).trend;
-  return points.slice(Math.max(0, points.length - days)).map((point) => ({
-    date: point.date,
-    value: safeNumber(point[metric]),
-  }));
 }
 
 // Base de comparación para el rango activo. `range` = arranque que Substack da

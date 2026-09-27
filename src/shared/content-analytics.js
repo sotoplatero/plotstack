@@ -1,7 +1,6 @@
 import { normalizeSnapshot, safeNumber } from "./analytics.js";
 
 export const EVIDENCE_MIN_N = 5;
-export const MIN_EFFECT = 0.15;
 export const OUTCOME_KEYS = ["interactions", "profileVisits", "impressions", "freeSubscribers"];
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -24,7 +23,6 @@ export const FEATURE_DEFS = Object.freeze([
 ]);
 
 const FLAG_IDS = FEATURE_DEFS.filter((def) => def.kind === "flag").map((def) => def.id);
-const BAND_IDS = FEATURE_DEFS.filter((def) => def.kind === "band").map((def) => def.id);
 
 const median = (values) => {
   if (!values.length) return null;
@@ -403,84 +401,6 @@ export function getCadenceHeatmap(snapshot, options = {}) {
 // Seguidores y altas que Substack atribuye a cada nota, agregados por día.
 // Solo suman las notas con `stats.available`: una nota sin detalle no aporta
 // cero, queda fuera. `coverage` dice sobre cuántas notas se sostiene la serie.
-// Calendario de cadencia estilo GitHub: una celda por DIA, columnas por semana
-// (lunes arriba), intensidad por notas publicadas. Sustituye a la rejilla por
-// tramos horarios, que con decenas de notas quedaba casi vacia. Se limita a las
-// ultimas `maxWeeks` semanas con notas: mas alla no cabe en pantalla y GitHub
-// hace lo mismo. La mediana de interacciones del dia sale de los valores crudos
-// de sus notas con detalle; un dia sin detalle es `null`, no cero.
-export const CALENDAR_MAX_WEEKS = 53;
-
-export function getCadenceCalendar(snapshot, options = {}) {
-  const { timeZoneOffsetMinutes = 0, maxWeeks = CALENDAR_MAX_WEEKS } = options;
-  const normalized = normalizeSnapshot(snapshot || {});
-  const notes = dedupeNotes(Array.isArray(normalized.notes) ? normalized.notes : []);
-  const rows = notes.map((note) => extractNoteFeatures(note, { timeZoneOffsetMinutes }));
-  const dated = rows.filter((row) => row.localDay);
-  if (!dated.length) {
-    return { days: [], weeks: [], months: [], maxNotes: 0, start: "", end: "", datedNotes: 0, undatedNotes: rows.length, truncatedWeeks: 0 };
-  }
-
-  const byDay = new Map();
-  for (const row of dated) {
-    const bucket = byDay.get(row.localDay) || { notes: 0, interactions: [] };
-    bucket.notes += 1;
-    if (row.scorable) bucket.interactions.push(safeNumber(row.outcomes.interactions));
-    byDay.set(row.localDay, bucket);
-  }
-
-  const keys = [...byDay.keys()].sort();
-  // Desde el lunes de la primera semana con notas hasta el domingo de la ultima.
-  let start = new Date(`${weekStartOf(new Date(`${keys[0]}T00:00:00Z`))}T00:00:00Z`);
-  const end = new Date(`${weekStartOf(new Date(`${keys.at(-1)}T00:00:00Z`))}T00:00:00Z`);
-  end.setUTCDate(end.getUTCDate() + 6);
-  const totalWeeks = Math.round((end.getTime() - start.getTime() + 86400000) / (7 * 86400000));
-  const truncatedWeeks = Math.max(0, totalWeeks - maxWeeks);
-  if (truncatedWeeks) start = new Date(start.getTime() + truncatedWeeks * 7 * 86400000);
-
-  const days = [];
-  const weeks = [];
-  const months = [];
-  let lastMonth = "";
-  for (let cursor = new Date(start.getTime()), column = 0; cursor.getTime() <= end.getTime(); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
-    const key = cursor.toISOString().slice(0, 10);
-    const bucket = byDay.get(key);
-    const cell = {
-      date: key,
-      // 0 = lunes … 6 = domingo, la fila del calendario.
-      weekday: (cursor.getUTCDay() + 6) % 7,
-      column,
-      notes: bucket?.notes || 0,
-      scoredNotes: bucket?.interactions.length || 0,
-      medianInteractions: bucket ? median(bucket.interactions) : null,
-    };
-    days.push(cell);
-    if (cell.weekday === 0) {
-      weeks.push([]);
-      // Etiqueta de mes en la primera columna donde cambia.
-      const month = key.slice(0, 7);
-      if (month !== lastMonth) {
-        months.push({ month, column });
-        lastMonth = month;
-      }
-    }
-    weeks[weeks.length - 1].push(cell);
-    if (cell.weekday === 6) column += 1;
-  }
-
-  return {
-    days,
-    weeks,
-    months,
-    maxNotes: Math.max(0, ...days.map((cell) => cell.notes)),
-    start: days[0]?.date || "",
-    end: days.at(-1)?.date || "",
-    datedNotes: dated.length,
-    undatedNotes: rows.length - dated.length,
-    truncatedWeeks,
-  };
-}
-
 export function getNoteAttributionTimeline(snapshot, options = {}) {
   const { timeZoneOffsetMinutes = 0 } = options;
   const normalized = normalizeSnapshot(snapshot || {});
@@ -514,52 +434,11 @@ export function getNoteAttributionTimeline(snapshot, options = {}) {
   };
 }
 
-export function getContentFindings(insights, options = {}) {
-  const { primaryOutcome = "interactions", limit = 5, minEffect = MIN_EFFECT } = options;
-  const best = new Map();
-
-  for (const feature of insights?.features || []) {
-    if (feature.state !== "evidence") continue;
-    const cell = feature.outcomes?.[primaryOutcome];
-    if (!cell || cell.lift === null || !Number.isFinite(cell.lift) || cell.lift <= 0) continue;
-    if (Math.abs(cell.lift - 1) < minEffect) continue;
-
-    const n = Math.min(feature.counts.withScored, feature.counts.withoutScored);
-    const score = Math.abs(Math.log2(cell.lift)) * Math.min(1, n / (2 * EVIDENCE_MIN_N));
-    const finding = {
-      featureId: feature.id,
-      kind: feature.kind,
-      level: feature.level,
-      outcome: primaryOutcome,
-      direction: cell.lift >= 1 ? "positive" : "negative",
-      lift: cell.lift,
-      liftBasis: cell.liftBasis,
-      medianWith: cell.medianWith,
-      medianWithout: cell.medianWithout,
-      delta: cell.delta,
-      n,
-      score,
-      sampleIds: feature.sampleIds,
-    };
-    const current = best.get(feature.id);
-    if (!current || finding.score > current.score) best.set(feature.id, finding);
-  }
-
-  return [...best.values()]
-    .sort((a, b) => b.score - a.score || b.n - a.n || a.featureId.localeCompare(b.featureId))
-    .slice(0, limit);
-}
-
+// Fachada del dashboard: solo lo que pinta la vista Notas.
 export function getContentAnalytics(snapshot, options = {}) {
-  const primaryOutcome = options.primaryOutcome || "interactions";
-  const insights = getFeatureInsights(snapshot, { ...options, primaryOutcome });
   return {
-    coverage: insights.coverage,
-    features: insights.features,
     timeline: getNotesTimeline(snapshot, options),
     cadence: getCadenceHeatmap(snapshot, options),
     attribution: getNoteAttributionTimeline(snapshot, options),
-    findings: getContentFindings(insights, { ...options, primaryOutcome }),
-    primaryOutcome,
   };
 }
