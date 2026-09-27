@@ -41,7 +41,7 @@ Se conserva el nombre PlotStack y el español como idioma principal de la experi
 
 ## Evidence on Hand
 
-El repositorio contiene el dashboard funcional, datos de prueba realistas, documentación de las fuentes de Substack y una suite automatizada de 172 pruebas. La vista previa con la publicación ficticia «Carta de muestra» (`scripts/preview-dashboard.mjs`) es la fuente de las capturas de la tienda: nunca se usan métricas de una cuenta real. No hay testimonios, benchmarks comerciales ni investigación formal de usuarios que deban presentarse como evidencia.
+El repositorio contiene el dashboard funcional, datos de prueba realistas, documentación de las fuentes de Substack y una suite automatizada de 192 pruebas. La vista previa con la publicación ficticia «Carta de muestra» (`scripts/preview-dashboard.mjs`) es la fuente de las capturas de la tienda: nunca se usan métricas de una cuenta real. No hay testimonios, benchmarks comerciales ni investigación formal de usuarios que deban presentarse como evidencia.
 
 ## Product Principles
 

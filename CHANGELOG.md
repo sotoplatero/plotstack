@@ -4,6 +4,50 @@ Las versiones que se han subido a la Chrome Web Store. La tienda **no permite
 bajar** un número de versión, así que cada entrada aquí corresponde a un
 `manifest.json` que ya se publicó o está listo para publicarse.
 
+## 1.3.0 — 27 de septiembre de 2026
+
+### Hallazgos
+
+- **El Resumen dice qué merece leerse.** Debajo de las cifras y el gráfico de
+  suscriptores, un panel de hallazgos escribe en frases lo que se sale de lo
+  normal: una nota o un artículo muy por encima de lo habitual, qué rasgo de
+  tus notas rinde más, cuántas altas concentran unas pocas notas, qué fuente
+  es tu principal puerta de entrada, tu mejor semana o cuándo llegarás al
+  próximo hito.
+- **Siempre frente a ti mismo.** Cada pieza se compara con sus 30 anteriores,
+  nunca con otras newsletters, y con una estadística que una nota viral no
+  descoloca. Lo que no llega al umbral no se muestra; si falta muestra, se dice
+  cuánta.
+- **Con su prueba.** Cada hallazgo lleva la muestra sobre la que se calcula y,
+  cuando la tiene, una tira de puntos con tus piezas, las notas que lo
+  sostienen y una propuesta para probar. «Ver» abre la vista de la evidencia
+  y, en Notas, filtra la tabla a esas notas.
+- **Un solo formato en todo el panel.** Las conclusiones que antes eran notas
+  al pie de un panel (altas por canal, días con y sin envío, concentración de
+  visitas, fuente líder, horario de publicación) son ahora hallazgos bajo su
+  gráfico o su tabla. Las advertencias de fuente siguen como nota.
+
+### Más claro
+
+- **Una cifra, un sitio.** Se retiraron los datos repetidos: la curva de
+  suscriptores duplicada en Audiencia, el panel de actividad de la lista (lo
+  cuenta el núcleo fiel), los bloques del Resumen que ya son hallazgos y los
+  totales que repetían su propia tira. Cuando una conclusión aparece en dos
+  vistas, usa el mismo umbral en las dos.
+- **Tiras de cifras en una sola fila.** Altas y bajas pasa de once cifras a
+  cuatro (altas, bajas, neto y tasa de bajas); el resto se lee como hallazgo.
+- **Nombres coherentes.** El menú dice Audiencia y Artículos; cada panel lleva
+  un título descriptivo y los textos de ayuda son más cortos.
+
+### Correcciones
+
+- La fuente principal ya no puede aparecer como líder en Cómo creces mientras
+  el Resumen dice que las altas llegan repartidas.
+- Altas y bajas muestra un neto de cero o negativo en su tira, en vez de
+  esconderlo.
+- Las dos medianas de apertura de Artículos dicen su base: histórica o del
+  periodo.
+
 ## 1.2.0 — 23 de septiembre de 2026
 
 ### Diseño nuevo
