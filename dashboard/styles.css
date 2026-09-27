@@ -505,7 +505,6 @@ html.is-capturing .reveal { animation: none; }
 .churn-summary { margin: 22px calc(-1 * var(--pad)) 0; border-block: 1px solid var(--line); }
 .churn-summary h3 { margin: 0; padding: 16px var(--pad) 0; font: 700 12px/1.3 var(--sans); color: var(--paper); }
 .churn-summary .audience-totals { margin: 12px 0 0; }
-.churn-summary #channels-note { margin: 0; padding: 14px var(--pad) 18px; }
 #churn-panel .chart-wrap { min-height: 240px; }
 #churn-panel .chart-bar { opacity: .92; }
 #churn-panel .chart-bar-secondary { opacity: .82; }
@@ -1296,8 +1295,13 @@ html.is-capturing .postal { border-radius: 0; }
 [data-series="subs"] { --series: var(--c-subs); --series-text: var(--c-subs-text); }
 [data-series="open"] { --series: var(--c-open); --series-text: var(--c-open-text); }
 [data-series="click"] { --series: var(--c-click); --series-text: var(--c-click-text); }
+[data-series="views"] { --series: var(--c-views); --series-text: var(--c-views-text); }
 [data-series="neutral"] { --series: var(--paper); --series-text: var(--paper); }
 .findings { display: grid; gap: var(--space-2); }
+/* Bajo el gráfico o la tabla de su panel: separado por la distancia de grupo;
+   la nota de fuente, si la hay, queda debajo en tinta atenuada. */
+.panel > .findings { margin-top: var(--space-group); }
+.panel > .findings + .panel-copy { margin-top: var(--space-3); }
 .finding { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: start; column-gap: 14px; padding: 16px 20px 16px 16px; border-radius: 12px; background: var(--ink); }
 /* La diana: un halo del tono al 16% con el punto pleno dentro. Es la firma del
    hallazgo; el color dice de qué métrica habla. */

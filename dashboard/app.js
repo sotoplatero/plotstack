@@ -957,17 +957,25 @@ function renderAudience(snapshot, analytics) {
   const cumulative = drawLineChart($("#audience-chart"), windowed.map((point) => ({ date: point.date, value: point.cumulative })), "audience-gradient", { primaryLabel: "Suscriptores acumulados" });
   $("#audience-empty").hidden = cumulative;
 
-  const note = $("#audience-note");
-  if (timeline?.partial) {
-    note.textContent = `Serie parcial: ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} altas. Substack pagina de más reciente a más antigua, así que faltan las más viejas.`;
-    note.hidden = false;
-  } else if (windowed.length) {
+  // La conclusión va como hallazgo bajo el gráfico; la nota queda solo para
+  // declarar que la serie llegó incompleta.
+  const audienceFindings = [];
+  if (!timeline?.partial && windowed.length) {
     const peak = [...windowed].sort((a, b) => b.signups - a.signups)[0];
     const inWindow = windowed.reduce((sum, point) => sum + point.signups, 0);
     const scope = windowed.length < daily.length ? `${formatCompactNumber(inWindow)} altas` : `${formatCompactNumber(timeline.counted)} altas`;
-    note.textContent = `${scope} entre ${shortDate(windowed[0].date)} y ${shortDate(windowed.at(-1).date)} · mejor día ${shortDate(peak.date)} con ${peak.signups}.`;
-    note.hidden = false;
-  } else note.hidden = true;
+    if (peak.signups > 0) {
+      audienceFindings.push(panelFinding("audience-best-day",
+        `Tu mejor día fue el ${shortDate(peak.date)}, con ${formatCompactNumber(peak.signups)} ${peak.signups === 1 ? "alta" : "altas"}.`,
+        `${scope} entre el ${shortDate(windowed[0].date)} y el ${shortDate(windowed.at(-1).date)}`, "subs"));
+    }
+  }
+  renderFindings($("#audience-findings"), audienceFindings);
+  const note = $("#audience-note");
+  note.textContent = timeline?.partial
+    ? `Serie parcial: ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} altas. Substack pagina de más reciente a más antigua, así que faltan las más viejas.`
+    : "";
+  note.hidden = !timeline?.partial;
 
   const followerHistory = audience?.followers?.history || [];
   const followers = withinRange(followerHistory, (point) => point.date).kept;
@@ -1325,9 +1333,12 @@ function renderSourcesTable(analytics) {
     ? formatPercent((totals.subscribers / totals.visitors) * 100)
     : "Sin dato";
   const leader = [...sources].sort((a, b) => b.subscribers - a.subscribers || b.visitors - a.visitors)[0];
-  $("#acquisition-leader").textContent = leader
-    ? `${sourceLabel(leader.label)} lidera con ${formatCompactNumber(leader.subscribers)} altas de ${formatCompactNumber(totals.subscribers)} y ${formatCompactNumber(leader.visitors)} visitas.`
-    : "Sin altas atribuidas a una fuente en este periodo. Prueba con un rango más amplio.";
+  const hasLeader = Boolean(leader && leader.subscribers > 0);
+  renderFindings($("#acquisition-leader"), hasLeader ? [panelFinding("acquisition-leader",
+    `${sourceLabel(leader.label)} lidera con ${formatCompactNumber(leader.subscribers)} de tus ${formatCompactNumber(totals.subscribers)} altas.`,
+    `${formatCompactNumber(leader.visitors)} visitas desde esa fuente · ${rangeLabel()}`, "subs")] : []);
+  $("#acquisition-note").textContent = hasLeader ? "" : "Sin altas atribuidas a una fuente en este periodo. Prueba con un rango más amplio.";
+  $("#acquisition-note").hidden = hasLeader;
   // Ya NO es de periodo fijo: el endpoint acepta `from_date`/`to_date` y la
   // sincronizacion pide una ventana por cada opcion del selector. El badge decia
   // "· fijo" por una limitacion nuestra, no de la API. Con datos guardados por
@@ -1529,34 +1540,43 @@ function renderChurn(snapshot, analytics) {
     ["Neto", neto],
     ["Tasa de bajas", tasaBajas, "percent"],
   ], "Sin movimientos de audiencia en este periodo.");
-  const channelsNote = $("#channels-note");
-  const partes = [];
+  // Las conclusiones del panel son hallazgos bajo el gráfico; lo que declara
+  // de dónde salen los datos o que falta muestra va en la nota de fuente.
+  const churnFindings = [];
+  const cautelas = [];
   if (channels.email.pieces || channels.notes.pieces) {
-    const porPieza = (value, unidad) => (value === null ? "" : ` (${formatCompactNumber(value)} por ${unidad})`);
     const canales = [];
-    if (channels.email.pieces) canales.push(`${formatCompactNumber(channels.email.signups)} a tus envíos en sus primeras 24 h${porPieza(channels.email.perPiece, "envío")}`);
-    if (channels.notes.pieces) canales.push(`${formatCompactNumber(channels.notes.signups)} a tus notas${porPieza(channels.notes.perPiece, "nota medida")}`);
-    partes.push(`Substack atribuye ${canales.join(" y ")}. Son ventanas distintas (24 h tras cada envío; acumulado por nota): no suman el total. Notas medidas: ${channels.notes.scoredPieces} de ${channels.notes.pieces}; las notas sin detalle no cuentan como cero.`);
-  }
-  // Con pocos dias medidos la media es anecdota: se dice, no se esconde.
-  if (ritmo.state !== "nodata" && ritmo.onPublish !== null && ritmo.onQuiet !== null) {
-    const medias = `Un día con envío trae de media ${decimal(ritmo.onPublish)} altas; uno sin envío, ${decimal(ritmo.onQuiet)}`;
-    if (ritmo.state === "evidence" && ritmo.lift !== null) {
-      partes.push(`${medias}: ${decimal(ritmo.lift)}× más (${ritmo.publishDays} días con envío frente a ${ritmo.quietDays} sin él).`);
-    } else {
-      partes.push(`${medias}. Muestra escasa para compararlos: ${ritmo.publishDays} días con envío y ${ritmo.quietDays} sin él.`);
+    const ventanas = [];
+    if (channels.email.pieces) {
+      canales.push(`${formatCompactNumber(channels.email.signups)} a tus envíos`);
+      ventanas.push(`24 h tras cada envío${channels.email.perPiece === null ? "" : ` (${formatCompactNumber(channels.email.perPiece)} por envío)`}`);
     }
-  } else if (ritmo.state === "insufficient") {
-    partes.push(`Muestra escasa para comparar días con y sin envío: ${ritmo.publishDays} con envío y ${ritmo.quietDays} sin él.`);
+    if (channels.notes.pieces) {
+      canales.push(`${formatCompactNumber(channels.notes.signups)} a tus notas`);
+      ventanas.push(`acumulado por nota${channels.notes.perPiece === null ? "" : ` (${formatCompactNumber(channels.notes.perPiece)} por nota medida)`}`);
+    }
+    churnFindings.push(panelFinding("churn-channels",
+      `Substack atribuye ${canales.join(" y ")}.`,
+      `Ventanas distintas: ${ventanas.join("; ")}. No suman el total. Notas medidas: ${channels.notes.scoredPieces} de ${channels.notes.pieces}; las notas sin detalle no cuentan como cero`,
+      "subs"));
   }
-  // El unico dato de este panel que no sale de la propia publicacion.
+  // Con pocos días medidos la media es anécdota: no es un hallazgo, se declara.
+  if (ritmo.state === "evidence" && ritmo.lift !== null && ritmo.onPublish !== null && ritmo.onQuiet !== null) {
+    churnFindings.push(panelFinding("churn-rhythm",
+      `Un día con envío trae ${decimal(ritmo.lift)}× más altas que uno sin envío: ${decimal(ritmo.onPublish)} frente a ${decimal(ritmo.onQuiet)} de media.`,
+      `${ritmo.publishDays} días con envío frente a ${ritmo.quietDays} sin él`, "subs"));
+  } else if (ritmo.state !== "nodata" && (ritmo.publishDays || ritmo.quietDays)) {
+    cautelas.push(`Muestra escasa para comparar días con y sin envío: ${ritmo.publishDays} con envío y ${ritmo.quietDays} sin él.`);
+  }
+  // El único dato de este panel que no sale de la propia publicación.
   const marca = analytics?.growth?.benchmark;
   if (marca?.outcomeCopy && marca.growthRate !== null) {
     // Sin `toLowerCase`: degradaba el nombre propio a "substack".
-    partes.push(`${marca.outcomeCopy}: un ${formatPercent(marca.growthRate)} de crecimiento en ${marca.periodDays} días, según su propia comparación.`);
+    churnFindings.push(panelFinding("churn-benchmark",
+      `${marca.outcomeCopy}: un ${formatPercent(marca.growthRate)} de crecimiento en ${marca.periodDays} días.`,
+      "Según la comparación que publica Substack; no se deriva de tus datos", "subs"));
   }
-  channelsNote.textContent = partes.join(" ");
-  channelsNote.hidden = !partes.length;
+  renderFindings($("#churn-findings"), churnFindings);
   // `renderLabelledGrid` esconde los ceros, y un neto de 0 o unas bajas de 0 son
   // informacion. Se pintan aparte cuando toque.
   const churnPeriod = showingLatestAvailable
@@ -1573,7 +1593,7 @@ function renderChurn(snapshot, analytics) {
     { primaryLabel: "Altas", secondaryLabel: "Bajas" },
   );
   $("#churn-empty").hidden = dibujado;
-  const stalePrefix = showingLatestAvailable ? "No hay movimientos dentro del rango actual. Se muestra el último tramo con datos. " : "";
+  const stalePrefix = `${showingLatestAvailable ? "No hay movimientos dentro del rango actual. Se muestra el último tramo con datos. " : ""}${cautelas.map((texto) => `${texto} `).join("")}`;
   $("#churn-basis").textContent = growthHasSignups
     ? `${stalePrefix}Altas y bajas obtenidas del histórico de crecimiento de suscriptores de Substack.`
     : growthDaily.length && sourceDaily.length
@@ -1583,8 +1603,8 @@ function renderChurn(snapshot, analytics) {
     : !daily.length && campaignDaily.length
     ? `${stalePrefix}Datos atribuidos a las primeras 24 h después de cada envío; no representan todas las altas y bajas de la publicación.`
     : bajasPorDia.size
-    ? `Las bajas solo cubren las 24 h siguientes a cada envío porque el histórico general no estuvo disponible.`
-    : `Substack no ha devuelto ninguna baja. Solo expone las bajas de las 24 h siguientes a cada envío, así que un cero aquí no prueba que nadie se haya ido.`;
+    ? `${stalePrefix}Las bajas solo cubren las 24 h siguientes a cada envío porque el histórico general no estuvo disponible.`
+    : `${stalePrefix}Substack no ha devuelto ninguna baja. Solo expone las bajas de las 24 h siguientes a cada envío, así que un cero aquí no prueba que nadie se haya ido.`;
 }
 
 // Visitas: la serie diaria SI es diaria, asi que se recorta por fecha como las
@@ -1654,9 +1674,12 @@ function renderTraffic(analytics) {
   }
   // Concentracion: la cifra que dice si dependes de un solo canal.
   const concentracion = getConcentration(filas, (fila) => fila.views);
+  renderFindings($("#traffic-findings"), concentracion.share === null ? [] : [panelFinding("traffic-concentration",
+    `Las ${concentracion.top} fuentes principales concentran el ${formatPercent(concentracion.share, 0)} de tus visitas.`,
+    `Sobre ${concentracion.counted} fuentes medidas`, "views")]);
   $("#traffic-note").textContent = concentracion.share === null
     ? "Sin visitas medidas por fuente en este periodo."
-    : `Las ${concentracion.top} fuentes principales concentran el ${formatPercent(concentracion.share)} de las visitas, sobre ${concentracion.counted} fuentes medidas. Substack mide por separado este desglose y la serie diaria, así que su suma no tiene por qué coincidir con el total del gráfico. Las altas de esta tabla son solo las de visitantes de la web; las de la app y las Notas están en Fuentes de adquisición.`;
+    : "Substack mide por separado este desglose y la serie diaria, así que su suma no tiene por qué coincidir con el total del gráfico. Las altas de esta tabla son solo las de visitantes de la web; las de la app y las Notas están en Fuentes de adquisición.";
 }
 
 // Efecto de red: `network_attribution` respondia 500 solo porque se llamaba sin
@@ -2557,9 +2580,14 @@ function renderNotesReach(analytics) {
 function renderCadenceTable(content) {
   renderCadenceHeatmap($("#cadence-heatmap"), content?.cadence);
   const busiest = content?.cadence?.busiest;
-  $("#cadence-summary").textContent = busiest
-    ? `Publicas más: ${DAY_NAMES[busiest.day]} · ${String(busiest.hour).padStart(2, "0")}:00`
-    : "Sin notas fechadas";
+  const DAY_PLURALS = { sun: "domingos", mon: "lunes", tue: "martes", wed: "miércoles", thu: "jueves", fri: "viernes", sat: "sábados" };
+  const fechadas = (content?.cadence?.cells || []).reduce((sum, cell) => sum + safeNumber(cell.notes), 0);
+  // La insignia dice sobre cuántas notas se sostiene el mapa; la conclusión es
+  // un hallazgo bajo el mapa.
+  $("#cadence-summary").textContent = fechadas ? `${formatCompactNumber(fechadas)} ${fechadas === 1 ? "nota fechada" : "notas fechadas"}` : "Sin notas fechadas";
+  renderFindings($("#cadence-findings"), busiest ? [panelFinding("cadence-busiest",
+    `Publicas más los ${DAY_PLURALS[busiest.day]} a las ${String(busiest.hour).padStart(2, "0")}:00.`,
+    `${busiest.notes} ${busiest.notes === 1 ? "nota" : "notas"} en esa franja de ${formatCompactNumber(fechadas)} fechadas`, "notes")] : []);
   const body = $("#cadence-table-body");
   body.replaceChildren();
   const weeks = (content?.timeline?.weeks || []).slice(-12).reverse();
@@ -2607,9 +2635,11 @@ function renderAttribution(content) {
   $("#attribution-coverage").textContent = attribution && attribution.totalNotes
     ? `${attribution.scoredNotes} de ${attribution.totalNotes} notas con detalle`
     : "Sin notas";
-  $("#attribution-note").textContent = drawn
-    ? `${formatCompactNumber(attribution.totals.freeSubscribers)} altas y ${formatCompactNumber(attribution.totals.impressions)} impresiones atribuidas a notas en ${rangeLabel()}. Las notas sin detalle no cuentan como cero: quedan fuera de la serie.`
-    : "Substack solo atribuye altas a las notas con estadísticas de detalle.";
+  renderFindings($("#attribution-findings"), drawn ? [panelFinding("attribution-total",
+    `Substack atribuye ${formatCompactNumber(attribution.totals.freeSubscribers)} altas y ${formatCompactNumber(attribution.totals.impressions)} impresiones a tus notas en ${rangeLabel()}.`,
+    `${attribution.scoredNotes} de ${attribution.totalNotes} notas con detalle; las notas sin detalle no cuentan como cero`, "notes")] : []);
+  $("#attribution-note").textContent = drawn ? "" : "Substack solo atribuye altas a las notas con estadísticas de detalle.";
+  $("#attribution-note").hidden = drawn;
 }
 
 const NOTES_PAGE_SIZE = 25;
@@ -2811,7 +2841,8 @@ function renderDashboard() {
 // un contenedor estático y `renderFindings(contenedor, hallazgos)`; la
 // navegación está delegada en el documento.
 // El texto llega escrito desde `insights.js`; aquí solo se compone el DOM.
-const INSIGHT_GROUP_LABELS = { audiencia: "Audiencia", crecimiento: "Crecimiento", notas: "Notas", publicaciones: "Publicaciones" };
+// Los mismos nombres que la barra lateral: "Ver en Artículos" lleva a Artículos.
+const INSIGHT_GROUP_LABELS = { audiencia: "Audiencia", crecimiento: "Cómo creces", notas: "Notas", publicaciones: "Artículos" };
 const dayMonth = (value) => {
   const date = parseDay(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "";
@@ -2881,7 +2912,7 @@ function drawFindingStrip(strip) {
 function renderFinding(insight) {
   const card = document.createElement("article");
   card.className = "finding";
-  card.dataset.series = insightSeries(insight.id);
+  card.dataset.series = insight.series || insightSeries(insight.id);
   const mark = document.createElement("i");
   mark.className = "finding-mark";
   mark.setAttribute("aria-hidden", "true");
@@ -2928,17 +2959,25 @@ function renderFinding(insight) {
     action.textContent = insight.action;
     body.append(action);
   }
-  card.append(mark, body, findingLink(insight));
+  card.append(mark, body);
+  // Un hallazgo que ya está junto a su evidencia (bajo el gráfico de su
+  // panel) no lleva enlace: no hay adónde ir.
+  if (insight.target) card.append(findingLink(insight));
   return card;
 }
 
 // Pinta una lista de hallazgos en un contenedor estático y registra sus
 // destinos para la navegación delegada. Sirve a cualquier vista.
 function renderFindings(container, insights) {
-  insights.forEach((insight) => state.insightTargets.set(insight.id, insight.target));
+  insights.forEach((insight) => { if (insight.target) state.insightTargets.set(insight.id, insight.target); });
   container.replaceChildren(...insights.map(renderFinding));
   container.hidden = !insights.length;
 }
+
+// Hallazgo de panel: la conclusión que antes era una nota al pie. Vive bajo
+// el gráfico o la tabla que la sostiene, así que no lleva enlace. Si no hay
+// conclusión (muestra escasa, sin datos), no se fabrica: se omite.
+const panelFinding = (id, text, sample, series) => ({ id, text, sample, series, strip: null, examples: [], action: null, target: null });
 
 function renderInsights(snapshot, analytics) {
   const result = getInsights({ snapshot, analytics, days: state.days, timeZoneOffsetMinutes: timezoneOffset() });

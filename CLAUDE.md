@@ -111,6 +111,17 @@ propia vista el enlace dice "Ver detalle" y solo lleva al panel. El tono sale de
 núcleo fiel en tinta): un detector nuevo con otra métrica añade ahí su patrón.
 En Notas, el enlace pone `state.notesFilter` (en memoria; se quita con el chip o
 al entrar desde la barra lateral).
+
+**Las notas de conclusión de los paneles también son hallazgos.** Lo que un panel
+concluye de sus datos ("tu mejor día fue…", "las 3 fuentes principales
+concentran…", "publicas más los martes…", "Substack atribuye…", "X lidera…") va
+como `.finding` en un contenedor `<div class="findings" id="<panel>-findings">`
+**debajo del gráfico o la tabla que lo sostiene**, construido con
+`panelFinding(id, texto, muestra, serie)` y sin enlace (`target: null`), porque
+ya está junto a su evidencia. Lo que solo declara de dónde salen los datos, que
+la serie llegó incompleta o que falta muestra **no es un hallazgo**: sigue como
+`panel-copy` de fuente, debajo de los hallazgos. Una nota nueva de un panel
+sigue la misma regla: si concluye, es hallazgo; si advierte, es nota de fuente.
 `health-score` e inventario se retiraron porque duplicaban señales o usaban un
 índice arbitrario. Los KPI de pago e ingreso mensual existen, pero están ocultos
 por defecto con `data-sensitive`; sus preferencias viven en `localStorage` bajo
@@ -148,9 +159,10 @@ listeners quedarían colgando.
 - **Las atribuciones por canal no se fuerzan a sumar el total.**
   `getChannelAttribution` compara altas de emails (24 h por envío) y de notas
   (acumulado por nota con detalle): ventanas distintas de Substack. Sus cifras
-  (altas por canal y por pieza) van **escritas en la nota del panel "Altas y
-  bajas"** (`#channels-note`), junto a la comparación de días con y sin envío,
-  y la misma frase declara las ventanas. No son celdas de la tira: esa solo
+  (altas por canal y por pieza) son **un hallazgo bajo el gráfico de "Altas y
+  bajas"** (`#churn-findings`), junto a la comparación de días con y sin envío
+  (hallazgo solo con muestra; si es escasa, lo dice la nota de fuente
+  `#churn-basis`), y la línea de muestra del hallazgo declara las ventanas. No son celdas de la tira: esa solo
   responde "¿cuántos llegaron y cuántos se fueron?" (altas, bajas, neto, tasa
   de bajas), y poner las atribuciones como celdas hermanas de "Altas" invitaba
   a sumarlas. Nada de paneles con layout propio. La eficiencia por pieza se calcula sobre las piezas *medidas*, y la

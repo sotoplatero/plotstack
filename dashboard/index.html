@@ -54,7 +54,7 @@
             <svg aria-hidden="true"><use href="#icon-grid"></use></svg><span>Resumen</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="audiencia">
-            <svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Tus lectores</span>
+            <svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Audiencia</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="crecimiento">
             <svg aria-hidden="true"><use href="#icon-arrow"></use></svg><span>Cómo creces</span>
@@ -63,7 +63,7 @@
             <svg aria-hidden="true"><use href="#icon-note"></use></svg><span>Notas</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="publicaciones">
-            <svg aria-hidden="true"><use href="#icon-mail"></use></svg><span>Envíos</span>
+            <svg aria-hidden="true"><use href="#icon-mail"></use></svg><span>Artículos</span>
           </button>
           <button class="nav-item button-reset" type="button" data-view="postal">
             <svg aria-hidden="true"><use href="#icon-card"></use></svg><span>Postal</span>
@@ -236,6 +236,7 @@
                 <svg id="audience-chart" viewBox="0 0 820 270" role="img" aria-label="Suscriptores acumulados por día"></svg>
                 <div class="chart-empty" id="audience-empty" hidden>Substack no devolvió fechas de alta para esta cuenta. Sincroniza de nuevo; si persiste, revisa Estado de los datos.</div>
               </div>
+              <div class="findings" id="audience-findings" hidden></div>
               <p class="panel-copy" id="audience-note" hidden></p>
             </section>
 
@@ -342,6 +343,7 @@
                   <tbody id="visitor-sources-body"></tbody>
                 </table>
               </div>
+              <div class="findings" id="traffic-findings" hidden></div>
               <p class="panel-copy" id="traffic-note"></p>
             </section>
 
@@ -365,13 +367,14 @@
                 <div><span>Visitas</span><strong id="acquisition-visitors">—</strong></div>
                 <div><span>Conversión visita → alta</span><strong id="acquisition-conversion">—</strong></div>
               </div>
-              <p class="panel-copy" id="acquisition-leader">Esperando fuentes de crecimiento…</p>
               <div class="table-wrap">
                 <table class="sources-table">
                   <thead><tr><th>Fuente</th><th>Visitas</th><th>Altas</th><th>Conversión</th><th>Tendencia</th></tr></thead>
                   <tbody id="sources-body"></tbody>
                 </table>
               </div>
+              <div class="findings" id="acquisition-leader" hidden></div>
+              <p class="panel-copy" id="acquisition-note" hidden></p>
             </section>
 
 
@@ -381,14 +384,14 @@
                 <span class="period-badge" id="churn-net">—</span>
               </div>
               <div class="churn-summary" aria-labelledby="churn-summary-title">
-                <h3 id="churn-summary-title">Cifras y explicación</h3>
+                <h3 id="churn-summary-title">Cifras del periodo</h3>
                 <div class="audience-totals" id="churn-kpis"></div>
-                <p class="panel-copy" id="channels-note" hidden></p>
               </div>
               <div class="chart-wrap">
                 <svg id="churn-chart" viewBox="0 0 820 200" role="img" aria-label="Altas y bajas por día"></svg>
                 <div class="chart-empty" id="churn-empty" hidden>Sin movimientos de audiencia en este periodo.</div>
               </div>
+              <div class="findings" id="churn-findings" hidden></div>
               <p class="panel-copy" id="churn-basis"></p>
             </section>
 
@@ -449,6 +452,7 @@
               </div>
               <div class="heatmap" id="cadence-heatmap" aria-label="Mapa de actividad: notas publicadas por día de la semana y hora"></div>
               <div class="heatmap-legend" aria-hidden="true"><span>Menos</span><i></i><i></i><i></i><i></i><span>Más publicaciones</span></div>
+              <div class="findings" id="cadence-findings" hidden></div>
               <div class="table-wrap cadence-table-wrap">
                 <table>
                   <caption>Tu ritmo durante las últimas 12 semanas</caption>
@@ -467,6 +471,7 @@
                 <svg id="attribution-chart" viewBox="0 0 820 200" role="img" aria-label="Altas gratuitas atribuidas a notas por día"></svg>
                 <div class="chart-empty" id="attribution-empty" hidden>Ninguna nota con estadísticas de detalle en el periodo.</div>
               </div>
+              <div class="findings" id="attribution-findings" hidden></div>
               <p class="panel-copy" id="attribution-note"></p>
             </section>
 

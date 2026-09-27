@@ -433,7 +433,9 @@ test("Notas no pinta ceros donde no hubo medición y muestra la atribución", as
   assert.equal(filas.length, 7, "una fila por día de la semana");
   assert.ok(filas.every((row) => row.querySelectorAll(".heatmap-cell").length === 24), "veinticuatro horas por fila");
   assert.ok($$("#cadence-heatmap .heatmap-cell.is-filled").length >= 1, "alguna hora tiene notas");
-  assert.match($("#cadence-summary").textContent, /Publicas más:/, "el resumen explica el patrón en lenguaje natural");
+  assert.match($("#cadence-findings").textContent, /Publicas más los/, "la conclusión del mapa es un hallazgo en lenguaje natural");
+  assert.match($("#cadence-summary").textContent, /notas? fechadas?/, "la insignia dice sobre cuántas notas se sostiene");
+  assert.match($("#attribution-findings").textContent, /Substack atribuye/, "el total atribuido es un hallazgo bajo el gráfico");
   assert.ok($$("#cadence-heatmap .heatmap-cell[data-hint]").length === 168, "cada hora explica su dato con el hint propio");
 });
 
@@ -470,11 +472,15 @@ test("las altas por canal viven en la nota del panel de altas y bajas, no en su 
   const tira = $("#churn-kpis").children.map((celda) => celda.children[0].textContent);
   assert.deepEqual(tira.filter((etiqueta) => !["Altas", "Bajas", "Neto", "Tasa de bajas"].includes(etiqueta)), []);
   assert.doesNotMatch($("#churn-kpis").textContent, /vía|por envío|por nota/);
-  const nota = $("#channels-note").textContent;
-  assert.match(nota, /60 a tus envíos en sus primeras 24 h \(30 por envío\)/, "36 + 24 altas D1 y la eficiencia por pieza");
-  assert.match(nota, /11 a tus notas \(5,5 por nota medida\)/, "7 + 4 altas, sobre las notas medidas, no sobre todas");
-  assert.match(nota, /no suman el total/);
-  assert.match($("#channels-note").textContent, /2 de 3/, "la cobertura se declara");
+  const hallazgo = $$("#churn-findings .finding").find((nodo) => /atribuye/.test(nodo.textContent));
+  assert.ok(hallazgo, "las altas por canal son un hallazgo bajo el gráfico");
+  assert.equal(hallazgo.querySelector(".finding-link"), null, "junto a su evidencia no lleva enlace");
+  const nota = hallazgo.textContent;
+  assert.match(nota, /60 a tus envíos y 11 a tus notas/, "36 + 24 altas D1 y 7 + 4 de notas");
+  assert.match(nota, /30 por envío/, "la eficiencia por pieza");
+  assert.match(nota, /5,5 por nota medida/, "sobre las notas medidas, no sobre todas");
+  assert.match(nota, /No suman el total/);
+  assert.match(nota, /2 de 3/, "la cobertura se declara");
 });
 
 test("el diagnóstico asunto/contenido no clasifica con muestra escasa", async () => {
@@ -703,7 +709,7 @@ test("Crecimiento pinta visitas, sus fuentes y la concentracion", async () => {
   // `free_signup` null no es cero altas: la celda va en guion, no en 0.
   assert.match(filas[1].textContent, /—/);
   assert.match($("#traffic-kpis").textContent, /Visitantes/);
-  assert.match($("#traffic-note").textContent, /concentran/);
+  assert.match($("#traffic-findings").textContent, /concentran/);
 });
 
 test("Crecimiento reparte la audiencia entre la red de Substack y la propia", async () => {
@@ -722,10 +728,10 @@ test("el panel de altas y bajas compara dias con envio y cita el veredicto de Su
   await arrancar();
   await verVista("crecimiento");
   await rango("all");
-  const nota = $("#channels-note").textContent;
-  assert.match(nota, /Un día con envío trae de media/, "la comparación va en frase, no en celdas de la tira");
-  assert.match(nota, /media de Substack/, "el veredicto comparativo no se puede derivar de datos propios");
-  assert.match(nota, /40,7%/);
+  const panel = `${$("#churn-findings").textContent} ${$("#churn-basis").textContent}`;
+  assert.match(panel, /días con envío|días con y sin envío/, "la comparación va en frase: hallazgo con muestra, nota de fuente si es escasa");
+  assert.match($("#churn-findings").textContent, /media de Substack/, "el veredicto comparativo es un hallazgo");
+  assert.match($("#churn-findings").textContent, /40,7%/);
 });
 
 test("Audiencia lista las publicaciones que comparten lectores", async () => {

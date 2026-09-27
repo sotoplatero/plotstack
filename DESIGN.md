@@ -303,7 +303,8 @@ El componente de todo hallazgo, en cualquier vista, siempre igual: no hay versi�
 - **Marca de diana:** círculo de 26px (22px en móvil) con el tono de su métrica al 16% y un punto pleno de 10px dentro. Es la firma del hallazgo: el color dice de qué métrica habla, según la regla Un color, un significado.
 - **Frase:** Geist 700 16px/1.4 (15px en móvil), −0.01em, tinta. La cifra va dentro de la frase, nunca como número suelto.
 - **Muestra:** meta 500 12px en tinta atenuada, justo debajo: sobre cuántas piezas o con qué ventana se calcula.
-- **Enlace:** 600 13px en tinta con el icono de flecha del sistema, en su propia columna alineado con la frase (al pie en móvil). "Ver en <Vista>" o, desde la propia vista, "Ver detalle".
+- **Enlace:** 600 13px en tinta con el icono de flecha del sistema, en su propia columna alineado con la frase (al pie en móvil). "Ver en <Vista>" o, desde la propia vista, "Ver detalle". Un hallazgo de panel, colocado bajo el gráfico o la tabla que lo sostiene, no lleva enlace.
+- **Hallazgo de panel:** la conclusión de un panel (lo que antes era una nota al pie) usa este mismo componente, debajo de su gráfico o tabla y a 16px. Las advertencias de fuente (de dónde salen los datos, serie incompleta, muestra escasa) no son hallazgos: siguen como dek atenuado debajo.
 - **Prueba, solo si existe:** tira de puntos (cada pieza es un punto en eje logarítmico, la franja gris es lo típico y las piezas del hallazgo son puntos de 13px en el tono), piezas de ejemplo con un punto de 7px del tono y su fecha, y la línea *Prueba* en una cápsula blanca de radio 10px.
 - **Lo que aún no concluye:** no es un hallazgo y no usa la superficie. Va en un recuadro de trazo discontinuo, con puntos de anillo hueco (el mismo lenguaje que "no disponible").
 
