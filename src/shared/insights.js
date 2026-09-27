@@ -342,7 +342,7 @@ function detectPostOutliers(ctx) {
   const { rows, measured } = rollingOutliers(sent, (campaign) => campaign.signupsWithin1Day, (campaign) => ctx.inRange(campaign.date));
   const evaluated = rows.filter((row) => row.z !== null);
   if (!evaluated.length) {
-    return { silent: [{ group: "publicaciones", text: `Envíos fuera de lo habitual: hacen falta al menos ${BASELINE_MIN + 1} envíos para tener con qué comparar.` }] };
+    return { silent: [{ group: "publicaciones", text: `Artículos fuera de lo habitual: hacen falta al menos ${BASELINE_MIN + 1} artículos enviados para tener con qué comparar.` }] };
   }
   const winners = evaluated
     .filter((row) => row.z >= OUTLIER_Z && row.multiple >= 2 && row.value >= 3)
@@ -354,7 +354,7 @@ function detectPostOutliers(ctx) {
     insights: [{
       id: "post-outlier",
       group: "publicaciones",
-      text: `«${top.piece.title}» trajo ${times(top.multiple)} más altas en su primer día que tu envío típico (${formatCompactNumber(top.value)} altas).`,
+      text: `«${top.piece.title}» trajo ${times(top.multiple)} más altas en su primer día que tu artículo típico (${formatCompactNumber(top.value)} altas).`,
       sample: `Altas en las 24 h tras cada envío · cada envío frente a sus ${BASELINE_WINDOW} anteriores`,
       score: scoreOf(top.multiple, evaluated.length) + 0.3,
       strip: stripFor(evaluated, ids, "altas en el primer día", measured.slice(-BASELINE_WINDOW).map((row) => row.value)),

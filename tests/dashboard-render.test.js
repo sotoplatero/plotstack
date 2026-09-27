@@ -221,7 +221,7 @@ test("Altas y bajas recupera el último tramo disponible sin presentarlo como ac
   await rango("7");
   assert.ok($$("#churn-chart .chart-bar").length > 0, "un histórico válido no debe dejar la tarjeta vacía");
   assert.match($("#churn-net").textContent, /último tramo disponible/i);
-  assert.match($("#churn-basis").textContent, /No hay movimientos dentro del rango actual/);
+  assert.match($("#churn-basis").textContent, /Sin movimientos en el rango actual/);
 });
 
 test("Altas y bajas usa la atribución por envío cuando falta el histórico diario", async () => {
@@ -267,7 +267,7 @@ test("Altas y bajas combina las altas de adquisición con las bajas del históri
   assert.doesNotMatch($("#churn-net").textContent, /neto/, "la insignia solo dice el tramo");
   assert.equal($$("#churn-chart .chart-bar").length, 1, "las altas de fuentes deben producir una barra visible");
   assert.equal($$("#churn-chart .chart-bar-secondary").length, 1, "una baja negativa de la API debe producir una barra visible");
-  assert.match($("#churn-basis").textContent, /Altas obtenidas de las fuentes de crecimiento/);
+  assert.match($("#churn-basis").textContent, /Altas de las fuentes de crecimiento/);
   listener({ "plotstack.analytics": { newValue: original } }, "local");
   await settle(4);
 });
@@ -315,7 +315,7 @@ test("Publicaciones ordena y busca sin perder la tabla", async () => {
   assert.equal($$("#campaigns-body tr").length, 2);
 });
 
-test("las columnas de Publicaciones no incluyen las que la API deja siempre en cero", async () => {
+test("las columnas de Artículos no incluyen las que la API deja siempre en cero", async () => {
   await arrancar();
   await verVista("publicaciones");
   // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
@@ -324,7 +324,7 @@ test("las columnas de Publicaciones no incluyen las que la API deja siempre en c
   for (const muerta of ["Subtítulo", "Palabras", "Audiencia", "Valor", "Suscripciones", "Bajas D1"]) {
     assert.equal(cabeceras.includes(muerta), false, `${muerta} no debería estar: ${cabeceras.join(", ")}`);
   }
-  for (const viva of ["Publicación", "Apertura", "CTR", "Reacciones", "Comentarios"]) {
+  for (const viva of ["Artículo", "Apertura", "CTR", "Reacciones", "Comentarios"]) {
     assert.equal(cabeceras.includes(viva), true, `falta ${viva}: ${cabeceras.join(", ")}`);
   }
 });
@@ -644,8 +644,8 @@ test("Cobertura declara el estado del snapshot, no solo de las fuentes ampliadas
   await arrancar();
   await verVista("cobertura");
   const texto = $("#coverage-list").textContent;
-  assert.match(texto, /Snapshot principal/);
-  assert.match(texto, /Detalle por publicación/);
+  assert.match(texto, /Datos principales/);
+  assert.match(texto, /Detalle por artículo/);
   assert.match(texto, /Estadísticas por nota/);
   // El fixture tiene 3 notas, 2 con detalle y 1 marcada como sin datos.
   assert.match(texto, /2 con datos/);

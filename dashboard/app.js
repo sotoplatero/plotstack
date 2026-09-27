@@ -998,7 +998,7 @@ function renderAudience(snapshot, analytics) {
   $("#audience-location-count").textContent = locationCount
     ? `${formatCompactNumber(locationCount)} ${locationCount === 1 ? "país" : "países"}`
     : "";
-  renderRankedList($("#audience-location-list"), locations, "Substack no devolvió ubicaciones de la audiencia. Sincroniza de nuevo; si persiste, revisa Estado de los datos.");
+  renderRankedList($("#audience-location-list"), locations, "Substack no devolvió ubicaciones de la audiencia. Sincroniza de nuevo; si persiste, revisa Estado de datos.");
 
   // Solapamiento: `percentOverlap` viene en fraccion 0-1.
   renderRankedList(
@@ -1044,7 +1044,7 @@ function renderComposition(analytics) {
     ["Prueba gratuita", composition.freeTrial],
     ["Plan mensual", intervals.get("month") ?? intervals.get("monthly")],
     ["Plan anual", intervals.get("year") ?? intervals.get("yearly") ?? intervals.get("annual")],
-  ], "Substack no devolvió la composición de la suscripción. Sincroniza de nuevo; si persiste, revisa Estado de los datos.");
+  ], "Substack no devolvió la composición de la suscripción. Sincroniza de nuevo; si persiste, revisa Estado de datos.");
 }
 
 // Donut en SVG. Cada segmento es un arco de `circle` con stroke-dasharray, así
@@ -1522,7 +1522,7 @@ function renderChurn(snapshot, analytics) {
     }
     churnFindings.push(panelFinding("churn-channels",
       `Substack atribuye ${canales.join(" y ")}.`,
-      `Ventanas distintas: ${ventanas.join("; ")}. No suman el total. Notas medidas: ${channels.notes.scoredPieces} de ${channels.notes.pieces}; las notas sin detalle no cuentan como cero`,
+      `Ventanas distintas: ${ventanas.join("; ")}. No suman el total. Notas con estadísticas: ${channels.notes.scoredPieces} de ${channels.notes.pieces}; sin ellas no cuentan como cero`,
       "subs"));
   }
   // Con pocos días medidos la media es anécdota: no es un hallazgo, se declara.
@@ -1555,18 +1555,18 @@ function renderChurn(snapshot, analytics) {
     { primaryLabel: "Altas", secondaryLabel: "Bajas" },
   );
   $("#churn-empty").hidden = dibujado;
-  const stalePrefix = `${showingLatestAvailable ? "No hay movimientos dentro del rango actual. Se muestra el último tramo con datos. " : ""}${cautelas.map((texto) => `${texto} `).join("")}`;
+  const stalePrefix = `${showingLatestAvailable ? "Sin movimientos en el rango actual: se muestra el último tramo con datos. " : ""}${cautelas.map((texto) => `${texto} `).join("")}`;
   $("#churn-basis").textContent = growthHasSignups
-    ? `${stalePrefix}Altas y bajas obtenidas del histórico de crecimiento de suscriptores de Substack.`
+    ? `${stalePrefix}Fuente: histórico de crecimiento de Substack.`
     : growthDaily.length && sourceDaily.length
-    ? `${stalePrefix}Altas obtenidas de las fuentes de crecimiento y bajas del histórico de suscriptores de Substack.`
+    ? `${stalePrefix}Altas de las fuentes de crecimiento; bajas del histórico de Substack.`
     : growthDaily.length && daily.length
-    ? `${stalePrefix}Altas reconstruidas del historial de audiencia y bajas del histórico de suscriptores de Substack.`
+    ? `${stalePrefix}Altas del historial de audiencia; bajas del histórico de Substack.`
     : !daily.length && campaignDaily.length
-    ? `${stalePrefix}Datos atribuidos a las primeras 24 h después de cada envío; no representan todas las altas y bajas de la publicación.`
+    ? `${stalePrefix}Solo las primeras 24 h tras cada envío: no son todas las altas y bajas.`
     : bajasPorDia.size
-    ? `${stalePrefix}Las bajas solo cubren las 24 h siguientes a cada envío porque el histórico general no estuvo disponible.`
-    : `${stalePrefix}Substack no ha devuelto ninguna baja. Solo expone las bajas de las 24 h siguientes a cada envío, así que un cero aquí no prueba que nadie se haya ido.`;
+    ? `${stalePrefix}Bajas solo de las 24 h tras cada envío: el histórico general no respondió.`
+    : `${stalePrefix}Substack solo da las bajas de las 24 h tras cada envío: un cero aquí no prueba que nadie se fuera.`;
 }
 
 // Visitas: la serie diaria SI es diaria, asi que se recorta por fecha como las
@@ -1641,7 +1641,7 @@ function renderTraffic(analytics) {
     `Sobre ${concentracion.counted} fuentes medidas`, "views")]);
   $("#traffic-note").textContent = concentracion.share === null
     ? "Sin visitas medidas por fuente en este periodo."
-    : "Substack mide por separado este desglose y la serie diaria, así que su suma no tiene por qué coincidir con el total del gráfico. Las altas de esta tabla son solo las de visitantes de la web; las de la app y las Notas están en Fuentes de adquisición.";
+    : "Este desglose y la serie diaria se miden por separado: no tienen por qué sumar lo mismo. Aquí solo cuentan las altas desde la web; las de app y Notas están en Fuentes de adquisición.";
 }
 
 // Efecto de red: `network_attribution` respondia 500 solo porque se llamaba sin
@@ -1717,7 +1717,7 @@ function renderRecords(snapshot, analytics) {
   renderRecordCells($("#records-grid"), [
     ["Mejor semana de altas", records.bestWeek && `${formatCompactNumber(records.bestWeek.signups)} altas`, records.bestWeek && `Semana del ${shortDate(records.bestWeek.weekStart)}`],
     ["Mejor apertura", records.bestOpen && formatPercent(records.bestOpen.value), records.bestOpen?.title],
-    ["Envío que más convirtió", records.bestSignups && `${formatCompactNumber(records.bestSignups.value)} altas`, records.bestSignups && `${records.bestSignups.title} · primer día`],
+    ["Artículo que más convirtió", records.bestSignups && `${formatCompactNumber(records.bestSignups.value)} altas`, records.bestSignups && `${records.bestSignups.title} · primer día`],
     ["Nota con más interacciones", records.bestNote && formatCompactNumber(records.bestNote.value), records.bestNote?.body],
     ["Racha más larga", longest >= 2 && `${longest} semanas`, longest >= 2 && "Publicando al menos una vez por semana"],
   ], `Aún no hay récords en ${rangeLabel()}. Prueba con un rango más amplio.`);
@@ -1730,12 +1730,12 @@ function renderRecords(snapshot, analytics) {
   const [d30, d90] = projection.estimates.map((row) => row.date);
   $("#milestone-copy").textContent = projection.state === "projected"
     ? `${faltan} ${[
-      d30 && `Al ritmo de los últimos 30 días llegarías hacia el ${shortDate(d30)}`,
-      d90 && `al de los últimos 90, hacia el ${shortDate(d90)}`,
-    ].filter(Boolean).join("; ")}. Es una estimación con tus altas menos tus bajas, no una promesa.`
+      d30 && `Al ritmo de 30 días, hacia el ${shortDate(d30)}`,
+      d90 && `al de 90, hacia el ${shortDate(d90)}`,
+    ].filter(Boolean).join("; ")}. Estimación con altas menos bajas, no una promesa.`
     : projection.state === "flat"
-    ? `${faltan} Con el ritmo actual (altas menos bajas) no creces lo bastante para estimar una fecha.`
-    : `${faltan} Para estimar cuándo llegarás hace falta el histórico de altas y bajas de Substack.`;
+    ? `${faltan} Con el ritmo actual (altas menos bajas) no hay fecha que estimar.`
+    : `${faltan} Para estimar la fecha hace falta el histórico de altas y bajas de Substack.`;
 }
 
 const RATING_SEGMENTS = [
@@ -1748,7 +1748,7 @@ function renderLoyalCore(analytics) {
   const badge = $("#loyal-change");
   if (loyal.state === "nodata") {
     badge.textContent = "Sin dato";
-    emptyMessage($("#loyal-kpis"), "Substack no devolvió la puntuación de actividad. Sincroniza de nuevo; si persiste, revisa Estado de los datos.", "coverage-empty");
+    emptyMessage($("#loyal-kpis"), "Substack no devolvió la puntuación de actividad. Sincroniza de nuevo; si persiste, revisa Estado de datos.", "coverage-empty");
     renderStackedBar($("#loyal-bar"), $("#loyal-legend"), [], "");
     $("#loyal-legend").replaceChildren();
     drawLineChart($("#loyal-chart"), [], "loyal-gradient");
@@ -1764,7 +1764,7 @@ function renderLoyalCore(analytics) {
     ["Núcleo fiel (5 de 5)", loyal.core],
     ["Parte de tu lista", loyal.coreShare, "percent"],
     ["Muy activos (4 o 5)", loyal.active],
-    ["Muy activos, parte de la lista", loyal.activeShare, "percent"],
+    ["Parte de tu lista (4 o 5)", loyal.activeShare, "percent"],
   ], "Todavía nadie tiene la máxima actividad.");
   renderStackedBar($("#loyal-bar"), $("#loyal-legend"),
     RATING_SEGMENTS.map(([key, label, rating]) => [key, label, loyal.ratings[rating]]), "");
@@ -1772,7 +1772,7 @@ function renderLoyalCore(analytics) {
   $("#loyal-empty").hidden = drawn;
   const note = $("#loyal-note");
   note.textContent = loyal.partial
-    ? `Calculado sobre ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} suscriptores: Substack pagina de más reciente a más antiguo.`
+    ? `Sobre ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} suscriptores; faltan los más antiguos.`
     : "";
   note.hidden = !loyal.partial;
 }
@@ -1786,7 +1786,7 @@ function renderCohortActivity(analytics) {
   if (!rows.length) {
     emptyMessage(list, (timeline?.cohorts || []).length
       ? `No hay suscriptores que se dieran de alta en ${rangeLabel()}. Prueba con un rango más amplio.`
-      : "Substack no devolvió fechas de alta con actividad. Sincroniza de nuevo; si persiste, revisa Estado de los datos.", "coverage-empty");
+      : "Substack no devolvió fechas de alta con actividad. Sincroniza de nuevo; si persiste, revisa Estado de datos.", "coverage-empty");
     note.hidden = true;
     return;
   }
@@ -1824,8 +1824,8 @@ function renderCohortActivity(analytics) {
     return item;
   }));
   note.textContent = [
-    "Substack solo lista a quien sigue suscrito, así que la barra reparte a los que se quedaron. «Siguen» compara con las altas de ese mes en el histórico de crecimiento; si las dos fuentes no cuadran, no se muestra.",
-    partial ? "El mes más antiguo se omite porque la lista llegó incompleta." : "",
+    "Substack solo lista a quien sigue suscrito: la barra reparte a los que se quedaron. «Siguen» cruza con las altas de ese mes; si no cuadran, se omite.",
+    partial ? "El mes más antiguo se omite: la lista llegó incompleta." : "",
   ].filter(Boolean).join(" ");
   note.hidden = false;
 }
@@ -1840,7 +1840,7 @@ const POSTAL_WIDTH = 1080;
 // dato de la newsletter. `localStorage` puede fallar (ventana privada, datos
 // bloqueados): entonces se usa la de fábrica y la postal sigue funcionando.
 const POSTAL_KEY = "plotstack.postal";
-const POSTAL_FORMATS = { portrait: { ratio: 5 / 4, copy: "1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X." }, square: { ratio: 1, copy: "1080 × 1080 px, cuadrado: sirve en cualquier red." } };
+const POSTAL_FORMATS = { portrait: { ratio: 5 / 4, copy: "1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X." }, square: { ratio: 1, copy: "1080 × 1080 px, cuadrado." } };
 const POSTAL_THEMES = ["ink", "light", "indigo"];
 const POSTAL_SECTIONS = ["chart", "tiles", "record", "milestone", "author"];
 const POSTAL_DEFAULTS = { format: "portrait", theme: "ink", show: { chart: true, tiles: true, record: true, milestone: true, author: true } };
@@ -2073,13 +2073,13 @@ function renderCoverage(analytics, snapshot) {
   if (campaigns.length || summary?.total) {
     const heading = document.createElement("p");
     heading.className = "retention-label";
-    heading.textContent = "Snapshot principal";
+    heading.textContent = "Datos principales";
     list.append(heading);
     if (campaigns.length) {
       const conDetalle = campaigns.filter((campaign) => campaign.detailAvailable).length;
       list.append(coverageRow({
-        label: "Detalle por publicación",
-        meta: `${conDetalle}/${campaigns.length} publicaciones`,
+        label: "Detalle por artículo",
+        meta: `${conDetalle}/${campaigns.length} artículos`,
         status: conDetalle === campaigns.length ? "ready" : "pending",
         statusCopy: conDetalle === campaigns.length ? "Completo" : "Parcial",
         title: "Se refrescan las 12 más recientes y las que aún no tienen métricas.",
@@ -2111,7 +2111,7 @@ function renderCoverage(analytics, snapshot) {
     const fallida = detenida || state.progress.phase === "error";
     list.append(coverageRow({
       label: "Sincronización en curso",
-      meta: total > 0 ? `${state.progress.step} ${done}/${total}` : "Fase rápida en curso",
+      meta: total > 0 ? `${state.progress.step} ${done}/${total}` : "Preparando datos principales",
       status: fallida ? "unavailable" : "pending",
       statusCopy: fallida ? "Interrumpida" : "En marcha",
       title: detenida ? PROGRESS_STALLED_COPY : state.progress.error || "",
@@ -2149,7 +2149,7 @@ function renderCoverage(analytics, snapshot) {
 // Cabeceras abreviadas como en la tabla de Notas: `short` es lo que se pinta,
 // `label` el nombre completo (en `data-label` y en el título de la abreviatura).
 const POST_COLUMNS = [
-  { key: "title", label: "Publicación", type: "text" },
+  { key: "title", label: "Artículo", type: "text" },
   { key: "date", label: "Fecha", short: "Fecha", type: "date", hint: "Fecha de publicación" },
   { key: "delivered", label: "Entregados", short: "ENT", type: "number", hint: "Correos entregados" },
   { key: "openRate", label: "Apertura", short: "APE", type: "percent", hint: "Aperturas únicas sobre entregados" },
@@ -2254,7 +2254,7 @@ function renderPostCuts(campaigns) {
   renderRankedList(
     $("#posts-length-list"),
     cuts.byLength.map((row) => cutEntry(bandLabels[row.band], row)),
-    "Substack no publica la longitud de tus posts, así que este corte no se puede hacer.",
+    "Substack no da la longitud de tus artículos.",
   );
 }
 
@@ -2296,10 +2296,10 @@ function renderCampaigns(snapshot) {
     const cell = document.createElement("td");
     cell.colSpan = POST_COLUMNS.length;
     cell.textContent = search
-      ? "Ninguna publicación coincide con la búsqueda."
+      ? "Ningún artículo coincide con la búsqueda."
       : snapshot.campaigns.length
-      ? `No enviaste publicaciones en ${rangeLabel()}. Elige un rango más amplio para ver las anteriores.`
-      : "Todavía no hay publicaciones sincronizadas.";
+      ? `No publicaste artículos en ${rangeLabel()}. Prueba con un rango más amplio.`
+      : "Todavía no hay artículos sincronizados.";
     row.append(cell); body.append(row);
   } else {
     // Mismo resaltado que la tabla de Notas: en cada columna se destacan los
@@ -2362,7 +2362,7 @@ function renderSections(campaigns) {
       display: formatPercent(row.openRate),
       muted: row.scarce,
     })),
-    "Ninguna publicación con envío tiene sección asignada.",
+    "Ningún artículo enviado tiene sección.",
   );
 }
 
@@ -2372,13 +2372,13 @@ function renderSections(campaigns) {
 function renderDiscovery(campaigns) {
   const mezcla = getDiscoveryMix(campaigns);
   $("#discovery-median").textContent = mezcla.median === null
-    ? "Sin envíos medidos"
+    ? "Sin artículos medidos"
     : `Tu mediana · ${decimal(mezcla.median, 2)} vistas por entrega`;
   renderLabelledGrid($("#discovery-kpis"), [
-    ["Envíos medidos", mezcla.posts],
+    ["Artículos medidos", mezcla.posts],
     ["Se leen fuera del correo", mezcla.beyondEmail],
     ["Dependen del correo", mezcla.emailBound],
-  ], "Ninguna publicación tiene vistas y entregas a la vez.");
+  ], "Ningún artículo tiene vistas y entregas a la vez.");
   renderRankedList(
     $("#discovery-list"),
     mezcla.top.map((row) => ({
@@ -2595,7 +2595,7 @@ function renderAttribution(content) {
   );
   $("#attribution-empty").hidden = drawn;
   $("#attribution-coverage").textContent = attribution && attribution.totalNotes
-    ? `${attribution.scoredNotes} de ${attribution.totalNotes} notas con detalle`
+    ? `${attribution.scoredNotes} de ${attribution.totalNotes} notas con estadísticas`
     : "Sin notas";
 
 }
@@ -2662,7 +2662,7 @@ function renderNotesTable(snapshot) {
   body.replaceChildren();
   if (!notes.length) {
     const row = document.createElement("tr"); const cell = document.createElement("td");
-    cell.colSpan = 11; cell.textContent = search ? "Ninguna nota coincide con la búsqueda." : `No publicaste notas en ${rangeLabel()}. Las altas que Substack atribuye a Notas pueden venir de notas anteriores: elige un rango más amplio para verlas.`;
+    cell.colSpan = 11; cell.textContent = search ? "Ninguna nota coincide con la búsqueda." : `No publicaste notas en ${rangeLabel()}. Las altas atribuidas pueden venir de notas anteriores: prueba con un rango más amplio.`;
     row.append(cell); body.append(row);
     renderNotesPager(0, 0);
     return;
@@ -2890,11 +2890,12 @@ function renderFinding(insight) {
   if (insight.strip?.points.length) {
     const figure = document.createElement("figure");
     figure.className = "finding-figure";
-    const caption = document.createElement("figcaption");
-    caption.textContent = insight.strip.band
-      ? "Cada punto es una pieza. La franja gris es lo típico: la mitad de tus piezas recientes cae ahí."
-      : "Cada punto es una pieza.";
-    figure.append(drawFindingStrip(insight.strip), caption);
+    figure.append(drawFindingStrip(insight.strip));
+    if (insight.strip.band) {
+      const caption = document.createElement("figcaption");
+      caption.textContent = "Franja gris: la mitad de tus piezas recientes.";
+      figure.append(caption);
+    }
     body.append(figure);
   }
   if (insight.examples.length) {
@@ -2955,7 +2956,7 @@ function renderInsights(snapshot, analytics) {
     section.append(heading, list);
     groups.append(section);
   });
-  if (!result.total) emptyMessage(groups, `Todavía no hay nada que destaque con claridad en ${rangeLabel()}. Prueba con un rango más amplio o vuelve tras unas cuantas piezas más.`, "coverage-empty");
+  if (!result.total) emptyMessage(groups, `Nada destaca todavía en ${rangeLabel()}. Prueba con un rango más amplio.`, "coverage-empty");
 
   // El silencio también es un resultado: se dice qué se evaluó y qué faltó.
   const silent = $("#insights-silent");
@@ -3180,11 +3181,11 @@ function downloadCsv(rows, filename) {
 // publicaciones en el resto.
 function exportCsv() {
   if (state.view === "notas") return exportNotesCsv();
-  if (!state.snapshot?.campaigns.length) return showToast("No hay publicaciones para exportar.");
+  if (!state.snapshot?.campaigns.length) return showToast("No hay artículos para exportar.");
   // Mismas columnas que la tabla mas las que tienen dato aunque no se muestren.
   // Fuera downloads/video/estimatedValue/subscribes: siempre cero en la API.
   const CSV_COLUMNS = [
-    ["Publicación", "title"], ["Slug", "slug"], ["Fecha", "date"], ["Tipo", "type"],
+    ["Artículo", "title"], ["Slug", "slug"], ["Fecha", "date"], ["Tipo", "type"],
     ["Enviados", "sent"], ["Entregados", "delivered"], ["Aperturas", "opens"],
     ["Abrieron", "opened"], ["Open rate", "openRate"], ["Clics", "clicks"],
     ["Clickers", "clicked"], ["CTR", "clickRate"], ["CTOR", "ctor"],

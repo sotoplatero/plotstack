@@ -76,7 +76,7 @@
         <div class="sidebar-bottom">
           <div class="source-card">
             <span class="source-dot"></span>
-            <div><small>Fuente activa</small><strong id="source-name">Substack</strong></div>
+            <div><small>Newsletter</small><strong id="source-name">Substack</strong></div>
           </div>
           <button class="nav-item button-reset" id="disconnect-button" type="button">
             <svg aria-hidden="true"><use href="#icon-exit"></use></svg><span>Desconectar</span>
@@ -94,7 +94,7 @@
               <button type="button" data-days="90">90D</button>
               <button type="button" data-days="all">Todo</button>
             </div>
-            <button class="icon-button" id="export-button" type="button" title="Exportar CSV" aria-label="Exportar publicaciones como CSV">
+            <button class="icon-button" id="export-button" type="button" title="Exportar CSV" aria-label="Exportar la tabla como CSV">
               <svg aria-hidden="true"><use href="#icon-download"></use></svg>
             </button>
             <div class="capture-control">
@@ -202,7 +202,7 @@
                 </div>
                 <div class="chart-wrap">
                   <svg id="growth-chart" viewBox="0 0 820 270" role="img" aria-label="Evolución de suscriptores"></svg>
-                  <div class="chart-empty" id="chart-empty" hidden>Sin datos suficientes en el periodo seleccionado. Prueba un rango más amplio o sincroniza de nuevo.</div>
+                  <div class="chart-empty" id="chart-empty" hidden>Sin datos suficientes en este periodo. Prueba con un rango más amplio.</div>
                 </div>
                 <div class="chart-footer">
                   <div><span id="net-growth-label">Crecimiento neto</span><strong id="net-growth">—</strong></div>
@@ -215,12 +215,12 @@
 
             <section class="panel insights-panel reveal" id="insights-panel" aria-labelledby="insights-title">
               <div class="panel-header">
-                <div><h2 id="insights-title">Hallazgos</h2><p class="panel-copy">Lo que se sale de lo normal en tus datos. Cada pieza se compara con las tuyas anteriores, nunca con otras newsletters.</p></div>
+                <div><h2 id="insights-title">Hallazgos</h2><p class="panel-copy">Siempre frente a tus propias piezas, nunca frente a otras newsletters.</p></div>
                 <span class="period-badge" id="insights-period">—</span>
               </div>
               <div class="insights-groups" id="insights-groups"></div>
               <div class="insights-silent" id="insights-silent" hidden>
-                <h3>Sin nada claro todavía</h3>
+                <h3>Aún sin conclusión</h3>
                 <ul id="insights-silent-list"></ul>
               </div>
             </section>
@@ -271,7 +271,7 @@
 
             <section class="panel chart-panel reveal" id="loyal-panel">
               <div class="panel-header">
-                <div><h2>Tu núcleo fiel</h2><p class="panel-copy">Lectores con la máxima puntuación de actividad de Substack: 5 de 5.</p></div>
+                <div><h2>Núcleo fiel</h2><p class="panel-copy">Máxima actividad según Substack: 5 de 5.</p></div>
                 <span class="period-badge" id="loyal-change">—</span>
               </div>
               <div class="audience-totals" id="loyal-kpis"></div>
@@ -287,7 +287,7 @@
 
             <section class="panel reveal" id="cohorts-panel">
               <div class="panel-header">
-                <div><h2>¿Siguen leyendo los que llegaron?</h2><p class="panel-copy">Por mes de alta: qué parte de quienes siguen suscritos lee con frecuencia y, cuando el histórico lo permite, cuántos siguen de los que llegaron.</p></div>
+                <div><h2>Actividad por mes de alta</h2><p class="panel-copy">Qué parte de quienes siguen suscritos lee a menudo y, si el histórico lo permite, cuántos siguen de los que llegaron.</p></div>
               </div>
               <div class="cohort-legend" aria-hidden="true"><span class="is-alta">Actividad alta</span><span class="is-baja">Actividad baja</span><span class="is-inactiva">Inactivos</span></div>
               <div class="cohort-list" id="cohort-list"></div>
@@ -299,7 +299,7 @@
           <div class="view" data-view="crecimiento" hidden>
             <section class="panel reveal" id="records-panel">
               <div class="panel-header">
-                <div><h2>Tus récords</h2><p class="panel-copy">Lo mejor que has conseguido en <span id="records-period">el periodo</span>.</p></div>
+                <div><h2>Récords</h2><p class="panel-copy">Lo mejor que has conseguido en <span id="records-period">el periodo</span>.</p></div>
                 <span class="period-badge" id="records-streak">—</span>
               </div>
               <div class="milestone" id="milestone">
@@ -371,8 +371,7 @@
                 <div><h2>Altas y bajas</h2><div class="chart-legend"><span></span>Altas<span class="is-secondary"></span>Bajas</div></div>
                 <span class="period-badge" id="churn-net">—</span>
               </div>
-              <div class="churn-summary" aria-labelledby="churn-summary-title">
-                <h3 id="churn-summary-title">Cifras del periodo</h3>
+              <div class="churn-summary">
                 <div class="audience-totals" id="churn-kpis"></div>
               </div>
               <div class="chart-wrap">
@@ -416,7 +415,7 @@
 
             <div class="two-up notes-reach-grid" aria-label="Alcance de las notas">
               <section class="panel list-panel reveal" id="notes-surfaces-panel">
-                <div class="panel-header"><div><h2>Dónde se ven tus notas</h2><p class="panel-copy">Las superficies de Substack que generan impresiones.</p></div><span class="period-badge" id="notes-surfaces-coverage">—</span></div>
+                <div class="panel-header"><div><h2>Superficies de las notas</h2><p class="panel-copy">Impresiones por superficie de Substack.</p></div><span class="period-badge" id="notes-surfaces-coverage">—</span></div>
                 <div class="donut-wrap">
                   <svg id="notes-surfaces-donut" viewBox="0 0 200 200" role="img" aria-label="Reparto de impresiones por superficie"></svg>
                   <div class="donut-center" id="notes-surfaces-center"></div>
@@ -424,7 +423,7 @@
                 <div class="donut-legend" id="notes-surfaces-legend"></div>
               </section>
               <section class="panel list-panel reveal" id="notes-audience-panel">
-                <div class="panel-header"><div><h2>Quién las ve</h2><p class="panel-copy">Qué relación tenían contigo antes de encontrar la nota.</p></div><span class="period-badge" id="notes-audience-coverage">—</span></div>
+                <div class="panel-header"><div><h2>Audiencia de las notas</h2><p class="panel-copy">Qué relación tenían contigo antes de encontrar la nota.</p></div><span class="period-badge" id="notes-audience-coverage">—</span></div>
                 <div class="donut-wrap">
                   <svg id="notes-audience-donut" viewBox="0 0 200 200" role="img" aria-label="Reparto de impresiones por tipo de audiencia"></svg>
                   <div class="donut-center" id="notes-audience-center"></div>
@@ -435,11 +434,11 @@
 
             <section class="panel reveal" id="cadence-panel">
               <div class="panel-header">
-                <div><h2>Cuándo publicas</h2><p class="panel-copy">Busca un día a la izquierda y una hora arriba. El cuadro será más verde cuanto más hayas publicado en esa combinación.</p></div>
+                <div><h2>Horario de publicación</h2><p class="panel-copy">Más verde, más notas publicadas ese día a esa hora.</p></div>
                 <span class="period-badge" id="cadence-summary">—</span>
               </div>
               <div class="heatmap" id="cadence-heatmap" aria-label="Mapa de actividad: notas publicadas por día de la semana y hora"></div>
-              <div class="heatmap-legend" aria-hidden="true"><span>Menos</span><i></i><i></i><i></i><i></i><span>Más publicaciones</span></div>
+              <div class="heatmap-legend" aria-hidden="true"><span>Menos</span><i></i><i></i><i></i><i></i><span>Más notas</span></div>
               <div class="findings" id="cadence-findings" hidden></div>
               <div class="table-wrap cadence-table-wrap">
                 <table>
@@ -452,14 +451,13 @@
 
             <section class="panel chart-panel reveal" id="attribution-panel">
               <div class="panel-header">
-                <div><h2>Altas atribuidas a notas</h2><p class="panel-copy">Suscriptores gratuitos que Substack atribuye a cada nota, agregados por día.</p></div>
+                <div><h2>Altas atribuidas a notas</h2><p class="panel-copy">Altas gratuitas que Substack atribuye a tus notas, por día.</p></div>
                 <span class="period-badge" id="attribution-coverage">—</span>
               </div>
               <div class="chart-wrap">
                 <svg id="attribution-chart" viewBox="0 0 820 200" role="img" aria-label="Altas gratuitas atribuidas a notas por día"></svg>
-                <div class="chart-empty" id="attribution-empty" hidden>Ninguna nota con estadísticas de detalle en el periodo.</div>
+                <div class="chart-empty" id="attribution-empty" hidden>Ninguna nota del periodo tiene estadísticas; Substack solo atribuye altas a esas.</div>
               </div>
-              <p class="panel-copy" id="attribution-note"></p>
             </section>
 
             <section class="panel notes-panel reveal" id="notes">
@@ -519,7 +517,7 @@
                 </div>
               </div>
               <div class="post-kpi-strip">
-                <div><span>Publicaciones</span><strong id="posts-total">—</strong></div>
+                <div><span>Artículos</span><strong id="posts-total">—</strong></div>
                 <div><span>Entregados</span><strong id="posts-delivered">—</strong></div>
                 <div><span>Aperturas únicas</span><strong id="posts-opened">—</strong></div>
                 <div><span>Clics únicos</span><strong id="posts-clicked">—</strong></div>
@@ -537,18 +535,18 @@
 
             <section class="panel chart-panel reveal" id="posts-rate-panel">
               <div class="panel-header">
-                <div><h2>Apertura y CTR por envío</h2><div class="chart-legend"><span></span>Apertura<span class="is-secondary"></span>CTR</div><p class="panel-copy">Solo envíos con destinatarios.</p></div>
+                <div><h2>Apertura y CTR por artículo</h2><div class="chart-legend"><span></span>Apertura<span class="is-secondary"></span>CTR</div><p class="panel-copy">Solo envíos con destinatarios.</p></div>
                 <span class="period-badge" id="posts-rate-median">—</span>
               </div>
               <div class="chart-wrap">
-                <svg id="posts-rate-chart" viewBox="0 0 820 240" role="img" aria-label="Apertura y CTR por envío a lo largo del tiempo"></svg>
-                <div class="chart-empty" id="posts-rate-empty" hidden>Hacen falta al menos dos envíos con destinatarios para dibujar la serie.</div>
+                <svg id="posts-rate-chart" viewBox="0 0 820 240" role="img" aria-label="Apertura y CTR por artículo a lo largo del tiempo"></svg>
+                <div class="chart-empty" id="posts-rate-empty" hidden>Hacen falta al menos dos artículos enviados para dibujar la serie.</div>
               </div>
             </section>
 
             <section class="panel reveal" id="discovery-panel">
               <div class="panel-header">
-                <div><h2>Correo o descubrimiento</h2><p class="panel-copy">Vistas por cada entrega. Por encima de 1, la pieza se lee más allá de la bandeja: web, app y recomendaciones.</p></div>
+                <div><h2>Lectura fuera del correo</h2><p class="panel-copy">Vistas por entrega. Por encima de 1, también se lee en web, app y recomendaciones.</p></div>
                 <span class="period-badge" id="discovery-median">—</span>
               </div>
               <div class="audience-totals" id="discovery-kpis"></div>
@@ -557,7 +555,7 @@
 
             <section class="panel reveal" id="diagnosis-panel">
               <div class="panel-header">
-                <div><h2>Diagnóstico asunto / contenido</h2><p class="panel-copy">La apertura mide el asunto; el CTOR (clics de quienes abren) mide el contenido. La línea que separa cada eje es tu propia mediana.</p></div>
+                <div><h2>Diagnóstico asunto / contenido</h2><p class="panel-copy">La apertura mide el asunto; el CTOR (clics de quienes abren), el contenido. Cada eje se corta en tu mediana.</p></div>
                 <span class="period-badge" id="diagnosis-medians">—</span>
               </div>
               <div class="quadrant-grid" id="diagnosis-grid"></div>
@@ -565,15 +563,15 @@
 
             <section class="intelligence-grid reveal" aria-label="Cortes de rendimiento">
               <article class="panel list-panel" id="posts-by-day">
-                <div class="panel-header"><div><h2>Rendimiento por día</h2></div></div>
+                <div class="panel-header"><div><h2>Apertura por día</h2></div></div>
                 <div class="source-list" id="posts-day-list"></div>
               </article>
               <article class="panel list-panel" id="posts-by-section">
-                <div class="panel-header"><div><h2>Rendimiento por sección</h2></div></div>
+                <div class="panel-header"><div><h2>Apertura por sección</h2></div></div>
                 <div class="source-list" id="posts-section-list"></div>
               </article>
               <article class="panel list-panel" id="posts-by-length">
-                <div class="panel-header"><div><h2>Rendimiento por longitud</h2></div></div>
+                <div class="panel-header"><div><h2>Apertura por longitud</h2></div></div>
                 <div class="source-list" id="posts-length-list"></div>
               </article>
             </section>
@@ -582,8 +580,8 @@
           <div class="view" data-view="postal" hidden>
             <section class="postal-stage" aria-labelledby="postal-title">
               <div class="postal-intro">
-                <h2 id="postal-title">Tu postal</h2>
-                <p class="panel-copy">Tu newsletter en una imagen para compartir. Usa el periodo que elijas arriba y nunca incluye suscriptores de pago ni ingresos.</p>
+                <h2 id="postal-title">Postal</h2>
+                <p class="panel-copy">Una imagen para compartir con el periodo elegido arriba. Nunca incluye pago ni ingresos.</p>
                 <div class="postal-actions">
                   <button class="action-button" id="postal-download" type="button">Descargar imagen</button>
                   <button class="icon-button postal-copy" id="postal-copy" type="button" aria-label="Copiar imagen al portapapeles" title="Copiar imagen">
@@ -659,11 +657,11 @@
           <div class="view" data-view="cobertura" hidden>
             <section class="panel coverage-panel reveal" id="data-coverage">
               <div class="panel-header">
-                <div><h2>Estado de los datos</h2></div>
+                <div><h2>Estado de datos</h2></div>
                 <div class="coverage-score"><strong id="coverage-ready">—</strong><span id="coverage-total">/ —</span></div>
               </div>
-              <p class="coverage-copy">Cada fuente se sincroniza por separado. Un fallo parcial nunca borra los datos que sí llegaron.</p>
-              <p class="panel-copy" id="coverage-synced">Sin sincronizar</p>
+              <p class="coverage-copy">Cada fuente va por separado: si una falla, las demás se conservan.</p>
+              <p class="panel-copy" id="coverage-synced">Todavía no has sincronizado.</p>
               <div class="coverage-list" id="coverage-list"></div>
               <div class="privacy-badge"><span>◇</span><p><strong>Privacidad local</strong>Emails y perfiles individuales se descartan antes de guardar.</p></div>
             </section>
