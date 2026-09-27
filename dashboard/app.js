@@ -2799,9 +2799,13 @@ function renderDashboard() {
 }
 
 // ── Hallazgos ─────────────────────────────────────────────────────────────
-// Tres niveles: hasta tres destacados con su prueba (tira y piezas), luego
-// todo lo demás que pasó su umbral, una línea por hallazgo y agrupado con los
-// nombres de la barra lateral, y al final lo que se evaluó sin concluir nada.
+// Un solo componente, `.finding`, para todo hallazgo de cualquier vista: marca
+// de diana en el tono de su métrica, la frase, sobre cuántas piezas y el
+// enlace; debajo, la prueba (tira de puntos, piezas, línea de Prueba) solo si
+// existe. No hay destacados ni líneas de segundo nivel: el orden por
+// relevancia ya dice qué va primero. Para montar hallazgos en otra vista basta
+// un contenedor estático y `renderFindings(contenedor, hallazgos)`; la
+// navegación está delegada en el documento.
 // El texto llega escrito desde `insights.js`; aquí solo se compone el DOM.
 const INSIGHT_GROUP_LABELS = { audiencia: "Audiencia", crecimiento: "Crecimiento", notas: "Notas", publicaciones: "Publicaciones" };
 const dayMonth = (value) => {
@@ -2820,14 +2824,15 @@ const INSIGHT_SERIES = [
 ];
 const insightSeries = (id) => INSIGHT_SERIES.find(([pattern]) => pattern.test(id))?.[1] || "neutral";
 
-function insightLink(insight, copy, label) {
+function findingLink(insight) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "text-button insight-link";
+  button.className = "text-button finding-link";
   button.dataset.insight = insight.id;
-  if (label) button.setAttribute("aria-label", label);
+  // Desde su propia vista el enlace no cambia de vista: lleva al panel.
+  const here = insight.target.view === state.view;
   const text = document.createElement("span");
-  text.textContent = copy;
+  text.textContent = here ? "Ver detalle" : `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"}`;
   const icon = document.createElementNS(SVG_NS, "svg");
   icon.setAttribute("aria-hidden", "true");
   const use = document.createElementNS(SVG_NS, "use");
@@ -2839,11 +2844,11 @@ function insightLink(insight, copy, label) {
 
 // Tira de puntos: cada pieza es un punto sobre un único eje logarítmico (una
 // nota viral no aplasta al resto) y la franja gris es la mitad central de las
-// recientes. El mismo gráfico sirve para cualquier hallazgo con piezas. Va en
-// HTML con posiciones en %: un SVG estirado al ancho deformaba los puntos.
-function drawInsightStrip(strip) {
+// recientes. Va en HTML con posiciones en %: un SVG estirado al ancho
+// deformaba los puntos.
+function drawFindingStrip(strip) {
   const box = document.createElement("div");
-  box.className = "insight-strip";
+  box.className = "finding-strip";
   const values = strip.points.map((point) => point.value).concat(strip.band || []);
   const logs = values.map((value) => Math.log1p(Math.max(0, value)));
   const min = Math.min(...logs);
@@ -2851,7 +2856,7 @@ function drawInsightStrip(strip) {
   const at = (value) => (max > min ? ((Math.log1p(Math.max(0, value)) - min) / (max - min)) * 100 : 50);
   if (strip.band) {
     const band = document.createElement("i");
-    band.className = "insight-strip-band";
+    band.className = "finding-strip-band";
     band.style.left = `${at(strip.band[0])}%`;
     band.style.width = `${Math.max(1, at(strip.band[1]) - at(strip.band[0]))}%`;
     box.append(band);
@@ -2859,7 +2864,7 @@ function drawInsightStrip(strip) {
   // Los resaltados van al final para que ningún punto gris los tape.
   [...strip.points].sort((a, b) => Number(a.highlight) - Number(b.highlight)).forEach((point) => {
     const dot = document.createElement("b");
-    dot.className = point.highlight ? "insight-strip-dot is-highlight" : "insight-strip-dot";
+    dot.className = point.highlight ? "finding-strip-dot is-highlight" : "finding-strip-dot";
     dot.style.left = `${at(point.value)}%`;
     box.append(dot);
   });
@@ -2869,26 +2874,39 @@ function drawInsightStrip(strip) {
   return box;
 }
 
-function renderInsightCard(insight) {
+function renderFinding(insight) {
   const card = document.createElement("article");
-  card.className = "insight-card";
+  card.className = "finding";
   card.dataset.series = insightSeries(insight.id);
+  const mark = document.createElement("i");
+  mark.className = "finding-mark";
+  mark.setAttribute("aria-hidden", "true");
+
+  const body = document.createElement("div");
+  body.className = "finding-body";
   const text = document.createElement("p");
-  text.className = "insight-text";
+  text.className = "finding-text";
   text.textContent = insight.text;
-  card.append(text);
+  const meta = document.createElement("div");
+  meta.className = "finding-meta";
+  const sample = document.createElement("small");
+  sample.textContent = insight.sample;
+  meta.append(sample);
+  body.append(text, meta);
+
   if (insight.strip?.points.length) {
-    card.append(drawInsightStrip(insight.strip));
-    const legend = document.createElement("p");
-    legend.className = "insight-legend";
-    legend.textContent = insight.strip.band
+    const figure = document.createElement("figure");
+    figure.className = "finding-figure";
+    const caption = document.createElement("figcaption");
+    caption.textContent = insight.strip.band
       ? "Cada punto es una pieza. La franja gris es lo típico: la mitad de tus piezas recientes cae ahí."
       : "Cada punto es una pieza.";
-    card.append(legend);
+    figure.append(drawFindingStrip(insight.strip), caption);
+    body.append(figure);
   }
   if (insight.examples.length) {
     const list = document.createElement("ul");
-    list.className = "insight-examples";
+    list.className = "finding-examples";
     insight.examples.forEach((example) => {
       const item = document.createElement("li");
       const excerpt = document.createElement("span");
@@ -2898,49 +2916,41 @@ function renderInsightCard(insight) {
       item.append(excerpt, date);
       list.append(item);
     });
-    card.append(list);
+    body.append(list);
   }
   if (insight.action) {
     const action = document.createElement("p");
-    action.className = "insight-action";
+    action.className = "finding-action";
     action.textContent = insight.action;
-    card.append(action);
+    body.append(action);
   }
-  const foot = document.createElement("div");
-  foot.className = "insight-foot";
-  const sample = document.createElement("small");
-  sample.textContent = insight.sample;
-  foot.append(sample, insightLink(insight, `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"}`));
-  card.append(foot);
+  card.append(mark, body, findingLink(insight));
   return card;
+}
+
+// Pinta una lista de hallazgos en un contenedor estático y registra sus
+// destinos para la navegación delegada. Sirve a cualquier vista.
+function renderFindings(container, insights) {
+  insights.forEach((insight) => state.insightTargets.set(insight.id, insight.target));
+  container.replaceChildren(...insights.map(renderFinding));
+  container.hidden = !insights.length;
 }
 
 function renderInsights(snapshot, analytics) {
   const result = getInsights({ snapshot, analytics, days: state.days, timeZoneOffsetMinutes: timezoneOffset() });
-  state.insightTargets = new Map([...result.featured, ...Object.values(result.groups).flat()].map((insight) => [insight.id, insight.target]));
+  state.insightTargets = new Map();
   $("#insights-period").textContent = state.days === ALL_TIME ? "Todo el histórico" : `Últimos ${state.days} días`;
-
-  const featured = $("#insights-featured");
-  featured.replaceChildren();
-  featured.append(...result.featured.map(renderInsightCard));
 
   const groups = $("#insights-groups");
   groups.replaceChildren();
-  const filled = INSIGHT_GROUPS.filter((group) => result.groups[group].length);
-  filled.forEach((group) => {
+  INSIGHT_GROUPS.filter((group) => result.groups[group].length).forEach((group) => {
     const section = document.createElement("section");
-    section.className = "insight-group";
+    section.className = "findings-group";
     const heading = document.createElement("h3");
     heading.textContent = INSIGHT_GROUP_LABELS[group];
-    const list = document.createElement("ul");
-    result.groups[group].forEach((insight) => {
-      const item = document.createElement("li");
-      item.dataset.series = insightSeries(insight.id);
-      const text = document.createElement("span");
-      text.textContent = insight.text;
-      item.append(text, insightLink(insight, "Ver", `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"}`));
-      list.append(item);
-    });
+    const list = document.createElement("div");
+    list.className = "findings";
+    renderFindings(list, result.groups[group]);
     section.append(heading, list);
     groups.append(section);
   });
@@ -2956,7 +2966,7 @@ function renderInsights(snapshot, analytics) {
   }));
 }
 
-// "Ver →" abre la vista de la evidencia, lleva al panel y lo resalta un
+// "Ver" abre la vista de la evidencia, lleva al panel y lo resalta un
 // instante. En Notas, además, filtra la tabla a las piezas del hallazgo.
 function navigateToInsight(id) {
   const target = state.insightTargets.get(id);
@@ -3232,8 +3242,9 @@ function bindEvents() {
   bindPostalConfig();
   $("#postal-download").addEventListener("click", () => runCapture({ target: $("#postal-card"), destination: "download", label: "postal", outputWidth: POSTAL_WIDTH, layoutWidth: POSTAL_WIDTH / 2 }));
   $("#postal-copy").addEventListener("click", () => runCapture({ target: $("#postal-card"), destination: "copy", label: "postal", outputWidth: POSTAL_WIDTH, layoutWidth: POSTAL_WIDTH / 2 }));
-  // Delegación: los hallazgos se repintan con cada rango, el contenedor no.
-  $("#insights-panel").addEventListener("click", (event) => {
+  // Delegación en el documento: los hallazgos se repintan con cada rango y
+  // pueden vivir en cualquier vista; ningún nodo repintado lleva listener.
+  document.addEventListener("click", (event) => {
     const link = event.target.closest?.("[data-insight]");
     if (link) navigateToInsight(link.dataset.insight);
   });

@@ -891,8 +891,9 @@ test("el Resumen escribe sus hallazgos con enlace a la vista de la evidencia", a
     assert.equal($(`#${id}`), null, `#${id} se retiró`);
   }
   assert.equal($("#insights-period").textContent, "Todo el histórico");
-  const lineas = $$("#insights-groups li");
+  const lineas = $$("#insights-groups .finding");
   assert.ok(lineas.length >= 1, "hay al menos un hallazgo con los datos del fixture");
+  assert.ok(lineas.every((nodo) => nodo.querySelector(".finding-mark") && nodo.querySelector(".finding-text")), "todos comparten el mismo componente");
   assert.doesNotMatch($("#insights-panel").textContent, /NaN|undefined|Infinity/);
   const enlace = lineas[0].querySelector("[data-insight]");
   enlace.click();
@@ -919,9 +920,9 @@ test("un hallazgo de notas filtra la tabla a sus piezas y el filtro se quita", a
   await verVista("resumen");
   await rango("30");
 
-  const tarjeta = $$("#insights-featured .insight-card").find((node) => /nota típica/.test(node.textContent));
-  assert.ok(tarjeta, "la nota atípica se destaca con tarjeta");
-  assert.ok(tarjeta.querySelector(".insight-strip"), "la tarjeta lleva su tira de puntos");
+  const tarjeta = $$("#insights-groups .finding").find((node) => /nota típica/.test(node.textContent));
+  assert.ok(tarjeta, "la nota atípica aparece como hallazgo");
+  assert.ok(tarjeta.querySelector(".finding-strip"), "el hallazgo lleva su tira de puntos");
   assert.match(tarjeta.textContent, /La nota que se salió de lo normal/, "la prueba es la propia nota");
   tarjeta.querySelector("[data-insight]").click();
   await settle(4);

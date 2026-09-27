@@ -297,6 +297,16 @@ Línea de 2.5px en `--series`, puntos blancos con contorno de la serie, serie se
 ### Barras apiladas y sus leyendas
 Cada elemento de la leyenda lleva la clase de su segmento (`is-<clave>`) y un punto circular de 8px coloreado como ese segmento, de modo que la leyenda se lee sin adivinar. Actividad de la lista usa la escala de niveles; la barra de la red de Substack usa la paleta de canales.
 
+### Hallazgo (firma)
+El componente de todo hallazgo, en cualquier vista, siempre igual: no hay versión destacada ni versión en línea.
+- **Superficie:** gris agrupado sobre el panel blanco, radio 12px, sin borde ni sombra (el tono separa). Relleno 16px 20px 16px 16px (14px en móvil). Varios hallazgos se apilan con 8px de hueco.
+- **Marca de diana:** círculo de 26px (22px en móvil) con el tono de su métrica al 16% y un punto pleno de 10px dentro. Es la firma del hallazgo: el color dice de qué métrica habla, según la regla Un color, un significado.
+- **Frase:** Geist 700 16px/1.4 (15px en móvil), −0.01em, tinta. La cifra va dentro de la frase, nunca como número suelto.
+- **Muestra:** meta 500 12px en tinta atenuada, justo debajo: sobre cuántas piezas o con qué ventana se calcula.
+- **Enlace:** 600 13px en tinta con el icono de flecha del sistema, en su propia columna alineado con la frase (al pie en móvil). "Ver en <Vista>" o, desde la propia vista, "Ver detalle".
+- **Prueba, solo si existe:** tira de puntos (cada pieza es un punto en eje logarítmico, la franja gris es lo típico y las piezas del hallazgo son puntos de 13px en el tono), piezas de ejemplo con un punto de 7px del tono y su fecha, y la línea *Prueba* en una cápsula blanca de radio 10px.
+- **Lo que aún no concluye:** no es un hallazgo y no usa la superficie. Va en un recuadro de trazo discontinuo, con puntos de anillo hueco (el mismo lenguaje que "no disponible").
+
 ### Toast
 Bloque de tinta con texto blanco, radio 14px: el mismo lenguaje invertido que los estados activos.
 
@@ -313,6 +323,7 @@ Bloque de tinta con texto blanco, radio 14px: el mismo lenguaje invertido que lo
 - **Do** invertir el estado activo (bloque de tinta, texto blanco) y dar forma de cápsula a todo control.
 - **Do** escribir cifras en Geist negrita con numerales tabulares, y todo texto en caja de frase.
 - **Do** derivar sangrados de `--pad` (24px / 16px), y usar 16px dentro de un grupo y 32px entre grupos.
+- **Do** mostrar cualquier hallazgo, en cualquier vista, con el componente Hallazgo (`.finding`, `renderFindings`), nunca con una tarjeta o una lista propia.
 
 ### Don't:
 - **Don't** reintroducir el papel crema, la serif display, las reglas editoriales finas entre secciones ni el grano del mundo anterior.

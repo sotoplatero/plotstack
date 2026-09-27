@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BASELINE_MIN,
-  MAX_FEATURED,
   getInsights,
   robustBaseline,
   robustZ,
@@ -40,7 +39,7 @@ const detailed = (freeSubscribers, impressions, interactions = 10) => ({
 // 40 notas, una cada 2 días; la más reciente (índice 0) es la protagonista.
 const notesWith = (hero) => Array.from({ length: 40 }, (_, index) => note(index, index * 2, index === 0 ? hero : wobble(index)));
 
-const byId = (result, id) => [...result.featured, ...Object.values(result.groups).flat()].find((insight) => insight.id === id);
+const byId = (result, id) => Object.values(result.groups).flat().find((insight) => insight.id === id);
 
 test("robustBaseline exige muestra minima y resiste una nota viral", () => {
   assert.equal(robustBaseline([1, 2, 3]), null);
@@ -82,7 +81,7 @@ test("una nota muy por encima de su base se destaca con tira y ejemplo", () => {
   assert.equal(insight.examples[0].id, "0");
   assert.ok(insight.strip.points.some((point) => point.highlight && point.id === "0"));
   assert.deepEqual(insight.target.noteIds, ["0"]);
-  assert.ok(result.featured.some((row) => row.id === "note-outlier"));
+  assert.equal(result.groups.notas[0].id, "note-outlier", "la nota con prueba encabeza su vista por relevancia");
 });
 
 test("sin nota atipica no hay hallazgo ni silencio", () => {
@@ -186,15 +185,16 @@ test("la fuente lider respeta los umbrales y usa la ventana del rango", () => {
   assert.ok(semana.silent.some((row) => row.group === "crecimiento"));
 });
 
-test("como maximo tres destacados, sin duplicarse en los grupos", () => {
+test("cada hallazgo aparece una sola vez, en su vista y por relevancia", () => {
   const notes = notesWith(60).map((row, index) => ({ ...row, stats: index === 0 ? detailed(40, 1000) : detailed(1 + (index % 3), 1000 + index * 30) }));
   const campaigns = Array.from({ length: 20 }, (_, index) => campaign(index, index * 7, index === 0 ? { signups: 50 } : {}));
   const result = getInsights({ snapshot: { notes, campaigns }, days: 30, now: NOW });
-  assert.ok(result.featured.length <= MAX_FEATURED);
-  const grouped = Object.values(result.groups).flat().map((row) => row.id);
-  for (const insight of result.featured) {
-    assert.ok(!grouped.includes(insight.id), `${insight.id} no se repite`);
-    assert.ok(insight.strip || insight.examples.length, "un destacado lleva su prueba");
+  const all = Object.values(result.groups).flat();
+  assert.equal(new Set(all.map((row) => row.id)).size, all.length, "ningún hallazgo se repite");
+  assert.equal(all.length, result.total);
+  for (const [group, rows] of Object.entries(result.groups)) {
+    assert.ok(rows.every((row) => row.group === group), `${group} solo contiene los suyos`);
+    assert.ok(rows.every((row, index) => index === 0 || rows[index - 1].score >= row.score), `${group} va por relevancia`);
   }
 });
 
@@ -208,6 +208,5 @@ test("ningun hallazgo emite Infinity, NaN ni cifras de pago", () => {
 
 test("un snapshot vacio no rompe y no inventa nada", () => {
   const result = getInsights({});
-  assert.equal(result.featured.length, 0);
   assert.equal(result.total, 0);
 });

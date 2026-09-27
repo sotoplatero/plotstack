@@ -36,7 +36,6 @@ import { getFeatureInsights } from "./content-analytics.js";
 export const BASELINE_WINDOW = 30;
 export const BASELINE_MIN = 10;
 export const OUTLIER_Z = 2;
-export const MAX_FEATURED = 3;
 // Umbrales de producto heredados del Resumen anterior: por debajo, no se nombra
 // una fuente principal.
 export const LEADER_MIN_SIGNUPS = 10;
@@ -615,14 +614,13 @@ export function getInsights({ snapshot = {}, analytics = null, days = 30, now = 
     silent.push(...(result.silent || []));
   }
 
+  // Un solo nivel: dentro de cada vista, por relevancia. Lo que trae su prueba
+  // (tira o piezas) no se promociona aparte; el orden ya lo sube.
   const seen = new Set();
   const unique = found
     .filter((insight) => (seen.has(insight.id) ? false : seen.add(insight.id)))
     .sort((a, b) => b.score - a.score);
-  // Solo puede destacarse lo que trae su prueba: la tira o las piezas.
-  const featured = unique.filter((insight) => insight.strip || insight.examples.length).slice(0, MAX_FEATURED);
-  const featuredIds = new Set(featured.map((insight) => insight.id));
-  const groups = Object.fromEntries(GROUPS.map((group) => [group, unique.filter((insight) => insight.group === group && !featuredIds.has(insight.id))]));
+  const groups = Object.fromEntries(GROUPS.map((group) => [group, unique.filter((insight) => insight.group === group)]));
 
-  return { featured, groups, silent, total: unique.length };
+  return { groups, silent, total: unique.length };
 }

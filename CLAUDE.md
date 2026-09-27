@@ -46,7 +46,7 @@ dashboard/app.js  --chrome.runtime.sendMessage-->  src/background.js
 - **`src/providers/substack-extended.js`** — catorce claves de datos. Tres de ellas (`growthSources`, `visitorSources`, `networkAttribution`) se piden **una vez por ventana del selector** (7/30/90/todo): Substack las agrega en servidor y devuelve un único punto por fuente, así que sus totales no se pueden recortar en cliente. `trafficTimeseries` sí es diaria y basta una petición. Claves originales: `subscriberTimeline`, `growthSources`, `followerTimeseries`, `audienceLocation`, `freeSubscriberGrowth`, `paidSubscriberGrowth`, `freeRetention`, `paidRetention`, y `audience`, que **no tiene petición propia**: sus conteos salen de `audienceCounts`, la copia sin PII (`count` + `chartCounts`) que devuelve la primera página de la timeline. Pedirlo aparte con `limit: 1` era un duplicado exacto en cada sync. Se retiraron seis (red 500, recomendaciones 400, payment_pledges 400, planes, inventario y exportaciones) porque no alimentaban ningún renderer. **Una fuente sin consumidor no se sincroniza.** Cada una tiene `request` + `normalize`; se ejecutan con `Promise.allSettled` y producen un array `coverage` que el dashboard muestra en el panel **Cobertura**.
 - **`src/shared/analytics.js`** — capa de saneado y formato, compartida entre service worker y dashboard (importada por ruta relativa `../src/shared/`). `normalizeSnapshot()` define el esquema persistido; los formatters usan locale `es-ES`.
 - **`src/shared/content-analytics.js`** — módulo puro, sin red y sin persistencia. **`getContentFindings()` y la tabla de rasgos se retiraron de la interfaz** (el análisis por medianas no era útil con pocas notas; el análisis con IA está descartado, ver `PRODUCT.md`). Siguen exportadas y con tests, pero **ningún renderer las consume**. Lo que el dashboard sí usa, a través de la fachada `getContentAnalytics()`: `getCadenceHeatmap` (mapa día × hora: las 168 `cells` son lo que se pinta, 7 filas × 24 columnas, con intensidad por recuento y las interacciones en el tooltip; `buckets` por tramo sigue calculado pero sin consumidor). `getCadenceCalendar` (calendario estilo GitHub por día) queda exportado y con tests pero **fuera de la fachada y de la interfaz**: se probó y el usuario prefirió el mapa por hora y `getNoteAttributionTimeline` (panel "Altas atribuidas a notas" de la vista Notas).
-- **`src/shared/insights.js`** — **Hallazgos**, módulo puro como el anterior. `getInsights({ snapshot, analytics, days, now })` corre un catálogo de detectores deterministas (casi todos envuelven funciones ya existentes: `getRecords`, `getLoyalCore`, `getCampaignCuts`, `getFeatureInsights`…) y devuelve `{ featured, groups, silent, total }`: frases en español ya escritas, cada una con su `target` (vista, panel y, en Notas, `noteIds`). Solo puede ir en `featured` (máx. 3) lo que trae su prueba: tira de puntos (`strip`) o piezas (`examples`).
+- **`src/shared/insights.js`** — **Hallazgos**, módulo puro como el anterior. `getInsights({ snapshot, analytics, days, now })` corre un catálogo de detectores deterministas (casi todos envuelven funciones ya existentes: `getRecords`, `getLoyalCore`, `getCampaignCuts`, `getFeatureInsights`…) y devuelve `{ groups, silent, total }`: por vista (`audiencia`, `crecimiento`, `notas`, `publicaciones`), frases en español ya escritas y ordenadas por relevancia, cada una con su `target` (vista, panel y, en Notas, `noteIds`) y, si la tiene, su prueba: tira de puntos (`strip`) o piezas (`examples`). Un solo nivel: nada se promociona como destacado.
 - **`dashboard/`** — página completa (no popup), DOM manual sin framework. `app.js` mantiene `state` en memoria y despacha **una sola vista** por render.
 
 ## Las siete vistas del dashboard
@@ -90,19 +90,27 @@ porque siempre pedíamos 12 meses; `growth/sources` acepta `from_date`/`to_date`
 así que ahora se sincroniza una ventana por opción del selector.
 
 Resumen se lee en tres pasos: el titular (`growth-verdict`), los KPI y el
-gráfico de suscriptores, y el panel **Hallazgos** (`#insights-panel`): hasta tres
-tarjetas destacadas con su tira de puntos y sus piezas, luego **todas** las
-líneas que superan su umbral agrupadas con los nombres de la barra lateral, cada
-una con "Ver →", y al final en gris lo que se evaluó sin concluir nada. Los
-paneles de fuentes, de posts que convierten y de actividad de publicaciones y
-Notas se retiraron: sus conclusiones son líneas de Hallazgos y sus gráficos
-viven en su vista. "Ver →" usa delegación sobre el contenedor estático y, en
-Notas, pone `state.notesFilter` (en memoria, se quita con el chip o al entrar
-desde la barra lateral).
-Cada hallazgo lleva `data-series` con el tono de su métrica (`insightSeries()`:
-notas verde, altas índigo, apertura naranja, clics azul, núcleo fiel en tinta)
-y el punto, la tira y los ejemplos lo leen de `--series`. Sin etiquetas en
-mayúsculas encima de los bloques: la jerarquía la dan tarjeta, lista y gris.
+gráfico de suscriptores, y el panel **Hallazgos** (`#insights-panel`): **todos**
+los hallazgos que superan su umbral, agrupados con los nombres de la barra
+lateral, y al final, en un recuadro de trazo discontinuo, lo que se evaluó sin
+concluir nada. Los paneles de fuentes, de posts que convierten y de actividad de
+publicaciones y Notas se retiraron: sus conclusiones son hallazgos y sus
+gráficos viven en su vista.
+
+**El hallazgo es un componente único, `.finding`, y es el que usa cualquier
+vista que muestre hallazgos propios.** No hay dos niveles (destacado y línea):
+cada hallazgo es la misma pieza (marca de diana en el tono de su métrica, frase,
+muestra, enlace) y la prueba (tira, piezas, línea de *Prueba*) aparece dentro
+solo si existe. Para añadir hallazgos a otra vista: un contenedor estático
+`<div class="findings" id="…">` en `index.html` y, en su renderer,
+`renderFindings($("#…"), getInsights({ … }).groups.<vista>)`. `renderFindings`
+registra los destinos en `state.insightTargets`, y la navegación está delegada en
+el documento (`[data-insight]`), así que no hace falta enganchar nada. Desde su
+propia vista el enlace dice "Ver detalle" y solo lleva al panel. El tono sale de
+`insightSeries()` (notas verde, altas índigo, apertura naranja, clics azul,
+núcleo fiel en tinta): un detector nuevo con otra métrica añade ahí su patrón.
+En Notas, el enlace pone `state.notesFilter` (en memoria; se quita con el chip o
+al entrar desde la barra lateral).
 `health-score` e inventario se retiraron porque duplicaban señales o usaban un
 índice arbitrario. Los KPI de pago e ingreso mensual existen, pero están ocultos
 por defecto con `data-sensitive`; sus preferencias viven en `localStorage` bajo

@@ -1286,47 +1286,54 @@ html.is-capturing .postal { border-radius: 0; }
 /* Cinco récords caben en una fila a partir de ~850 px de panel. */
 .records-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
 
-/* ── Hallazgos (Resumen) ───────────────────────────────────────────────────
-   Tres pesos sin etiquetas encima: tarjetas destacadas con su prueba, líneas
-   agrupadas por vista y, al final, lo que se evaluó sin concluir nada. Cada
-   hallazgo declara el tono de su métrica en `data-series`. */
+/* ── Hallazgo (`.finding`) ────────────────────────────────────────────────
+   El componente de todo hallazgo, en cualquier vista. Superficie de gris
+   agrupado sobre el panel blanco (el tono separa), una marca de diana en el
+   tono de su métrica y la frase en negrita. La prueba (tira, piezas, Prueba)
+   cuelga de la misma columna de texto solo cuando existe. Cada hallazgo
+   declara su tono en `data-series`. */
 [data-series="notes"] { --series: var(--c-notes); --series-text: var(--c-notes-text); }
 [data-series="subs"] { --series: var(--c-subs); --series-text: var(--c-subs-text); }
 [data-series="open"] { --series: var(--c-open); --series-text: var(--c-open-text); }
 [data-series="click"] { --series: var(--c-click); --series-text: var(--c-click-text); }
 [data-series="neutral"] { --series: var(--paper); --series-text: var(--paper); }
-.insights-featured { display: grid; gap: var(--space-3); }
-.insights-featured:empty, .insights-groups:empty { display: none; }
-.insights-featured:not(:empty) + .insights-groups { margin-top: var(--space-section); }
-.insight-card { display: flex; flex-direction: column; gap: var(--space-3); padding: 20px 22px; border-radius: 12px; background: var(--ink); }
-.insight-text { margin: 0; font: 700 18px/1.35 var(--display); letter-spacing: -.01em; color: var(--paper); text-wrap: pretty; }
-.insight-strip { position: relative; height: 28px; margin: var(--space-1) 6px 0; }
-.insight-strip::before { content: ""; position: absolute; left: -6px; right: -6px; top: 50%; height: 1px; background: var(--line); }
-.insight-strip-band { position: absolute; top: 5px; bottom: 5px; border-radius: 999px; background: rgba(118, 118, 128, .16); }
-.insight-strip-dot { position: absolute; top: 50%; width: 7px; height: 7px; border-radius: 50%; background: var(--c-neutral); transform: translate(-50%, -50%); }
-.insight-strip-dot.is-highlight { width: 13px; height: 13px; background: var(--series); box-shadow: 0 0 0 2.5px var(--ink); }
-.insight-legend { margin: -4px 0 0; color: var(--muted); font: 500 12px/1.4 var(--sans); }
-.insight-examples { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.insight-examples li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; font: 500 14px/1.4 var(--sans); color: var(--paper); }
-.insight-examples li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--series); transform: translateY(-1px); }
-.insight-examples li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.insight-examples li small { color: var(--muted); font: 500 12px var(--sans); font-variant-numeric: tabular-nums; }
-.insight-action { justify-self: start; align-self: flex-start; margin: 0; padding: 10px 14px; border-radius: var(--radius-control); background: var(--panel); font: 600 14px/1.45 var(--sans); color: var(--paper); }
-.insight-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-top: auto; padding-top: var(--space-1); }
-.insight-foot small { color: var(--muted); font: 500 12px/1.4 var(--sans); }
-.insight-link { display: inline-flex; align-items: center; gap: 4px; padding: 4px 0; color: var(--paper); font: 600 13px var(--sans); white-space: nowrap; }
-.insight-link svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform .18s cubic-bezier(.16, 1, .3, 1); }
-.insight-link:hover svg, .insight-link:focus-visible svg { transform: translate(2px, -2px); }
-.insight-link span { margin-left: 0; color: inherit; }
-.insight-link:hover span { text-decoration: underline; text-underline-offset: 3px; }
-.insight-group + .insight-group { margin-top: var(--space-section); }
-.insight-group h3 { margin: 0 0 var(--space-1); font: 700 15px/1.3 var(--display); color: var(--paper); }
-.insight-group ul, .insights-silent ul { margin: 0; padding: 0; list-style: none; }
-.insight-group li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); font: 500 14px/1.5 var(--sans); color: var(--paper); }
-.insight-group li:last-child { border-bottom: 0; }
-.insight-group li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--series); transform: translateY(-1px); }
-.insights-silent { margin-top: var(--space-section); padding: 16px 18px; border-radius: 12px; background: var(--ink); }
+.findings { display: grid; gap: var(--space-2); }
+.finding { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: start; column-gap: 14px; padding: 16px 20px 16px 16px; border-radius: 12px; background: var(--ink); }
+/* La diana: un halo del tono al 16% con el punto pleno dentro. Es la firma del
+   hallazgo; el color dice de qué métrica habla. */
+.finding-mark { position: relative; width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--series) 16%, transparent); }
+.finding-mark::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--series); }
+.finding-body { display: grid; gap: 10px; min-width: 0; padding-top: 2px; }
+.finding-text { margin: 0; font: 700 16px/1.4 var(--display); letter-spacing: -.01em; color: var(--paper); text-wrap: pretty; max-width: 72ch; }
+.finding-meta { margin-top: -4px; }
+.finding-meta small { color: var(--muted); font: 500 12px/1.4 var(--sans); }
+.finding-link { display: inline-flex; align-items: center; gap: 4px; padding: 4px 0 0; color: var(--paper); font: 600 13px var(--sans); white-space: nowrap; }
+.finding-link span { margin-left: 0; color: inherit; }
+.finding-link svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform .18s cubic-bezier(.16, 1, .3, 1); }
+.finding-link:hover svg, .finding-link:focus-visible svg { transform: translate(2px, -2px); }
+.finding-link:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.finding-figure { display: grid; gap: 6px; margin: 2px 0 0; }
+.finding-figure figcaption { color: var(--muted); font: 500 12px/1.4 var(--sans); }
+.finding-strip { position: relative; height: 24px; margin: 0 6px; }
+.finding-strip::before { content: ""; position: absolute; left: -6px; right: -6px; top: 50%; height: 1px; background: var(--line); }
+.finding-strip-band { position: absolute; top: 4px; bottom: 4px; border-radius: 999px; background: rgba(118, 118, 128, .16); }
+.finding-strip-dot { position: absolute; top: 50%; width: 7px; height: 7px; border-radius: 50%; background: var(--c-neutral); transform: translate(-50%, -50%); }
+.finding-strip-dot.is-highlight { width: 13px; height: 13px; background: var(--series); box-shadow: 0 0 0 2.5px var(--ink); }
+.finding-examples { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.finding-examples li { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; font: 500 14px/1.4 var(--sans); color: var(--paper); }
+.finding-examples li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--series); transform: translateY(-1px); }
+.finding-examples li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finding-examples li small { color: var(--muted); font: 500 12px var(--sans); font-variant-numeric: tabular-nums; }
+.finding-action { justify-self: start; margin: 0; padding: 8px 12px; border-radius: var(--radius-control); background: var(--panel); font: 600 13px/1.45 var(--sans); color: var(--paper); }
+
+/* Resumen: los hallazgos de todas las vistas, agrupados con el nombre de la
+   barra lateral, y al final lo que se evaluó sin concluir nada. */
+.findings-group + .findings-group { margin-top: var(--space-section); }
+.findings-group h3 { margin: 0 0 var(--space-3); font: 700 15px/1.3 var(--display); color: var(--paper); }
+.insights-groups:empty { display: none; }
+.insights-silent { margin-top: var(--space-section); padding: 16px 18px; border-radius: 12px; border: 1px dashed rgba(60, 60, 67, .22); }
 .insights-silent h3 { margin: 0 0 var(--space-2); font: 600 13px/1.3 var(--sans); color: var(--muted); }
+.insights-silent ul { margin: 0; padding: 0; list-style: none; }
 .insights-silent li { display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: baseline; gap: 10px; padding: 3px 0; color: var(--muted); font: 500 13px/1.5 var(--sans); }
 .insights-silent li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px #8e8e93; transform: translateY(-1px); }
 /* "Ver →" lleva a un panel concreto: se resalta un instante al llegar. */
@@ -1334,11 +1341,12 @@ html.is-capturing .postal { border-radius: 0; }
 .insight-filter { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 10%, transparent); font: 600 13px var(--sans); color: var(--accent); }
 .insight-filter .text-button { color: var(--accent); font: 600 13px var(--sans); text-decoration: underline; }
 @media (max-width: 560px) {
-  .insight-card { padding: 16px; }
-  .insight-text { font-size: 16px; }
-  .insight-examples li { grid-template-columns: 8px minmax(0, 1fr); row-gap: 2px; }
-  .insight-examples li span { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  .insight-examples li small { grid-column: 2; }
-  .insight-group li { grid-template-columns: 9px minmax(0, 1fr); }
-  .insight-group li .insight-link { grid-column: 2; justify-self: start; }
+  .finding { grid-template-columns: 22px minmax(0, 1fr); column-gap: 12px; padding: 14px; }
+  .finding-link { grid-column: 2; justify-self: start; padding-top: 10px; }
+  .finding-mark { width: 22px; height: 22px; }
+  .finding-mark::after { inset: 7px; }
+  .finding-text { font-size: 15px; }
+  .finding-examples li { grid-template-columns: 7px minmax(0, 1fr); row-gap: 2px; }
+  .finding-examples li span { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .finding-examples li small { grid-column: 2; }
 }
