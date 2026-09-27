@@ -2809,12 +2809,31 @@ const dayMonth = (value) => {
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "";
 };
 
-function insightLink(insight, copy) {
+// Cada hallazgo lleva el tono de su métrica (Un color, un significado): notas
+// en verde, altas en índigo, apertura en naranja, clics en azul. El núcleo fiel
+// no es una métrica con tono propio: va en la escala neutra.
+const INSIGHT_SERIES = [
+  [/^note-/, "notes"],
+  [/^(post-outlier|source-leader|best-week|milestone)/, "subs"],
+  [/^(rate-open|post-day|post-section)/, "open"],
+  [/^rate-click/, "click"],
+];
+const insightSeries = (id) => INSIGHT_SERIES.find(([pattern]) => pattern.test(id))?.[1] || "neutral";
+
+function insightLink(insight, copy, label) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "text-button insight-link";
   button.dataset.insight = insight.id;
-  button.textContent = copy;
+  if (label) button.setAttribute("aria-label", label);
+  const text = document.createElement("span");
+  text.textContent = copy;
+  const icon = document.createElementNS(SVG_NS, "svg");
+  icon.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(SVG_NS, "use");
+  use.setAttribute("href", "#icon-arrow");
+  icon.append(use);
+  button.append(text, icon);
   return button;
 }
 
@@ -2853,6 +2872,7 @@ function drawInsightStrip(strip) {
 function renderInsightCard(insight) {
   const card = document.createElement("article");
   card.className = "insight-card";
+  card.dataset.series = insightSeries(insight.id);
   const text = document.createElement("p");
   text.className = "insight-text";
   text.textContent = insight.text;
@@ -2890,7 +2910,7 @@ function renderInsightCard(insight) {
   foot.className = "insight-foot";
   const sample = document.createElement("small");
   sample.textContent = insight.sample;
-  foot.append(sample, insightLink(insight, `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"} →`));
+  foot.append(sample, insightLink(insight, `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"}`));
   card.append(foot);
   return card;
 }
@@ -2902,22 +2922,11 @@ function renderInsights(snapshot, analytics) {
 
   const featured = $("#insights-featured");
   featured.replaceChildren();
-  if (result.featured.length) {
-    const kicker = document.createElement("p");
-    kicker.className = "insight-kicker";
-    kicker.textContent = "Lo que destaca";
-    featured.append(kicker, ...result.featured.map(renderInsightCard));
-  }
+  featured.append(...result.featured.map(renderInsightCard));
 
   const groups = $("#insights-groups");
   groups.replaceChildren();
   const filled = INSIGHT_GROUPS.filter((group) => result.groups[group].length);
-  if (filled.length) {
-    const kicker = document.createElement("p");
-    kicker.className = "insight-kicker";
-    kicker.textContent = result.featured.length ? "También en este periodo" : "En este periodo";
-    groups.append(kicker);
-  }
   filled.forEach((group) => {
     const section = document.createElement("section");
     section.className = "insight-group";
@@ -2926,9 +2935,10 @@ function renderInsights(snapshot, analytics) {
     const list = document.createElement("ul");
     result.groups[group].forEach((insight) => {
       const item = document.createElement("li");
+      item.dataset.series = insightSeries(insight.id);
       const text = document.createElement("span");
       text.textContent = insight.text;
-      item.append(text, insightLink(insight, "Ver →"));
+      item.append(text, insightLink(insight, "Ver", `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"}`));
       list.append(item);
     });
     section.append(heading, list);
@@ -2939,7 +2949,11 @@ function renderInsights(snapshot, analytics) {
   // El silencio también es un resultado: se dice qué se evaluó y qué faltó.
   const silent = $("#insights-silent");
   silent.hidden = !result.silent.length;
-  silent.textContent = result.silent.length ? `Sin nada claro todavía. ${result.silent.map((row) => row.text).join(" ")}` : "";
+  $("#insights-silent-list").replaceChildren(...result.silent.map((row) => {
+    const item = document.createElement("li");
+    item.textContent = row.text;
+    return item;
+  }));
 }
 
 // "Ver →" abre la vista de la evidencia, lleva al panel y lo resalta un

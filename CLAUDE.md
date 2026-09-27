@@ -99,6 +99,10 @@ Notas se retiraron: sus conclusiones son líneas de Hallazgos y sus gráficos
 viven en su vista. "Ver →" usa delegación sobre el contenedor estático y, en
 Notas, pone `state.notesFilter` (en memoria, se quita con el chip o al entrar
 desde la barra lateral).
+Cada hallazgo lleva `data-series` con el tono de su métrica (`insightSeries()`:
+notas verde, altas índigo, apertura naranja, clics azul, núcleo fiel en tinta)
+y el punto, la tira y los ejemplos lo leen de `--series`. Sin etiquetas en
+mayúsculas encima de los bloques: la jerarquía la dan tarjeta, lista y gris.
 `health-score` e inventario se retiraron porque duplicaban señales o usaban un
 índice arbitrario. Los KPI de pago e ingreso mensual existen, pero están ocultos
 por defecto con `data-sensitive`; sus preferencias viven en `localStorage` bajo
