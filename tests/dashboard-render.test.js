@@ -177,14 +177,10 @@ test("Resumen pinta las métricas del snapshot", async () => {
   assert.notEqual(txt($("#metric-open-rate").textContent), "47,3%");
 });
 
-test("Resumen y Audiencia usan el mismo histórico de suscriptores", async () => {
+test("la curva de suscriptores vive solo en el Resumen", async () => {
   await arrancar();
-  await rango("all");
-  await verVista("resumen");
-  const resumen = $$("#growth-chart .chart-label").map((node) => node.textContent);
-  await verVista("audiencia");
-  const audiencia = $$("#audience-chart .chart-label").map((node) => node.textContent);
-  assert.deepEqual(resumen, audiencia, "las dos vistas deben compartir serie, rango y etiquetas");
+  assert.equal($("#audience-chart"), null, "Audiencia no repite la curva del Resumen");
+  assert.equal($("#engagement-panel"), null, "la actividad de la lista la cuenta el núcleo fiel");
 });
 
 test("Audiencia muestra el total y el histórico real de seguidores", async () => {
@@ -224,7 +220,7 @@ test("Altas y bajas recupera el último tramo disponible sin presentarlo como ac
   await verVista("crecimiento");
   await rango("7");
   assert.ok($$("#churn-chart .chart-bar").length > 0, "un histórico válido no debe dejar la tarjeta vacía");
-  assert.match($("#churn-net").textContent, /último tramo disponible/);
+  assert.match($("#churn-net").textContent, /último tramo disponible/i);
   assert.match($("#churn-basis").textContent, /No hay movimientos dentro del rango actual/);
 });
 
@@ -266,7 +262,9 @@ test("Altas y bajas combina las altas de adquisición con las bajas del históri
     },
   } } }, "local");
   await settle(4);
-  assert.match($("#churn-net").textContent, /\+1 neto · 4 altas − 3 bajas/);
+  const tira = $("#churn-kpis").children.map((celda) => `${celda.children[0].textContent}=${txt(celda.children[1].textContent)}`);
+  assert.deepEqual(tira.slice(0, 3), ["Altas=4", "Bajas=3", "Neto=1"], "la tira pinta altas, bajas y neto");
+  assert.doesNotMatch($("#churn-net").textContent, /neto/, "la insignia solo dice el tramo");
   assert.equal($$("#churn-chart .chart-bar").length, 1, "las altas de fuentes deben producir una barra visible");
   assert.equal($$("#churn-chart .chart-bar-secondary").length, 1, "una baja negativa de la API debe producir una barra visible");
   assert.match($("#churn-basis").textContent, /Altas obtenidas de las fuentes de crecimiento/);
@@ -435,15 +433,14 @@ test("Notas no pinta ceros donde no hubo medición y muestra la atribución", as
   assert.ok($$("#cadence-heatmap .heatmap-cell.is-filled").length >= 1, "alguna hora tiene notas");
   assert.match($("#cadence-findings").textContent, /Publicas más los/, "la conclusión del mapa es un hallazgo en lenguaje natural");
   assert.match($("#cadence-summary").textContent, /notas? fechadas?/, "la insignia dice sobre cuántas notas se sostiene");
-  assert.match($("#attribution-findings").textContent, /Substack atribuye/, "el total atribuido es un hallazgo bajo el gráfico");
   assert.ok($$("#cadence-heatmap .heatmap-cell[data-hint]").length === 168, "cada hora explica su dato con el hint propio");
 });
 
-test("Audiencia pinta la actividad de la lista y la composición nace oculta", async () => {
+test("Audiencia reparte la lista por actividad en el núcleo fiel y la composición nace oculta", async () => {
   await arrancar();
   await verVista("audiencia");
-  assert.equal($$("#engagement-bar i").length, 3, "tres tramos de actividad");
-  assert.match(txt($("#engagement-legend").textContent), /Actividad alta/);
+  assert.ok($$("#loyal-bar i").length >= 3, "el reparto por puntuación vive en el núcleo fiel");
+  assert.doesNotMatch($("#audience-totals").textContent, /Actividad alta/, "sin celda repetida en la tira");
   assert.equal($("#composition-panel").hidden, true, "la composición describe la base de pago: sensible");
 });
 
@@ -747,9 +744,6 @@ test("el panel de Seguidores superpone los suscriptores para ver la divergencia"
   await rango("all");
   assert.ok($$("#followers-chart .chart-line").length > 0);
   assert.ok($$("#followers-chart .chart-line-secondary").length > 0, "falta la segunda serie");
-  // La curva de Audiencia NO cambia: la comparte el Resumen y meterle una
-  // serie mayor le cambiaba la escala.
-  assert.equal($$("#audience-chart .chart-line-secondary").length, 0);
 });
 
 test("Publicaciones separa lo que se lee fuera del correo y corta por seccion", async () => {
@@ -776,7 +770,7 @@ test("un analytics guardado con el esquema anterior no vacia el panel de adquisi
     growth: { ...original.growth, sources: { totals: { visitors: 900, subscribers: 75, revenue: 0 }, sources: [{ id: "s", label: "Substack", visitors: 900, subscribers: 75, series: [] }] } },
   } } }, "local");
   await settle(4);
-  assert.match($("#acquisition-leader").textContent, /Substack lidera/, "se muestra lo guardado, no un panel vacio");
+  assert.match($("#acquisition-leader").textContent, /Substack es tu principal puerta de entrada/, "se muestra lo guardado, no un panel vacio");
   assert.match($("#acquisition-period").textContent, /Sincroniza/, "y el badge dice que el rango aun no aplica");
   listener({ "plotstack.analytics": { newValue: original } }, "local");
   await settle(4);
@@ -869,11 +863,11 @@ test("Dónde se ven y Quién las ve son dos cards con pastel y leyenda en españ
 
 test("el eje Y no repite etiquetas cuando el recorrido es estrecho", async () => {
   await arrancar();
-  await verVista("audiencia");
+  await verVista("resumen");
   await rango("all");
   // La curva acumulada del fixture va de 2.710 a 2.840: en formato compacto
   // las cuatro marcas caerían en "2,8 mil" repetido.
-  const etiquetas = $$("#audience-chart .chart-label").map((node) => node.textContent);
+  const etiquetas = $$("#growth-chart .chart-label").map((node) => node.textContent);
   const marcasY = etiquetas.slice(0, 4);
   assert.equal(new Set(marcasY).size, marcasY.length, `eje con etiquetas repetidas: ${marcasY.join(" / ")}`);
 });

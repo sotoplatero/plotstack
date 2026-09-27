@@ -209,6 +209,7 @@
                   <div><span>Promedio diario</span><strong id="daily-growth">—</strong></div>
                   <div><span>Mejor día</span><strong id="best-day">—</strong></div>
                 </div>
+                <p class="panel-copy" id="growth-note" hidden></p>
               </article>
             </section>
 
@@ -229,15 +230,8 @@
             <section class="panel chart-panel reveal" id="audience-panel">
               <div class="panel-header">
                 <div><h2>Suscriptores</h2></div>
-                <div class="chart-legend"><span></span>Suscriptores acumulados</div>
               </div>
               <div class="audience-totals" id="audience-totals"></div>
-              <div class="chart-wrap">
-                <svg id="audience-chart" viewBox="0 0 820 270" role="img" aria-label="Suscriptores acumulados por día"></svg>
-                <div class="chart-empty" id="audience-empty" hidden>Substack no devolvió fechas de alta para esta cuenta. Sincroniza de nuevo; si persiste, revisa Estado de los datos.</div>
-              </div>
-              <div class="findings" id="audience-findings" hidden></div>
-              <p class="panel-copy" id="audience-note" hidden></p>
             </section>
 
             <section class="panel audience-location-card reveal" id="audience-location-panel">
@@ -268,12 +262,6 @@
               <article class="panel list-panel" id="overlap-panel">
                 <div class="panel-header"><div><h2>Audiencias que se solapan</h2><p class="panel-copy">Publicaciones que comparten lectores contigo</p></div></div>
                 <div class="source-list" id="overlap-list"></div>
-              </article>
-              <article class="panel list-panel" id="engagement-panel">
-                <div class="panel-header"><div><h2>Actividad de la lista</h2><p class="panel-copy">Puntuación de actividad de Substack por suscriptor</p></div></div>
-                <div class="engagement-bar" id="engagement-bar"></div>
-                <div class="engagement-legend" id="engagement-legend"></div>
-                <p class="panel-copy" id="engagement-note" hidden></p>
               </article>
               <article class="panel list-panel" id="composition-panel" data-sensitive="paid" hidden>
                 <div class="panel-header"><div><h2>Composición</h2><p class="panel-copy">Tipos de suscripción de la base actual</p></div></div>
@@ -471,7 +459,6 @@
                 <svg id="attribution-chart" viewBox="0 0 820 200" role="img" aria-label="Altas gratuitas atribuidas a notas por día"></svg>
                 <div class="chart-empty" id="attribution-empty" hidden>Ninguna nota con estadísticas de detalle en el periodo.</div>
               </div>
-              <div class="findings" id="attribution-findings" hidden></div>
               <p class="panel-copy" id="attribution-note"></p>
             </section>
 

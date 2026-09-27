@@ -21,7 +21,6 @@ import {
   getConcentration,
   getLoyalCore,
   getMilestoneProjection,
-  getRateWindows,
   getReachBeyondBubble,
   getRecords,
   MIN_CUT_N,
@@ -419,48 +418,6 @@ function detectPostCuts(ctx) {
   return { insights, silent };
 }
 
-// Apertura y CTR frente a la ventana anterior del mismo tamaño. Con "Todo" no
-// hay ventana anterior: el detector no aplica.
-function detectRateShift(ctx) {
-  if (!Number.isFinite(ctx.days)) return {};
-  const windows = getRateWindows(ctx.snapshot, ctx.days, ctx.now);
-  const { current, previous } = windows;
-  if (!current.posts) return {};
-  if (current.posts < 2 || previous.posts < 2) {
-    return { silent: [{ group: "publicaciones", text: "Cambio en la apertura: hacen falta al menos 2 envíos en este periodo y 2 en el anterior." }] };
-  }
-  const insights = [];
-  const openDelta = current.openRate !== null && previous.openRate !== null ? current.openRate - previous.openRate : null;
-  if (openDelta !== null && Math.abs(openDelta) >= CUT_MIN_POINTS) {
-    insights.push({
-      id: "rate-open",
-      group: "publicaciones",
-      text: `Tus lectores abren ${openDelta > 0 ? "más" : "menos"}: ${formatPercent(current.openRate, 0)} frente al ${formatPercent(previous.openRate, 0)} de los ${ctx.days} días anteriores.`,
-      sample: `${pieces(current.posts, "envío", "envíos")} ahora · ${pieces(previous.posts, "envío", "envíos")} antes`,
-      score: 0.6,
-      strip: null,
-      examples: [],
-      action: null,
-      target: { view: "publicaciones", panel: "posts-rate-panel" },
-    });
-  }
-  const clickDelta = current.clickRate !== null && previous.clickRate !== null ? current.clickRate - previous.clickRate : null;
-  if (clickDelta !== null && Math.abs(clickDelta) >= 1) {
-    insights.push({
-      id: "rate-click",
-      group: "publicaciones",
-      text: `Tus lectores hacen ${clickDelta > 0 ? "más" : "menos"} clic: ${formatPercent(current.clickRate)} frente al ${formatPercent(previous.clickRate)} de los ${ctx.days} días anteriores.`,
-      sample: `${pieces(current.posts, "envío", "envíos")} ahora · ${pieces(previous.posts, "envío", "envíos")} antes`,
-      score: 0.4,
-      strip: null,
-      examples: [],
-      action: null,
-      target: { view: "publicaciones", panel: "posts-rate-panel" },
-    });
-  }
-  return { insights };
-}
-
 // La fuente que lidera las altas del rango. Mismos umbrales que tenía el
 // Resumen: con 2 altas, o con un reparto casi a partes iguales, señalarla sería
 // inventarse una conclusión.
@@ -566,7 +523,6 @@ const DETECTORS = [
   detectReachBeyondBubble,
   detectPostOutliers,
   detectPostCuts,
-  detectRateShift,
 ];
 
 // ── Selección ──────────────────────────────────────────────────────────────

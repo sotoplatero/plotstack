@@ -27,7 +27,7 @@ import {
   getCohortActivity,
 } from "../src/shared/analytics.js";
 import { getContentAnalytics } from "../src/shared/content-analytics.js";
-import { GROUPS as INSIGHT_GROUPS, getInsights } from "../src/shared/insights.js";
+import { GROUPS as INSIGHT_GROUPS, LEADER_MIN_SHARE, LEADER_MIN_SIGNUPS, getInsights } from "../src/shared/insights.js";
 import {
   captureElementPng,
   captureFilename,
@@ -381,8 +381,8 @@ function renderMetrics(snapshot, analytics) {
   renderSparkBars($("#open-bars"), sends.map((campaign) => ({ value: campaign.openRate, hint: `${campaign.title}: ${formatPercent(campaign.openRate)} de apertura` })));
   renderSparkBars($("#click-bars"), sends.map((campaign) => ({ value: campaign.clickRate, hint: `${campaign.title}: ${formatPercent(campaign.clickRate)} de CTR` })));
   $("#open-reference").textContent = ownMedian === null
-    ? "Sin publicaciones con envío para comparar"
-    : `Tu mediana por publicación · ${formatPercent(ownMedian)}`;
+    ? "Sin envíos para comparar"
+    : `Tu mediana histórica · ${formatPercent(ownMedian)}`;
 
   const clickNow = windows.current.clickRate;
   $("#metric-click-rate").textContent = clickNow === null ? "Sin dato" : formatPercent(clickNow);
@@ -882,6 +882,11 @@ function renderChart(snapshot, analytics) {
     { events: eventos, primaryLabel: "Suscriptores" },
   );
   $("#chart-empty").hidden = drawn;
+  const timeline = analytics?.audience?.timeline;
+  $("#growth-note").textContent = timeline?.partial
+    ? `Serie parcial: ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} altas; faltan las más antiguas.`
+    : "";
+  $("#growth-note").hidden = !timeline?.partial;
   if (!drawn) return;
   // El neto honesto sale de altas − bajas del histórico de crecimiento. La
   // curva acumulada solo enumera a los suscriptores ACTUALES (quien se fue no
@@ -913,8 +918,10 @@ function renderChart(snapshot, analytics) {
 
 // Las etiquetas de Audiencia y de la composición ya vienen en español desde el
 // renderer; no se imprimen claves crudas de la API.
+// Una fila con `{ keepZero: true }` se pinta aunque valga 0 o sea negativa: un
+// neto de 0 o unas bajas de 0 son información.
 function renderLabelledGrid(container, rows, emptyCopy) {
-  const entries = rows.filter(([, value]) => Number.isFinite(value) && value > 0);
+  const entries = rows.filter(([, value, , options]) => Number.isFinite(value) && (value > 0 || options?.keepZero));
   if (!entries.length) return emptyMessage(container, emptyCopy, "coverage-empty");
   container.replaceChildren(...entries.map(([label, value, format]) => {
     const item = document.createElement("div");
@@ -932,9 +939,7 @@ function renderLabelledGrid(container, rows, emptyCopy) {
 function renderAudience(snapshot, analytics) {
   const audience = analytics?.audience;
   const timeline = audience?.timeline;
-  const daily = timeline?.daily || [];
   const composition = timeline?.composition || {};
-  const engagement = timeline?.engagement || {};
   const metrics = snapshot.metrics || {};
   const cards = [
     ["Suscriptores", audience?.total || timeline?.total || 0, ""],
@@ -942,7 +947,6 @@ function renderAudience(snapshot, analytics) {
     ["Lectores en la app", metrics.appSubscribers || 0, ""],
     ["Con email", audience?.emailable || 0, ""],
     ["De pago", composition.paid || audience?.composition?.paidSubscribers || 0, "paid"],
-    ["Actividad alta", engagement.alta || 0, ""],
   ];
   $("#audience-totals").replaceChildren(...cards.map(([label, value, sensitive]) => {
     const item = document.createElement("div");
@@ -953,36 +957,13 @@ function renderAudience(snapshot, analytics) {
     return item;
   }));
 
+  // La curva de suscriptores vive en el Resumen; aquí solo sirve de segunda
+  // serie de Seguidores.
   const windowed = windowedSubscriberDaily(analytics);
-  const cumulative = drawLineChart($("#audience-chart"), windowed.map((point) => ({ date: point.date, value: point.cumulative })), "audience-gradient", { primaryLabel: "Suscriptores acumulados" });
-  $("#audience-empty").hidden = cumulative;
-
-  // La conclusión va como hallazgo bajo el gráfico; la nota queda solo para
-  // declarar que la serie llegó incompleta.
-  const audienceFindings = [];
-  if (!timeline?.partial && windowed.length) {
-    const peak = [...windowed].sort((a, b) => b.signups - a.signups)[0];
-    const inWindow = windowed.reduce((sum, point) => sum + point.signups, 0);
-    const scope = windowed.length < daily.length ? `${formatCompactNumber(inWindow)} altas` : `${formatCompactNumber(timeline.counted)} altas`;
-    if (peak.signups > 0) {
-      audienceFindings.push(panelFinding("audience-best-day",
-        `Tu mejor día fue el ${shortDate(peak.date)}, con ${formatCompactNumber(peak.signups)} ${peak.signups === 1 ? "alta" : "altas"}.`,
-        `${scope} entre el ${shortDate(windowed[0].date)} y el ${shortDate(windowed.at(-1).date)}`, "subs"));
-    }
-  }
-  renderFindings($("#audience-findings"), audienceFindings);
-  const note = $("#audience-note");
-  note.textContent = timeline?.partial
-    ? `Serie parcial: ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} altas. Substack pagina de más reciente a más antigua, así que faltan las más viejas.`
-    : "";
-  note.hidden = !timeline?.partial;
-
   const followerHistory = audience?.followers?.history || [];
   const followers = withinRange(followerHistory, (point) => point.date).kept;
-  // Suscriptores como segunda linea AQUI, no sobre la curva de Audiencia: esa
-  // la comparte el Resumen y meterle una serie mayor le cambiaba la escala. La
-  // divergencia entre seguir y suscribirse (atencion que no convierte) es
-  // justo lo que este panel tiene que responder.
+  // Suscriptores como segunda línea: la divergencia entre seguir y
+  // suscribirse (atención que no convierte) es lo que este panel responde.
   const acumuladoPorFecha = new Map(windowed.map((point) => [point.date, point.cumulative]));
   const fechasAcumulado = [...acumuladoPorFecha.keys()].sort();
   // Ultimo valor conocido a esa fecha, nunca uno interpolado: las dos series
@@ -1046,7 +1027,6 @@ function renderAudience(snapshot, analytics) {
     renderRetention($("#paid-retention-list"), paidRetention, "Suscriptores de pago");
   }
   renderComposition(analytics);
-  renderEngagement(analytics);
 }
 
 // Composición de la suscripción: se calculaba por suscriptor en cada sync y no
@@ -1154,22 +1134,6 @@ function renderStackedBar(bar, legend, segments, emptyCopy) {
 
 const safeValue = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
 
-// Distribución de actividad (rating 0-5 de Substack agregado en tres tramos):
-// mejor señal de salud de la lista que el total a secas.
-function renderEngagement(analytics) {
-  const timeline = analytics?.audience?.timeline;
-  const engagement = timeline?.engagement || {};
-  const note = $("#engagement-note");
-  const drawn = renderStackedBar($("#engagement-bar"), $("#engagement-legend"), [
-    ["alta", "Actividad alta", engagement.alta || 0],
-    ["baja", "Actividad baja", engagement.baja || 0],
-    ["inactiva", "Inactivos", engagement.inactiva || 0],
-  ], "Substack no devolvió la puntuación de actividad. Sincroniza de nuevo; si persiste, revisa Estado de los datos.");
-  if (drawn && timeline?.partial) {
-    note.textContent = `Calculado sobre ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} suscriptores: Substack pagina de más reciente a más antiguo.`;
-    note.hidden = false;
-  } else note.hidden = true;
-}
 
 // La unidad (fracción 0-1 o porcentaje 0-100) se decide sobre la serie entera:
 // si TODAS las tasas finitas son ≤ 1, es una fracción. Con la heurística por
@@ -1308,19 +1272,15 @@ function renderGrowthBrief(snapshot, analytics) {
   const daily = fillDailyGaps(windowedSubscriberDaily(analytics), (date) => ({ date, signups: 0 }));
   const gained = daily.reduce((sum, point) => sum + safeNumber(point.signups), 0);
 
-  if (growth === null) {
-    $("#growth-verdict").textContent = `Tienes ${formatCompactNumber(snapshot.metrics.subscribers)} suscriptores. Necesitamos más historial para decir si el ritmo está mejorando.`;
-  } else if (growth >= GROWTH_AS_MULTIPLE) {
-    // Con una base pequeña el porcentaje explota ("creció 2798,0%"): se cuentan
-    // los suscriptores de antes y de ahora, que es lo que la autora reconoce.
-    $("#growth-verdict").textContent = `Tu audiencia pasó de ${formatCompactNumber(derived.comparison.subscribers)} a ${formatCompactNumber(snapshot.metrics.subscribers)} suscriptores ${derived.comparison.basis === "history" ? `desde el ${shortDate(derived.comparison.sinceDate)}` : "en este periodo"}.`;
-  } else if (growth > 1) {
-    $("#growth-verdict").textContent = `Tu audiencia creció ${formatPercent(growth)} en este periodo${gained ? ` y sumó ${formatCompactNumber(gained)} nuevas altas` : ""}.`;
-  } else if (growth >= 0) {
-    $("#growth-verdict").textContent = "Tu audiencia se mantiene estable. El siguiente avance vendrá de repetir lo que mejor convierte.";
-  } else {
-    $("#growth-verdict").textContent = `Tu audiencia retrocedió ${formatPercent(Math.abs(growth))}. Conviene revisar adquisición y bajas antes de aumentar el ritmo.`;
-  }
+  // El titular lee la tendencia; la cifra y su base ya las da la tarjeta de
+  // suscriptores justo debajo. Solo añade lo que no está en pantalla: altas.
+  const altas = gained ? ` y sumó ${formatCompactNumber(gained)} ${gained === 1 ? "alta" : "altas"}` : "";
+  $("#growth-verdict").textContent = growth === null
+    ? "Aún falta historial para saber si el ritmo mejora."
+    : growth >= GROWTH_AS_MULTIPLE ? `Tu audiencia se ha multiplicado en ${rangeLabel()}${altas}.`
+    : growth > 1 ? `Tu audiencia crece${altas}.`
+    : growth >= 0 ? "Tu audiencia se mantiene estable."
+    : "Tu audiencia retrocede. Revisa Altas y bajas en Cómo creces.";
 }
 
 function renderSourcesTable(analytics) {
@@ -1333,11 +1293,16 @@ function renderSourcesTable(analytics) {
     ? formatPercent((totals.subscribers / totals.visitors) * 100)
     : "Sin dato";
   const leader = [...sources].sort((a, b) => b.subscribers - a.subscribers || b.visitors - a.visitors)[0];
-  const hasLeader = Boolean(leader && leader.subscribers > 0);
+  // Mismo umbral que el hallazgo del Resumen (PRODUCT.md): con pocas altas o un
+  // reparto parejo no se nombra una fuente principal en ningún sitio.
+  const leaderShare = leader && totals.subscribers ? leader.subscribers / totals.subscribers : null;
+  const hasLeader = Boolean(leader) && leader.subscribers >= LEADER_MIN_SIGNUPS && leaderShare !== null && leaderShare >= LEADER_MIN_SHARE;
   renderFindings($("#acquisition-leader"), hasLeader ? [panelFinding("acquisition-leader",
-    `${sourceLabel(leader.label)} lidera con ${formatCompactNumber(leader.subscribers)} de tus ${formatCompactNumber(totals.subscribers)} altas.`,
-    `${formatCompactNumber(leader.visitors)} visitas desde esa fuente · ${rangeLabel()}`, "subs")] : []);
-  $("#acquisition-note").textContent = hasLeader ? "" : "Sin altas atribuidas a una fuente en este periodo. Prueba con un rango más amplio.";
+    `${sourceLabel(leader.label)} es tu principal puerta de entrada: aporta el ${formatPercent(leaderShare * 100, 0)} de tus altas.`,
+    "Sobre las altas con fuente atribuida", "subs")] : []);
+  $("#acquisition-note").textContent = hasLeader ? ""
+    : totals.subscribers ? "Tus altas llegan repartidas o todavía son pocas para señalar una fuente principal."
+    : "Sin altas atribuidas a una fuente en este periodo. Prueba con un rango más amplio.";
   $("#acquisition-note").hidden = hasLeader;
   // Ya NO es de periodo fijo: el endpoint acepta `from_date`/`to_date` y la
   // sincronizacion pide una ventana por cada opcion del selector. El badge decia
@@ -1534,12 +1499,12 @@ function renderChurn(snapshot, analytics) {
   const channels = getChannelAttribution(snapshot, state.days);
   // Altas medias de un dia con publicacion frente a uno en silencio.
   const ritmo = getPublishingRhythm(snapshot, growthDaily.length ? growthDaily : daily, state.days);
-  renderLabelledGrid($("#churn-kpis"), [
-    ["Altas", totalAltas],
-    ["Bajas", totalBajas],
-    ["Neto", neto],
+  renderLabelledGrid($("#churn-kpis"), ventana.length ? [
+    ["Altas", totalAltas, "", { keepZero: true }],
+    ["Bajas", totalBajas, "", { keepZero: true }],
+    ["Neto", neto, "", { keepZero: true }],
     ["Tasa de bajas", tasaBajas, "percent"],
-  ], "Sin movimientos de audiencia en este periodo.");
+  ] : [], "Sin movimientos de audiencia en este periodo.");
   // Las conclusiones del panel son hallazgos bajo el gráfico; lo que declara
   // de dónde salen los datos o que falta muestra va en la nota de fuente.
   const churnFindings = [];
@@ -1577,14 +1542,11 @@ function renderChurn(snapshot, analytics) {
       "Según la comparación que publica Substack; no se deriva de tus datos", "subs"));
   }
   renderFindings($("#churn-findings"), churnFindings);
-  // `renderLabelledGrid` esconde los ceros, y un neto de 0 o unas bajas de 0 son
-  // informacion. Se pintan aparte cuando toque.
-  const churnPeriod = showingLatestAvailable
-    ? `último tramo disponible · hasta ${shortDate(ventana.at(-1).date)}`
-    : rangeLabel();
-  $("#churn-net").textContent = ventana.length
-    ? `${neto >= 0 ? "+" : ""}${formatCompactNumber(neto)} neto · ${formatCompactNumber(totalAltas)} altas − ${formatCompactNumber(totalBajas)} bajas · ${churnPeriod}`
-    : "Sin datos de audiencia en este periodo.";
+  // La insignia solo dice de qué tramo son las cifras: altas, bajas y neto ya
+  // están en la tira, con sus ceros.
+  $("#churn-net").textContent = !ventana.length ? ""
+    : showingLatestAvailable ? `Último tramo disponible · hasta ${shortDate(ventana.at(-1).date)}`
+    : rangeLabel().replace(/^./, (letra) => letra.toUpperCase());
 
   const serieContinua = fillDailyGaps(ventana, (date) => ({ date, altas: 0, bajas: 0 }));
   const dibujado = drawBarChart(
@@ -2411,7 +2373,7 @@ function renderDiscovery(campaigns) {
   const mezcla = getDiscoveryMix(campaigns);
   $("#discovery-median").textContent = mezcla.median === null
     ? "Sin envíos medidos"
-    : `Mediana · ${decimal(mezcla.median, 2)} vistas por entrega`;
+    : `Tu mediana · ${decimal(mezcla.median, 2)} vistas por entrega`;
   renderLabelledGrid($("#discovery-kpis"), [
     ["Envíos medidos", mezcla.posts],
     ["Se leen fuera del correo", mezcla.beyondEmail],
@@ -2445,7 +2407,7 @@ function renderDiagnosis(campaigns) {
     badge.textContent = "Muestra escasa";
     return emptyMessage(grid, `Hacen falta al menos 4 envíos con aperturas para diagnosticar; hay ${diagnosis.sample}.`, "coverage-empty");
   }
-  badge.textContent = `Medianas · ${formatPercent(diagnosis.medianOpenRate)} apertura / ${formatPercent(diagnosis.medianCtor)} CTOR`;
+  badge.textContent = `Tus medianas del periodo · ${formatPercent(diagnosis.medianOpenRate)} apertura / ${formatPercent(diagnosis.medianCtor)} CTOR`;
   grid.replaceChildren(...["winner", "subject", "content", "weak"].map((key) => {
     const posts = diagnosis.quadrants[key];
     const cell = document.createElement("div");
@@ -2485,7 +2447,7 @@ function renderPostRates(campaigns, ownMedian) {
   $("#posts-rate-empty").hidden = drawn;
   $("#posts-rate-median").textContent = ownMedian === null
     ? "Sin mediana propia"
-    : `Mediana propia · ${formatPercent(ownMedian)}`;
+    : `Tu mediana histórica · ${formatPercent(ownMedian)}`;
 }
 
 // Altas por cada mil impresiones: conversión de alcance a suscriptor, la
@@ -2587,7 +2549,7 @@ function renderCadenceTable(content) {
   $("#cadence-summary").textContent = fechadas ? `${formatCompactNumber(fechadas)} ${fechadas === 1 ? "nota fechada" : "notas fechadas"}` : "Sin notas fechadas";
   renderFindings($("#cadence-findings"), busiest ? [panelFinding("cadence-busiest",
     `Publicas más los ${DAY_PLURALS[busiest.day]} a las ${String(busiest.hour).padStart(2, "0")}:00.`,
-    `${busiest.notes} ${busiest.notes === 1 ? "nota" : "notas"} en esa franja de ${formatCompactNumber(fechadas)} fechadas`, "notes")] : []);
+    `${busiest.notes} ${busiest.notes === 1 ? "nota" : "notas"} en esa franja`, "notes")] : []);
   const body = $("#cadence-table-body");
   body.replaceChildren();
   const weeks = (content?.timeline?.weeks || []).slice(-12).reverse();
@@ -2635,11 +2597,7 @@ function renderAttribution(content) {
   $("#attribution-coverage").textContent = attribution && attribution.totalNotes
     ? `${attribution.scoredNotes} de ${attribution.totalNotes} notas con detalle`
     : "Sin notas";
-  renderFindings($("#attribution-findings"), drawn ? [panelFinding("attribution-total",
-    `Substack atribuye ${formatCompactNumber(attribution.totals.freeSubscribers)} altas y ${formatCompactNumber(attribution.totals.impressions)} impresiones a tus notas en ${rangeLabel()}.`,
-    `${attribution.scoredNotes} de ${attribution.totalNotes} notas con detalle; las notas sin detalle no cuentan como cero`, "notes")] : []);
-  $("#attribution-note").textContent = drawn ? "" : "Substack solo atribuye altas a las notas con estadísticas de detalle.";
-  $("#attribution-note").hidden = drawn;
+
 }
 
 const NOTES_PAGE_SIZE = 25;

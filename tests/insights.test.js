@@ -160,17 +160,14 @@ test("un envio que trae muchas mas altas que su base se destaca", () => {
   assert.equal(insight.target.view, "publicaciones");
 });
 
-test("el cambio de apertura compara con la ventana anterior y calla con Todo", () => {
+test("apertura y CTR no se repiten como hallazgo: ya los dan sus tarjetas", () => {
   const campaigns = [
     campaign(1, 3, { opened: 400 }), campaign(2, 10, { opened: 420 }),
     campaign(3, 35, { opened: 500 }), campaign(4, 45, { opened: 490 }),
   ];
   const result = getInsights({ snapshot: { campaigns }, days: 30, now: NOW });
-  const insight = byId(result, "rate-open");
-  assert.ok(insight);
-  assert.match(insight.text, /^Tus lectores abren menos: 41% frente al 50%/);
-  const todo = getInsights({ snapshot: { campaigns }, days: Infinity, now: NOW });
-  assert.equal(byId(todo, "rate-open"), undefined);
+  assert.equal(byId(result, "rate-open"), undefined);
+  assert.equal(byId(result, "rate-click"), undefined);
 });
 
 test("la fuente lider respeta los umbrales y usa la ventana del rango", () => {
