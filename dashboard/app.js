@@ -1047,8 +1047,9 @@ function renderComposition(analytics) {
   const timeline = analytics?.audience?.timeline;
   const composition = timeline?.composition || {};
   const intervals = new Map((timeline?.byInterval || []).map((row) => [String(row.interval).toLowerCase(), row.count]));
+  // Sin celda "De pago": la tira de Audiencia de esta misma vista ya la pinta
+  // (también sensible), y con ella esta tira pasaba del tope de una fila.
   renderLabelledGrid($("#composition-grid"), [
-    ["De pago", composition.paid],
     ["Fundadores", composition.founding],
     ["Regalo", composition.gift],
     ["Cortesía", composition.comp],
@@ -1514,9 +1515,11 @@ function renderChurn(snapshot, analytics) {
   const tasaBajas = snapshot.metrics.subscribers > 0 && totalBajas > 0
     ? (totalBajas / snapshot.metrics.subscribers) * 100
     : null;
-  // Las altas por canal van como celdas más de la misma tira de KPI: una sección,
-  // una cabecera, un formato. La eficiencia por pieza es la cifra que decide
-  // dónde invertir esfuerzo; sus ventanas de atribución las declara la nota.
+  // La tira responde solo a "¿cuántos llegaron y cuántos se fueron?" y cabe en
+  // UNA fila (tope: MAX_STRIP_CELLS en el test de render). Lo secundario
+  // —altas por canal, su eficiencia por pieza, días con y sin envío— se
+  // escribe en la nota del panel: son atribuciones con ventanas distintas y
+  // leerlas como celdas hermanas de "Altas" invitaba a sumarlas.
   const channels = getChannelAttribution(snapshot, state.days);
   // Altas medias de un dia con publicacion frente a uno en silencio.
   const ritmo = getPublishingRhythm(snapshot, growthDaily.length ? growthDaily : daily, state.days);
@@ -1525,23 +1528,24 @@ function renderChurn(snapshot, analytics) {
     ["Bajas", totalBajas],
     ["Neto", neto],
     ["Tasa de bajas", tasaBajas, "percent"],
-    ["Días con altas", ventana.filter((point) => point.altas).length],
-    ["Altas vía email (D1)", channels.email.signups],
-    ["Altas por envío", channels.email.perPiece],
-    ["Altas vía notas", channels.notes.signups],
-    ["Altas por nota medida", channels.notes.perPiece],
-    // Las dos series ya existian por separado; la comparacion es lo nuevo.
-    ["Altas en día de envío", ritmo.state === "nodata" ? null : ritmo.onPublish],
-    ["Altas en día sin envío", ritmo.state === "nodata" ? null : ritmo.onQuiet],
   ], "Sin movimientos de audiencia en este periodo.");
   const channelsNote = $("#channels-note");
   const partes = [];
   if (channels.email.pieces || channels.notes.pieces) {
-    partes.push(`Atribuciones de Substack con ventanas distintas (24 h tras cada envío; acumulado por nota): no suman el total. Notas medidas: ${channels.notes.scoredPieces} de ${channels.notes.pieces}; las notas sin detalle no cuentan como cero.`);
+    const porPieza = (value, unidad) => (value === null ? "" : ` (${formatCompactNumber(value)} por ${unidad})`);
+    const canales = [];
+    if (channels.email.pieces) canales.push(`${formatCompactNumber(channels.email.signups)} a tus envíos en sus primeras 24 h${porPieza(channels.email.perPiece, "envío")}`);
+    if (channels.notes.pieces) canales.push(`${formatCompactNumber(channels.notes.signups)} a tus notas${porPieza(channels.notes.perPiece, "nota medida")}`);
+    partes.push(`Substack atribuye ${canales.join(" y ")}. Son ventanas distintas (24 h tras cada envío; acumulado por nota): no suman el total. Notas medidas: ${channels.notes.scoredPieces} de ${channels.notes.pieces}; las notas sin detalle no cuentan como cero.`);
   }
   // Con pocos dias medidos la media es anecdota: se dice, no se esconde.
-  if (ritmo.state === "evidence" && ritmo.lift !== null) {
-    partes.push(`Un día de envío trae ${decimal(ritmo.lift)}× las altas de un día en silencio (${ritmo.publishDays} días con envío frente a ${ritmo.quietDays} sin él).`);
+  if (ritmo.state !== "nodata" && ritmo.onPublish !== null && ritmo.onQuiet !== null) {
+    const medias = `Un día con envío trae de media ${decimal(ritmo.onPublish)} altas; uno sin envío, ${decimal(ritmo.onQuiet)}`;
+    if (ritmo.state === "evidence" && ritmo.lift !== null) {
+      partes.push(`${medias}: ${decimal(ritmo.lift)}× más (${ritmo.publishDays} días con envío frente a ${ritmo.quietDays} sin él).`);
+    } else {
+      partes.push(`${medias}. Muestra escasa para compararlos: ${ritmo.publishDays} días con envío y ${ritmo.quietDays} sin él.`);
+    }
   } else if (ritmo.state === "insufficient") {
     partes.push(`Muestra escasa para comparar días con y sin envío: ${ritmo.publishDays} con envío y ${ritmo.quietDays} sin él.`);
   }
