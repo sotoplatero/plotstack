@@ -6,10 +6,8 @@ import {
   getCampaignDiagnosis,
   getChannelAttribution,
   getDerivedMetrics,
-  getNotesEngagement,
   getNotesAnalytics,
   getOwnOpenRateMedian,
-  getPublicationEngagement,
   getConcentration,
   getDiscoveryMix,
   getCampaignSections,
@@ -29,6 +27,7 @@ import {
   getCohortActivity,
 } from "../src/shared/analytics.js";
 import { getContentAnalytics } from "../src/shared/content-analytics.js";
+import { GROUPS as INSIGHT_GROUPS, getInsights } from "../src/shared/insights.js";
 import {
   captureElementPng,
   captureFilename,
@@ -66,6 +65,9 @@ const state = {
   notesSearch: "",
   notesSort: "interactions",
   notesPage: 0,
+  // Filtro de un hallazgo ("ver estas 3 notas"): vive en memoria, no se guarda.
+  notesFilter: null,
+  insightTargets: new Map(),
   postsSearch: "",
   postsSort: { key: "date", direction: "desc" },
   sensitive: { paid: false, revenue: false },
@@ -1259,10 +1261,6 @@ function renderCohorts(container, cohorts) {
 // las cuatro en cada sync porque sus totales NO son recortables en cliente: el
 // endpoint devuelve un unico punto agregado por fuente, no una serie diaria.
 const RANGE_KEYS = ["7", "30", "90", "all"];
-// Umbrales de producto, no pruebas de significación: por debajo, el Resumen no
-// da una orden ("Refuerza X") ni nombra una fuente principal.
-const LEADER_MIN_SIGNUPS = 10;
-const LEADER_MIN_SHARE = 0.3;
 // A partir de +100% el crecimiento se cuenta en suscriptores o en "veces más".
 const GROWTH_AS_MULTIPLE = 100;
 const rangeKey = () => (state.days === ALL_TIME ? "all" : String(state.days));
@@ -1295,33 +1293,6 @@ function channelColor(label) {
   return `var(${match ? match[1] : "--cat-other"})`;
 }
 
-function renderDriverBars(container, rows, emptyCopy) {
-  container.replaceChildren();
-  if (!rows.length) {
-    const empty = document.createElement("p");
-    empty.className = "driver-empty";
-    empty.textContent = emptyCopy;
-    container.append(empty);
-    return;
-  }
-  const max = Math.max(1, ...rows.map((row) => row.value));
-  rows.slice(0, 3).forEach((entry) => {
-    const row = document.createElement("div");
-    row.className = "driver-row";
-    const label = document.createElement("span");
-    label.textContent = entry.label;
-    const value = document.createElement("strong");
-    value.textContent = entry.display;
-    const track = document.createElement("i");
-    const fill = document.createElement("b");
-    fill.style.width = `${Math.max(4, (entry.value / max) * 100)}%`;
-    if (entry.color) fill.style.background = entry.color;
-    track.append(fill);
-    row.append(label, value, track);
-    container.append(row);
-  });
-}
-
 function renderGrowthBrief(snapshot, analytics) {
   const derived = getDerivedMetrics(snapshot, state.days);
   const growth = derived.subscriberGrowth;
@@ -1340,55 +1311,6 @@ function renderGrowthBrief(snapshot, analytics) {
     $("#growth-verdict").textContent = "Tu audiencia se mantiene estable. El siguiente avance vendrá de repetir lo que mejor convierte.";
   } else {
     $("#growth-verdict").textContent = `Tu audiencia retrocedió ${formatPercent(Math.abs(growth))}. Conviene revisar adquisición y bajas antes de aumentar el ritmo.`;
-  }
-
-  const sourceData = byRange(analytics?.growth?.sources);
-  const sources = [...(sourceData?.sources || [])]
-    .filter((source) => safeNumber(source.subscribers) > 0)
-    .sort((a, b) => safeNumber(b.subscribers) - safeNumber(a.subscribers))
-    .slice(0, 3)
-    .map((source) => ({ label: sourceLabel(source.label), value: safeNumber(source.subscribers), display: `${formatCompactNumber(source.subscribers)} altas`, color: channelColor(source.label) }));
-  renderDriverBars($("#summary-source-bars"), sources, "Todavía no hay fuentes atribuidas para este periodo.");
-  const totalFromSources = safeNumber(sourceData?.totals?.subscribers);
-  // Una fuente solo "lidera" con muestra y peso suficientes: con 2 altas, o con
-  // un reparto casi a partes iguales, señalarla como la puerta de entrada sería
-  // inventarse una conclusión.
-  const leaderShare = sources.length && totalFromSources ? sources[0].value / totalFromSources : null;
-  const clearLeader = sources.length > 0
-    && sources[0].value >= LEADER_MIN_SIGNUPS
-    && leaderShare !== null && leaderShare >= LEADER_MIN_SHARE;
-  $("#summary-source-insight").textContent = clearLeader
-    ? `${sources[0].label} es tu principal puerta de entrada: aporta ${formatPercent(leaderShare * 100)} de las altas atribuidas.`
-    : sources.length
-    ? "Tus altas llegan repartidas o son todavía pocas: ninguna fuente destaca lo bastante para señalarla."
-    : "Substack no atribuyó altas a ninguna fuente en este periodo. Prueba con un rango más amplio.";
-
-  const rangedCampaigns = withinRange(snapshot.campaigns, (campaign) => campaign.date).kept;
-  const posts = rangedCampaigns
-    .filter((campaign) => safeNumber(campaign.signupsWithin1Day) > 0)
-    .sort((a, b) => safeNumber(b.signupsWithin1Day) - safeNumber(a.signupsWithin1Day))
-    .slice(0, 3)
-    .map((campaign) => ({ label: campaign.title || "Sin título", value: safeNumber(campaign.signupsWithin1Day), display: `${formatCompactNumber(campaign.signupsWithin1Day)} altas` }));
-  renderDriverBars($("#summary-post-bars"), posts, "Aún no hay altas atribuidas a publicaciones.");
-  $("#summary-post-insight").textContent = posts.length
-    ? `“${posts[0].label}” fue la publicación que más lectores convirtió en su primer día.`
-    : "Cuando Substack atribuya altas a un envío, aquí verás cuál conviene estudiar y repetir.";
-
-  // La recomendación lleva su acción: abre la vista donde está la evidencia.
-  const actionButton = $("#growth-action-button");
-  if (clearLeader) {
-    $("#growth-action").textContent = `Refuerza ${sources[0].label} y estudia qué promesa atrajo a esos lectores.`;
-    actionButton.textContent = "Ver de dónde llegan";
-    actionButton.dataset.goto = "crecimiento";
-    actionButton.hidden = false;
-  } else if (posts.length && posts[0].value >= LEADER_MIN_SIGNUPS) {
-    $("#growth-action").textContent = `Revisa “${posts[0].label}” y reutiliza su tema o enfoque.`;
-    actionButton.textContent = "Ver tus envíos";
-    actionButton.dataset.goto = "publicaciones";
-    actionButton.hidden = false;
-  } else {
-    $("#growth-action").textContent = "Publica con constancia; aparecerán recomendaciones cuando haya evidencia suficiente.";
-    actionButton.hidden = true;
   }
 }
 
@@ -2704,7 +2626,12 @@ function renderNotesTable(snapshot) {
   state.rangeExcluded.notes = ranged.excluded;
   const analytics = getNotesAnalytics({ notes: ranged.kept });
   const search = state.notesSearch.trim().toLocaleLowerCase("es");
-  const notes = analytics.ranked.filter((note) => !search || String(note.body || "").toLocaleLowerCase("es").includes(search));
+  const filter = state.notesFilter;
+  $("#notes-insight-filter").hidden = !filter;
+  if (filter) $("#notes-insight-filter-label").textContent = `Mostrando ${filter.label}`;
+  const notes = analytics.ranked
+    .filter((note) => !filter || filter.ids.has(note.id))
+    .filter((note) => !search || String(note.body || "").toLocaleLowerCase("es").includes(search));
   // Órdenes con valores nulos al final: una nota sin detalle no puede competir
   // en conversión ni en altas como si tuviera un 0 medido.
   const dateDesc = (a, b) => parseDay(b.date || 0) - parseDay(a.date || 0);
@@ -2819,7 +2746,7 @@ function renderNotesTable(snapshot) {
 }
 
 const VIEW_RENDERERS = {
-  resumen: (snapshot) => { renderMetrics(snapshot, state.analytics); renderChart(snapshot, state.analytics); renderGrowthBrief(snapshot, state.analytics); renderSummaryContent(snapshot); },
+  resumen: (snapshot) => { renderMetrics(snapshot, state.analytics); renderChart(snapshot, state.analytics); renderGrowthBrief(snapshot, state.analytics); renderInsights(snapshot, state.analytics); },
   audiencia: (snapshot) => { renderAudience(snapshot, state.analytics); renderLoyalCore(state.analytics); renderCohortActivity(state.analytics); },
   crecimiento: (snapshot) => renderGrowth(snapshot, state.analytics),
   notas: (snapshot) => {
@@ -2871,24 +2798,168 @@ function renderDashboard() {
   applyPrivacy();
 }
 
-function renderSummaryContent(snapshot) {
-  const posts = getPublicationEngagement(snapshot, state.days);
-  const notes = getNotesEngagement(snapshot, state.days);
-  $$(".summary-period-label").forEach((node) => { node.textContent = rangeLabel(); });
-  [
-    ["#summary-posts-count", posts.posts],
-    ["#summary-posts-interactions", posts.interactions],
-    ["#summary-posts-reactions", posts.reactions],
-    ["#summary-posts-comments", posts.comments],
-    ["#summary-posts-shares", posts.shares],
-    ["#summary-posts-views", posts.views],
-    ["#summary-notes-count", notes.notes],
-    ["#summary-notes-interactions", notes.interactions],
-    ["#summary-notes-likes", notes.likes],
-    ["#summary-notes-comments", notes.comments],
-    ["#summary-notes-restacks", notes.restacks],
-    ["#summary-notes-impressions", notes.impressions],
-  ].forEach(([selector, value]) => { $(selector).textContent = formatCompactNumber(value); });
+// ── Hallazgos ─────────────────────────────────────────────────────────────
+// Tres niveles: hasta tres destacados con su prueba (tira y piezas), luego
+// todo lo demás que pasó su umbral, una línea por hallazgo y agrupado con los
+// nombres de la barra lateral, y al final lo que se evaluó sin concluir nada.
+// El texto llega escrito desde `insights.js`; aquí solo se compone el DOM.
+const INSIGHT_GROUP_LABELS = { audiencia: "Audiencia", crecimiento: "Crecimiento", notas: "Notas", publicaciones: "Publicaciones" };
+const dayMonth = (value) => {
+  const date = parseDay(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "";
+};
+
+function insightLink(insight, copy) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button insight-link";
+  button.dataset.insight = insight.id;
+  button.textContent = copy;
+  return button;
+}
+
+// Tira de puntos: cada pieza es un punto sobre un único eje logarítmico (una
+// nota viral no aplasta al resto) y la franja gris es la mitad central de las
+// recientes. El mismo gráfico sirve para cualquier hallazgo con piezas. Va en
+// HTML con posiciones en %: un SVG estirado al ancho deformaba los puntos.
+function drawInsightStrip(strip) {
+  const box = document.createElement("div");
+  box.className = "insight-strip";
+  const values = strip.points.map((point) => point.value).concat(strip.band || []);
+  const logs = values.map((value) => Math.log1p(Math.max(0, value)));
+  const min = Math.min(...logs);
+  const max = Math.max(...logs);
+  const at = (value) => (max > min ? ((Math.log1p(Math.max(0, value)) - min) / (max - min)) * 100 : 50);
+  if (strip.band) {
+    const band = document.createElement("i");
+    band.className = "insight-strip-band";
+    band.style.left = `${at(strip.band[0])}%`;
+    band.style.width = `${Math.max(1, at(strip.band[1]) - at(strip.band[0]))}%`;
+    box.append(band);
+  }
+  // Los resaltados van al final para que ningún punto gris los tape.
+  [...strip.points].sort((a, b) => Number(a.highlight) - Number(b.highlight)).forEach((point) => {
+    const dot = document.createElement("b");
+    dot.className = point.highlight ? "insight-strip-dot is-highlight" : "insight-strip-dot";
+    dot.style.left = `${at(point.value)}%`;
+    box.append(dot);
+  });
+  const highlighted = strip.points.filter((point) => point.highlight).length;
+  box.setAttribute("role", "img");
+  box.setAttribute("aria-label", `${strip.points.length} piezas según ${strip.unit}; ${highlighted} resaltadas${strip.band ? `; lo típico va de ${decimal(strip.band[0])} a ${decimal(strip.band[1])}` : ""}.`);
+  return box;
+}
+
+function renderInsightCard(insight) {
+  const card = document.createElement("article");
+  card.className = "insight-card";
+  const text = document.createElement("p");
+  text.className = "insight-text";
+  text.textContent = insight.text;
+  card.append(text);
+  if (insight.strip?.points.length) {
+    card.append(drawInsightStrip(insight.strip));
+    const legend = document.createElement("p");
+    legend.className = "insight-legend";
+    legend.textContent = insight.strip.band
+      ? "Cada punto es una pieza. La franja gris es lo típico: la mitad de tus piezas recientes cae ahí."
+      : "Cada punto es una pieza.";
+    card.append(legend);
+  }
+  if (insight.examples.length) {
+    const list = document.createElement("ul");
+    list.className = "insight-examples";
+    insight.examples.forEach((example) => {
+      const item = document.createElement("li");
+      const excerpt = document.createElement("span");
+      excerpt.textContent = `“${example.excerpt}”`;
+      const date = document.createElement("small");
+      date.textContent = dayMonth(example.date);
+      item.append(excerpt, date);
+      list.append(item);
+    });
+    card.append(list);
+  }
+  if (insight.action) {
+    const action = document.createElement("p");
+    action.className = "insight-action";
+    action.textContent = insight.action;
+    card.append(action);
+  }
+  const foot = document.createElement("div");
+  foot.className = "insight-foot";
+  const sample = document.createElement("small");
+  sample.textContent = insight.sample;
+  foot.append(sample, insightLink(insight, `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"} →`));
+  card.append(foot);
+  return card;
+}
+
+function renderInsights(snapshot, analytics) {
+  const result = getInsights({ snapshot, analytics, days: state.days, timeZoneOffsetMinutes: timezoneOffset() });
+  state.insightTargets = new Map([...result.featured, ...Object.values(result.groups).flat()].map((insight) => [insight.id, insight.target]));
+  $("#insights-period").textContent = state.days === ALL_TIME ? "Todo el histórico" : `Últimos ${state.days} días`;
+
+  const featured = $("#insights-featured");
+  featured.replaceChildren();
+  if (result.featured.length) {
+    const kicker = document.createElement("p");
+    kicker.className = "insight-kicker";
+    kicker.textContent = "Lo que destaca";
+    featured.append(kicker, ...result.featured.map(renderInsightCard));
+  }
+
+  const groups = $("#insights-groups");
+  groups.replaceChildren();
+  const filled = INSIGHT_GROUPS.filter((group) => result.groups[group].length);
+  if (filled.length) {
+    const kicker = document.createElement("p");
+    kicker.className = "insight-kicker";
+    kicker.textContent = result.featured.length ? "También en este periodo" : "En este periodo";
+    groups.append(kicker);
+  }
+  filled.forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "insight-group";
+    const heading = document.createElement("h3");
+    heading.textContent = INSIGHT_GROUP_LABELS[group];
+    const list = document.createElement("ul");
+    result.groups[group].forEach((insight) => {
+      const item = document.createElement("li");
+      const text = document.createElement("span");
+      text.textContent = insight.text;
+      item.append(text, insightLink(insight, "Ver →"));
+      list.append(item);
+    });
+    section.append(heading, list);
+    groups.append(section);
+  });
+  if (!result.total) emptyMessage(groups, `Todavía no hay nada que destaque con claridad en ${rangeLabel()}. Prueba con un rango más amplio o vuelve tras unas cuantas piezas más.`, "coverage-empty");
+
+  // El silencio también es un resultado: se dice qué se evaluó y qué faltó.
+  const silent = $("#insights-silent");
+  silent.hidden = !result.silent.length;
+  silent.textContent = result.silent.length ? `Sin nada claro todavía. ${result.silent.map((row) => row.text).join(" ")}` : "";
+}
+
+// "Ver →" abre la vista de la evidencia, lleva al panel y lo resalta un
+// instante. En Notas, además, filtra la tabla a las piezas del hallazgo.
+function navigateToInsight(id) {
+  const target = state.insightTargets.get(id);
+  if (!target) return;
+  if (target.noteIds?.length) {
+    state.notesFilter = { ids: new Set(target.noteIds), label: target.label || "las notas del hallazgo" };
+    state.notesSearch = "";
+    $("#notes-search").value = "";
+    state.notesPage = 0;
+  }
+  setView(target.view);
+  const panel = $(`#${target.panel}`);
+  if (!panel) return;
+  panel.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  panel.classList.add("is-flash");
+  clearTimeout(navigateToInsight.timer);
+  navigateToInsight.timer = setTimeout(() => panel.classList.remove("is-flash"), 1600);
 }
 
 function applyPrivacy() {
@@ -3147,7 +3218,16 @@ function bindEvents() {
   bindPostalConfig();
   $("#postal-download").addEventListener("click", () => runCapture({ target: $("#postal-card"), destination: "download", label: "postal", outputWidth: POSTAL_WIDTH, layoutWidth: POSTAL_WIDTH / 2 }));
   $("#postal-copy").addEventListener("click", () => runCapture({ target: $("#postal-card"), destination: "copy", label: "postal", outputWidth: POSTAL_WIDTH, layoutWidth: POSTAL_WIDTH / 2 }));
-  $("#growth-action-button").addEventListener("click", (event) => setView(event.currentTarget.dataset.goto));
+  // Delegación: los hallazgos se repintan con cada rango, el contenedor no.
+  $("#insights-panel").addEventListener("click", (event) => {
+    const link = event.target.closest?.("[data-insight]");
+    if (link) navigateToInsight(link.dataset.insight);
+  });
+  $("#notes-insight-filter-clear").addEventListener("click", () => {
+    state.notesFilter = null;
+    state.notesPage = 0;
+    renderNotesTable(state.snapshot);
+  });
   $("#cadence-heatmap").addEventListener("keydown", moveHeatmapFocus);
   $("#connect-button").addEventListener("click", connect);
   $("#login-button").addEventListener("click", async () => {
@@ -3239,7 +3319,12 @@ function bindEvents() {
     syncRangeButtons();
     renderDashboard();
   }));
-  $$(".nav-item[data-view]").forEach((item) => item.addEventListener("click", () => setView(item.dataset.view)));
+  // Entrar desde la barra lateral es ver la vista entera: el filtro de un
+  // hallazgo solo vale para el "Ver →" que lo puso.
+  $$(".nav-item[data-view]").forEach((item) => item.addEventListener("click", () => {
+    state.notesFilter = null;
+    setView(item.dataset.view);
+  }));
   // Resumen deja de ser un muro de cifras: cada KPI entra en su vista.
   $$("[data-goto]").forEach((card) => {
     card.addEventListener("click", () => setView(card.dataset.goto));

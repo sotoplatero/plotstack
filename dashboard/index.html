@@ -144,10 +144,6 @@
                 <h1 id="growth-brief-title">Así está creciendo tu newsletter</h1>
                 <p id="growth-verdict">Sincroniza para preparar una lectura sencilla de tu crecimiento.</p>
               </div>
-              <div class="brief-action">
-                <strong id="growth-action">Sigue publicando y vuelve después de la próxima edición.</strong>
-                <button class="action-button" id="growth-action-button" type="button" hidden>Ver detalle</button>
-              </div>
             </section>
 
             <section class="metrics-grid" aria-label="Métricas principales">
@@ -216,52 +212,15 @@
               </article>
             </section>
 
-            <section class="growth-drivers" aria-label="Qué está impulsando el crecimiento">
-              <article class="panel driver-panel reveal" data-goto="crecimiento" role="link" tabindex="0">
-                <div class="panel-header">
-                  <div><h2>De dónde llegan tus nuevos lectores</h2><p class="panel-copy">Las fuentes que más altas aportaron en <span class="summary-period-label">el periodo</span>.</p></div>
-                  <span class="period-badge">Ver detalle ↗</span>
-                </div>
-                <div class="driver-bars" id="summary-source-bars"></div>
-                <p class="plain-insight" id="summary-source-insight">Sincroniza para identificar tus fuentes de crecimiento.</p>
-              </article>
-              <article class="panel driver-panel reveal" data-goto="publicaciones" role="link" tabindex="0">
-                <div class="panel-header">
-                  <div><h2>Qué publicaciones convierten mejor</h2><p class="panel-copy">Altas conseguidas durante el primer día.</p></div>
-                  <span class="period-badge">Ver envíos ↗</span>
-                </div>
-                <div class="driver-bars" id="summary-post-bars"></div>
-                <p class="plain-insight" id="summary-post-insight">Aún no hay publicaciones con altas atribuidas.</p>
-              </article>
+            <section class="panel insights-panel reveal" id="insights-panel" aria-labelledby="insights-title">
+              <div class="panel-header">
+                <div><h2 id="insights-title">Hallazgos</h2></div>
+                <span class="period-badge" id="insights-period">—</span>
+              </div>
+              <div class="insights-featured" id="insights-featured"></div>
+              <div class="insights-groups" id="insights-groups"></div>
+              <p class="insights-silent" id="insights-silent" hidden></p>
             </section>
-
-            <details class="secondary-detail reveal">
-              <summary>Ver actividad de publicaciones y Notas</summary>
-              <section class="content-summary-grid" aria-label="Interacciones del periodo">
-              <article class="panel content-summary-panel reveal" data-goto="publicaciones" role="link" tabindex="0">
-                <div class="panel-header"><div><h2>Publicaciones</h2><p class="panel-copy">Actividad en <span class="summary-period-label">el periodo</span></p></div><span class="period-badge">Ver todas ↗</span></div>
-                <div class="summary-kpi-grid">
-                  <div><span>Publicaciones</span><strong id="summary-posts-count">—</strong></div>
-                  <div><span>Interacciones</span><strong id="summary-posts-interactions">—</strong></div>
-                  <div><span>Reacciones</span><strong id="summary-posts-reactions">—</strong></div>
-                  <div><span>Comentarios</span><strong id="summary-posts-comments">—</strong></div>
-                  <div><span>Compartidos</span><strong id="summary-posts-shares">—</strong></div>
-                  <div><span>Vistas</span><strong id="summary-posts-views">—</strong></div>
-                </div>
-              </article>
-              <article class="panel content-summary-panel reveal" data-goto="notas" role="link" tabindex="0">
-                <div class="panel-header"><div><h2>Notas</h2><p class="panel-copy">Actividad en <span class="summary-period-label">el periodo</span></p></div><span class="period-badge">Ver todas ↗</span></div>
-                <div class="summary-kpi-grid">
-                  <div><span>Notas</span><strong id="summary-notes-count">—</strong></div>
-                  <div><span>Interacciones</span><strong id="summary-notes-interactions">—</strong></div>
-                  <div><span>Likes</span><strong id="summary-notes-likes">—</strong></div>
-                  <div><span>Comentarios</span><strong id="summary-notes-comments">—</strong></div>
-                  <div><span>Restacks</span><strong id="summary-notes-restacks">—</strong></div>
-                  <div><span>Impresiones</span><strong id="summary-notes-impressions">—</strong></div>
-                </div>
-              </article>
-              </section>
-            </details>
           </div>
 
           <div class="view" data-view="audiencia" hidden>
@@ -513,6 +472,10 @@
               <div class="panel-header notes-header">
                 <div><h2>Todas las notas</h2></div>
                 <div class="notes-header-actions">
+                  <div class="insight-filter" id="notes-insight-filter" hidden>
+                    <span id="notes-insight-filter-label">—</span>
+                    <button type="button" class="text-button" id="notes-insight-filter-clear" aria-label="Quitar el filtro del hallazgo">Ver todas</button>
+                  </div>
                   <div class="notes-filter">
                     <label class="field-label" for="notes-search">Buscar</label>
                     <input type="search" id="notes-search" placeholder="Texto de la nota…" />

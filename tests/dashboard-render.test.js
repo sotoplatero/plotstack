@@ -881,20 +881,61 @@ test("accesibilidad: una sola parada de tabulación en el mapa y estado anunciad
   assert.match($("#posts-rate-chart").getAttribute("aria-label"), /último valor/);
 });
 
-test("el Resumen da a la recomendación su acción y un pie igual a cada tarjeta", async () => {
+test("el Resumen escribe sus hallazgos con enlace a la vista de la evidencia", async () => {
   await arrancar();
   await verVista("resumen");
   await rango("all");
-  const boton = $("#growth-action-button");
-  // Con fuente principal o envío que convierte, la acción abre su vista.
-  if (!boton.hidden) {
-    assert.ok(["crecimiento", "publicaciones"].includes(boton.dataset.goto), `destino: ${boton.dataset.goto}`);
-    boton.click();
-    await settle(4);
-    assert.equal($(`.view[data-view="${boton.dataset.goto}"]`).hidden, false, "la acción abre la vista de la evidencia");
-  }
-  await verVista("resumen");
   assert.equal($$(".view[data-view=\"resumen\"] .metric-foot").length, 3, "las tres tarjetas comparten pie");
+  // Los bloques retirados no vuelven: los hallazgos los sustituyen.
+  for (const id of ["summary-source-bars", "summary-post-bars", "summary-posts-count", "growth-action-button"]) {
+    assert.equal($(`#${id}`), null, `#${id} se retiró`);
+  }
+  assert.equal($("#insights-period").textContent, "Todo el histórico");
+  const lineas = $$("#insights-groups li");
+  assert.ok(lineas.length >= 1, "hay al menos un hallazgo con los datos del fixture");
+  assert.doesNotMatch($("#insights-panel").textContent, /NaN|undefined|Infinity/);
+  const enlace = lineas[0].querySelector("[data-insight]");
+  enlace.click();
+  await settle(4);
+  const abierta = $$(".view").find((node) => !node.hidden).attributes["data-view"];
+  assert.notEqual(abierta, "resumen", "el enlace abre la vista de la evidencia");
+});
+
+test("un hallazgo de notas filtra la tabla a sus piezas y el filtro se quita", async () => {
+  await arrancar();
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.snapshot"];
+  const ruido = [4, 6, 5, 7, 3, 6, 5, 4, 8, 5];
+  const notas = Array.from({ length: 40 }, (_, index) => ({
+    id: String(index),
+    body: index === 0 ? "La nota que se salió de lo normal" : `Nota corriente ${index}`,
+    date: new Date(Date.now() - (index * 2 + 1) * 86400000).toISOString(),
+    reactions: index === 0 ? 80 : ruido[index % 10],
+    replies: 0,
+    restacks: 0,
+  }));
+  listener({ "plotstack.snapshot": { newValue: { ...original, notes: notas } } }, "local");
+  await settle(4);
+  await verVista("resumen");
+  await rango("30");
+
+  const tarjeta = $$("#insights-featured .insight-card").find((node) => /nota típica/.test(node.textContent));
+  assert.ok(tarjeta, "la nota atípica se destaca con tarjeta");
+  assert.ok(tarjeta.querySelector(".insight-strip"), "la tarjeta lleva su tira de puntos");
+  assert.match(tarjeta.textContent, /La nota que se salió de lo normal/, "la prueba es la propia nota");
+  tarjeta.querySelector("[data-insight]").click();
+  await settle(4);
+  assert.equal($(".view[data-view=\"notas\"]").hidden, false);
+  assert.equal($("#notes-insight-filter").hidden, false, "el filtro del hallazgo se anuncia");
+  assert.equal($$("#notes-table-body tr").length, 1, "la tabla muestra solo la nota del hallazgo");
+
+  $("#notes-insight-filter-clear").click();
+  await settle(4);
+  assert.equal($("#notes-insight-filter").hidden, true);
+  assert.ok($$("#notes-table-body tr").length > 1, "sin filtro vuelven todas");
+
+  listener({ "plotstack.snapshot": { newValue: original } }, "local");
+  await settle(4);
 });
 
 test("Crecimiento abre con tus récords y el próximo hito", async () => {

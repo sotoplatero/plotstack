@@ -46,6 +46,7 @@ dashboard/app.js  --chrome.runtime.sendMessage-->  src/background.js
 - **`src/providers/substack-extended.js`** — catorce claves de datos. Tres de ellas (`growthSources`, `visitorSources`, `networkAttribution`) se piden **una vez por ventana del selector** (7/30/90/todo): Substack las agrega en servidor y devuelve un único punto por fuente, así que sus totales no se pueden recortar en cliente. `trafficTimeseries` sí es diaria y basta una petición. Claves originales: `subscriberTimeline`, `growthSources`, `followerTimeseries`, `audienceLocation`, `freeSubscriberGrowth`, `paidSubscriberGrowth`, `freeRetention`, `paidRetention`, y `audience`, que **no tiene petición propia**: sus conteos salen de `audienceCounts`, la copia sin PII (`count` + `chartCounts`) que devuelve la primera página de la timeline. Pedirlo aparte con `limit: 1` era un duplicado exacto en cada sync. Se retiraron seis (red 500, recomendaciones 400, payment_pledges 400, planes, inventario y exportaciones) porque no alimentaban ningún renderer. **Una fuente sin consumidor no se sincroniza.** Cada una tiene `request` + `normalize`; se ejecutan con `Promise.allSettled` y producen un array `coverage` que el dashboard muestra en el panel **Cobertura**.
 - **`src/shared/analytics.js`** — capa de saneado y formato, compartida entre service worker y dashboard (importada por ruta relativa `../src/shared/`). `normalizeSnapshot()` define el esquema persistido; los formatters usan locale `es-ES`.
 - **`src/shared/content-analytics.js`** — módulo puro, sin red y sin persistencia. **`getContentFindings()` y la tabla de rasgos se retiraron de la interfaz** (el análisis por medianas no era útil con pocas notas; el análisis con IA está descartado, ver `PRODUCT.md`). Siguen exportadas y con tests, pero **ningún renderer las consume**. Lo que el dashboard sí usa, a través de la fachada `getContentAnalytics()`: `getCadenceHeatmap` (mapa día × hora: las 168 `cells` son lo que se pinta, 7 filas × 24 columnas, con intensidad por recuento y las interacciones en el tooltip; `buckets` por tramo sigue calculado pero sin consumidor). `getCadenceCalendar` (calendario estilo GitHub por día) queda exportado y con tests pero **fuera de la fachada y de la interfaz**: se probó y el usuario prefirió el mapa por hora y `getNoteAttributionTimeline` (panel "Altas atribuidas a notas" de la vista Notas).
+- **`src/shared/insights.js`** — **Hallazgos**, módulo puro como el anterior. `getInsights({ snapshot, analytics, days, now })` corre un catálogo de detectores deterministas (casi todos envuelven funciones ya existentes: `getRecords`, `getLoyalCore`, `getCampaignCuts`, `getFeatureInsights`…) y devuelve `{ featured, groups, silent, total }`: frases en español ya escritas, cada una con su `target` (vista, panel y, en Notas, `noteIds`). Solo puede ir en `featured` (máx. 3) lo que trae su prueba: tira de puntos (`strip`) o piezas (`examples`).
 - **`dashboard/`** — página completa (no popup), DOM manual sin framework. `app.js` mantiene `state` en memoria y despacha **una sola vista** por render.
 
 ## Las siete vistas del dashboard
@@ -88,8 +89,16 @@ excepciones**. El panel de fuentes de adquisición llevaba un badge `· fijo`
 porque siempre pedíamos 12 meses; `growth/sources` acepta `from_date`/`to_date`,
 así que ahora se sincroniza una ventana por opción del selector.
 
-Resumen es deliberadamente corto: suscriptores, apertura, CTR, vistas y
-crecimiento.
+Resumen se lee en tres pasos: el titular (`growth-verdict`), los KPI y el
+gráfico de suscriptores, y el panel **Hallazgos** (`#insights-panel`): hasta tres
+tarjetas destacadas con su tira de puntos y sus piezas, luego **todas** las
+líneas que superan su umbral agrupadas con los nombres de la barra lateral, cada
+una con "Ver →", y al final en gris lo que se evaluó sin concluir nada. Los
+paneles de fuentes, de posts que convierten y de actividad de publicaciones y
+Notas se retiraron: sus conclusiones son líneas de Hallazgos y sus gráficos
+viven en su vista. "Ver →" usa delegación sobre el contenedor estático y, en
+Notas, pone `state.notesFilter` (en memoria, se quita con el chip o al entrar
+desde la barra lateral).
 `health-score` e inventario se retiraron porque duplicaban señales o usaban un
 índice arbitrario. Los KPI de pago e ingreso mensual existen, pero están ocultos
 por defecto con `data-sensitive`; sus preferencias viven en `localStorage` bajo
@@ -206,6 +215,16 @@ listeners quedarían colgando.
 - **Ninguna clave cruda de la API llega a la interfaz.** No hay volcados genéricos de objetos: las rejillas de cifras se construyen con `renderLabelledGrid`, que recibe pares `[etiqueta en español, valor]` escritos en el renderer. El volcado anterior (`renderStatGrid` + `STAT_LABELS`) pintaba `drafts` en inglés y booleanos de control como `publishedIsCapped: false`. Si añades una rejilla, escribe las etiquetas; no itereres el payload. Los nombres de fuente y de red que devuelve Substack ("Substack App", "direct to app", "Search") pasan por `sourceLabel()` de `analytics.js` **al pintar**: el snapshot guarda el valor original y una etiqueta desconocida se muestra capitalizada en vez de desaparecer.
 - **El perfil se refresca en cada sync.** `syncConnected` llama a `getProfile()` siempre, no solo cuando falta `userId`: ahí vive `followerCount`, que es un número vivo. Cachearlo desde el momento de la conexión lo dejaba a **0** en cualquier conexión creada antes de mapearlo. Si el perfil falla, se conserva la publicación guardada y `getPublicationSnapshot` cae al `followers` del snapshot anterior. Cubierto en `tests/background.test.js`.
 - **Récords, hito y fidelidad son conteos, nunca personas.** `getSubscriberTimeline` añade `ratings` (reparto 0-5 de `activity_rating`) y `cohorts` (actividad por mes de alta) sin sacar ninguna fila. El núcleo fiel (puntuación 5) solo tiene evolución porque el service worker la guarda: `withLoyaltyHistory` añade una captura por día a `analytics.audience.loyaltyHistory` y, si la fuente falla, conserva la anterior. La permanencia por mes tiene **sesgo de superviviente** (Substack solo lista a quien sigue): «siguen X de Y» cruza con las altas del histórico de crecimiento y queda en `null` si las fuentes no cuadran o el histórico no cubre el mes; con la lista truncada se omite el mes más antiguo. El próximo hito se proyecta con el ritmo **neto** de dos ventanas fijas (30 y 90 días) y da un rango, nunca una fecha única; sin ritmo positivo no proyecta.
+- **Un hallazgo sin umbral calla, no se atenúa.** Al revés que los cortes de
+  las vistas (`scarce`, `insufficient`), en Hallazgos lo que no supera su umbral
+  no aparece; si el detector aplica pero falta muestra, deja una línea en
+  `silent`. Cada pieza se compara con **sus 30 anteriores** (`BASELINE_WINDOW`,
+  base móvil, aunque queden fuera del rango) con mediana y MAD sobre `log1p`;
+  atípica desde `|z| ≥ 2` y múltiplo ≥ 2. Con MAD = 0 no clasifica. Las
+  interacciones de nota son las públicas (me gusta + respuestas + restacks) para
+  cubrir todas las notas; la conversión por nota es un detector aparte. **Ningún
+  detector toca pago ni ingresos.** El análisis con IA sigue descartado: el
+  "porqué" lo pone el autor al ver juntas las piezas de la prueba.
 - **Nada de PII en `chrome.storage`.** Solo métricas agregadas y normalizadas; se descartan emails, perfiles individuales de suscriptores y URLs firmadas de exportación.
 - **Notas propias.** El feed del perfil incluye restacks ajenos; se filtran comparando `comment.user_id` con `publication.userId`, no por la URL del perfil.
 - **Campos de la API son inestables.** Los normalizadores usan helpers variádicos (`asNumber(a, b, c)`, `text(...)`, `rowsFrom(payload, keys)`) porque Substack no documenta estos endpoints internos. Al añadir un campo, añade también sus alias plausibles en lugar de asumir un solo nombre.

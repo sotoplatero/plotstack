@@ -17,6 +17,7 @@ export const EXTENSION_FILES = [
   "src/background.js",
   "src/shared/analytics.js",
   "src/shared/content-analytics.js",
+  "src/shared/insights.js",
   "src/providers/substack-api.js",
   "src/providers/substack-extended.js",
   "assets/icon.svg",
