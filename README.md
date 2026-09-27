@@ -110,6 +110,7 @@ npm test            # 160 pruebas con node --test
 npm run validate    # manifest, archivos, iconos y permisos declarados
 npm run icons       # regenera assets/icons/*.png desde assets/icon.svg
 npm run package     # valida y escribe dist/plotstack-<versión>.zip
+npm run store-shots                   # capturas de la ficha desde la vista previa (con npm run preview en marcha)
 npm run screenshot -- <captura.png>   # capturas a 1280x800 para la ficha
 ```
 

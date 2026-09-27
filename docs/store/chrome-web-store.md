@@ -169,26 +169,29 @@ Lo que la tienda exige y lo que ya está resuelto:
 | Recurso | Tamaño | Estado |
 | --- | --- | --- |
 | Icono de la tienda | 128×128 PNG | ✅ `assets/icons/icon-128.png` |
-| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/`, regeneradas para 1.2.0: Resumen, Tus récords, Tu núcleo fiel, Notas y Postal |
+| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/`, regeneradas para 1.3.0 con `npm run store-shots`: Resumen, Hallazgos, Récords (Cómo creces), Notas y Postal |
 | Mosaico pequeño | 440×280 PNG | ⏳ opcional |
 | Imagen destacada | 1400×560 PNG | ⏳ opcional |
 
-Se suben cinco, en este orden: `plotstack-resumen`, `plotstack-publicaciones`,
-`plotstack-notas`, `plotstack-crecimiento`, `plotstack-audiencia`. `dist/` está
-en `.gitignore`, así que las capturas no viven en el repo: hay que regenerarlas
-antes de cada subida en la que la interfaz haya cambiado, y en 1.1.0 cambió.
+Se suben cinco, en este orden: `plotstack-resumen`, `plotstack-hallazgos`,
+`plotstack-crecimiento`, `plotstack-notas`, `plotstack-postal`. `dist/` está en
+`.gitignore`, así que las capturas no viven en el repo: hay que regenerarlas
+antes de cada subida en la que la interfaz haya cambiado.
 
 ### Cómo se regeneran
 
 ```powershell
-npm run preview     # http://localhost:4173/dashboard/
+npm run preview       # en una terminal: http://localhost:4173/dashboard/
+npm run store-shots   # en otra: las cinco capturas en dist/store/
 ```
 
-Con el servidor en marcha, se captura **con el viewport del navegador puesto a
-1280×800 exactos**: así el PNG ya sale del tamaño que pide la tienda y no hay que
-escalarlo ni rellenarlo. Se navega a `http://localhost:4173/dashboard/`, se
-recorre cada vista de la barra lateral y se guarda una captura del viewport por
-vista, con el scroll arriba.
+`scripts/capture-store.mjs` abre Chrome en modo headless con el viewport a
+1280×800 exactos y a 1x, recorre las vistas en el orden de subida y guarda una
+captura por vista: el PNG ya sale del tamaño que pide la tienda. El Resumen se
+captura a 30 días (la vista previa trae base de comparación para ese rango) y
+el resto a 90, donde salen más hallazgos. Borra las capturas de nombres
+antiguos para que no se cuelen en la subida. Si Chrome no está en su ruta
+habitual, `CHROME_PATH` la indica.
 
 `npm run screenshot -- <captura.png>` sigue estando para el otro caso: una
 captura hecha a mano, o desde la cuenta real con el botón de cámara, que llega

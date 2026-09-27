@@ -11,6 +11,7 @@ node --test --test-name-pattern "notas"   # un solo test por nombre
 npm run validate                          # comprueba manifest + archivos referenciados
 npm run icons                             # regenera assets/icons/*.png desde assets/icon.svg
 npm run package                           # valida y escribe dist/plotstack-<versión>.zip
+npm run store-shots                       # capturas 1280x800 de la ficha (con npm run preview en marcha)
 ```
 
 Los PNG de `assets/icons/` **se generan**, no se editan: `assets/icon.svg` es la

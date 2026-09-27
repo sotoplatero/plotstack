@@ -1157,10 +1157,12 @@ html.is-capturing .postal { border-radius: 0; }
 .postal:not(.is-without-chart) > .postal-tiles { margin-top: 2.2cqi; }
 .postal.is-without-chart .postal-chart { display: none; }
 
-/* Cuatro cifras en una fila, en los dos formatos. */
-.postal-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.6cqi; }
-.postal-tile { padding: 2.6cqi 2.8cqi; gap: .8cqi; align-content: start; }
-.postal-tile strong { font-size: 6.4cqi; }
+/* Cuatro cifras en una fila, en los dos formatos. Flex, no columnas iguales:
+   una cifra larga ("+1,3 mil") se salía de su casilla. Cada casilla reparte el
+   ancho pero nunca encoge por debajo de su cifra. */
+.postal-tiles { display: flex; gap: 1.6cqi; }
+.postal-tile { flex: 1 1 0; min-width: min-content; padding: 2.6cqi 2.8cqi; gap: .8cqi; align-content: start; }
+.postal-tile strong { font-size: 6.4cqi; white-space: nowrap; }
 .postal-tile span { font-size: 2.5cqi; line-height: 1.25; }
 
 .postal[data-theme="light"] .postal-chart { --chart-line: var(--c-subs); --chart-fill: rgba(88, 86, 214, .14); }
