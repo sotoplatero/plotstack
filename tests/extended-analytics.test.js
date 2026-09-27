@@ -9,7 +9,6 @@ import {
   normalizeRetention,
   getSubscriberTimeline,
   normalizeGrowthSources,
-  normalizeGrowthEvents,
   normalizeNetworkAttribution,
   normalizeVisitorSources,
   normalizeGrowthBenchmark,
@@ -284,14 +283,6 @@ test("normalizeGrowthSources devuelve estructura vacia sin sourceMetrics", () =>
   const growth = normalizeGrowthSources({});
   assert.deepEqual(growth.sources, []);
   assert.deepEqual(growth.totals, { visitors: 0, subscribers: 0, revenue: 0 });
-});
-
-test("normalizeGrowthEvents acepta pubEvents y no inventa conteos", () => {
-  const events = normalizeGrowthEvents({ pubEvents: [{ id: 211298012, date: "2026-08-15T14:08:46.592Z", title: "La forma mas inteligente", slug: "la-forma", type: "text" }] });
-  assert.equal(events.length, 1);
-  assert.equal(events[0].label, "La forma mas inteligente");
-  assert.equal(events[0].type, "text");
-  assert.equal("subscribers" in events[0], false, "el payload real no trae conteos: no se fabrican");
 });
 
 test("normalizeRetention acepta las formas conocidas de cohorte y descarta las demas", () => {

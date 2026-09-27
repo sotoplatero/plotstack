@@ -3,8 +3,6 @@ const STORAGE_KEYS = Object.freeze({
   revenue: "plotstack.showRevenue",
 });
 
-export const DEFAULT_SENSITIVE_PREFERENCES = Object.freeze({ paid: false, revenue: false });
-
 export function readSensitivePreferences(storage) {
   return Object.fromEntries(Object.entries(STORAGE_KEYS).map(([kind, key]) => [kind, storage.getItem(key) === "true"]));
 }

@@ -3,10 +3,8 @@ import assert from "node:assert/strict";
 import {
   EVIDENCE_MIN_N,
   extractNoteFeatures,
-  getCadenceCalendar,
   getCadenceHeatmap,
   getContentAnalytics,
-  getContentFindings,
   getFeatureInsights,
   getNoteAttributionTimeline,
   getNotesTimeline,
@@ -132,7 +130,6 @@ test("getFeatureInsights marks features as nodata when notes lack statistics", (
   assert.equal(emoji.state, "nodata");
   assert.equal(emoji.reason, "stats-missing");
   assert.equal(insights.coverage.statsCoverage, 0);
-  assert.deepEqual(getContentFindings(insights), []);
 });
 
 test("getFeatureInsights marks constant features as insufficient, not nodata", () => {
@@ -207,7 +204,6 @@ test("getFeatureInsights survives an empty snapshot", () => {
   const insights = getFeatureInsights({});
   assert.equal(insights.coverage.totalNotes, 0);
   assert.equal(insights.coverage.statsCoverage, 0);
-  assert.deepEqual(getContentFindings(insights), []);
 });
 
 test("getNotesTimeline groups notes into dense weekly buckets", () => {
@@ -236,97 +232,16 @@ test("getNotesTimeline sums only the results of notes with statistics", () => {
   assert.equal(week.impressionsPerNote, 3);
 });
 
-test("getContentFindings ranks strong negative effects alongside positive ones", () => {
-  const insights = {
-    features: [
-      {
-        id: "hasEmoji", kind: "flag", level: true, state: "evidence", reason: "",
-        counts: { withTotal: 10, withoutTotal: 10, withScored: 10, withoutScored: 10 },
-        outcomes: { interactions: { medianWith: 200, medianWithout: 100, lift: 2, liftBasis: "median", delta: 100 } },
-        sampleIds: [],
-      },
-      {
-        id: "hasLink", kind: "flag", level: true, state: "evidence", reason: "",
-        counts: { withTotal: 10, withoutTotal: 10, withScored: 10, withoutScored: 10 },
-        outcomes: { interactions: { medianWith: 50, medianWithout: 100, lift: 0.5, liftBasis: "median", delta: -50 } },
-        sampleIds: [],
-      },
-    ],
-  };
-  const findings = getContentFindings(insights);
-  assert.equal(findings.length, 2);
-  assert.equal(findings[0].score, findings[1].score);
-  assert.deepEqual(findings.map((finding) => finding.direction).sort(), ["negative", "positive"]);
-});
-
-test("getContentFindings drops weak, unevidenced, and null-lift features", () => {
-  const insights = {
-    features: [
-      {
-        id: "hasEmoji", kind: "flag", level: true, state: "evidence", reason: "",
-        counts: { withTotal: 10, withoutTotal: 10, withScored: 10, withoutScored: 10 },
-        outcomes: { interactions: { medianWith: 105, medianWithout: 100, lift: 1.05, liftBasis: "median", delta: 5 } },
-        sampleIds: [],
-      },
-      {
-        id: "hasLink", kind: "flag", level: true, state: "insufficient", reason: "small-sample",
-        counts: { withTotal: 4, withoutTotal: 10, withScored: 4, withoutScored: 10 },
-        outcomes: { interactions: { medianWith: 400, medianWithout: 100, lift: 4, liftBasis: "median", delta: 300 } },
-        sampleIds: [],
-      },
-      {
-        id: "hasQuote", kind: "flag", level: true, state: "evidence", reason: "",
-        counts: { withTotal: 10, withoutTotal: 10, withScored: 10, withoutScored: 10 },
-        outcomes: { interactions: { medianWith: 0, medianWithout: 0, lift: null, liftBasis: "none", delta: 0 } },
-        sampleIds: [],
-      },
-    ],
-  };
-  assert.deepEqual(getContentFindings(insights), []);
-});
-
-test("getContentFindings returns one finding per feature id", () => {
-  const level = (name, lift) => ({
-    id: "dayOfWeek", kind: "band", level: name, state: "evidence", reason: "",
-    counts: { withTotal: 10, withoutTotal: 10, withScored: 10, withoutScored: 10 },
-    outcomes: { interactions: { medianWith: 100 * lift, medianWithout: 100, lift, liftBasis: "median", delta: 0 } },
-    sampleIds: [],
-  });
-  const findings = getContentFindings({ features: [level("mon", 1.4), level("tue", 2.2), level("wed", 1.6)] });
-  assert.equal(findings.length, 1);
-  assert.equal(findings[0].level, "tue");
-});
-
-test("getContentFindings returns structured data without display strings", () => {
-  const insights = {
-    features: [{
-      id: "hasEmoji", kind: "flag", level: true, state: "evidence", reason: "",
-      counts: { withTotal: 10, withoutTotal: 10, withScored: 10, withoutScored: 10 },
-      outcomes: { interactions: { medianWith: 200, medianWithout: 100, lift: 2, liftBasis: "median", delta: 100 } },
-      sampleIds: [],
-    }],
-  };
-  const [finding] = getContentFindings(insights);
-  assert.equal(finding.label, undefined);
-  assert.equal(typeof finding.lift, "number");
-  assert.equal(typeof finding.featureId, "string");
-});
-
-test("getContentAnalytics assembles coverage, features, timeline, and findings", () => {
+test("getContentAnalytics devuelve solo lo que pinta el dashboard", () => {
   const notes = [
     ...corpus(6, (index) => note(`a${index}`, `¿Escribes notas cada día? Cuenta ${index}`, "2026-08-17T10:00:00Z", stats(200, { impressions: 5000 }))),
     ...corpus(6, (index) => note(`b${index}`, `Apunte breve ${index}`, "2026-08-18T10:00:00Z", stats(50, { impressions: 500 }))),
   ];
   const analytics = getContentAnalytics({ notes });
-  assert.deepEqual(Object.keys(analytics).sort(), ["attribution", "cadence", "coverage", "features", "findings", "primaryOutcome", "timeline"]);
-  assert.equal(analytics.primaryOutcome, "interactions");
-  assert.equal(analytics.coverage.scoredNotes, 12);
+  assert.deepEqual(Object.keys(analytics).sort(), ["attribution", "cadence", "timeline"]);
   assert.ok(analytics.timeline.weeks.length >= 1);
-  assert.ok(analytics.findings.length >= 1);
-
-  const byFollowers = getContentAnalytics({ notes }, { primaryOutcome: "impressions" });
-  assert.equal(byFollowers.primaryOutcome, "impressions");
-  assert.equal(byFollowers.features.length, analytics.features.length);
+  assert.equal(analytics.cadence.datedNotes, 12);
+  assert.equal(analytics.attribution.scoredNotes, 12);
 });
 
 test("getCadenceHeatmap cuenta notas por dia y hora sin inventar interacciones", () => {
@@ -400,51 +315,4 @@ test("getNoteAttributionTimeline devuelve cobertura null sin notas", () => {
   const attribution = getNoteAttributionTimeline({ notes: [] });
   assert.deepEqual(attribution.daily, []);
   assert.equal(attribution.coverage, null, "cero notas no es cobertura cero");
-});
-
-test("getCadenceCalendar alinea las semanas al lunes y cuenta una celda por dia", () => {
-  const notes = [
-    // Miercoles 12 de agosto de 2026, dos notas: una con detalle, otra sin el.
-    note("c1", "Primera", "2026-08-12T10:00:00Z", stats(40, { impressions: 900 })),
-    { id: "c2", body: "Segunda", date: "2026-08-12T15:00:00Z", stats: { available: false } },
-    // Lunes 24 de agosto, una nota sin detalle.
-    { id: "c3", body: "Tercera", date: "2026-08-24T09:00:00Z", stats: { available: false } },
-    // Sin fecha: no entra en el calendario, pero se cuenta como no fechada.
-    { id: "c4", body: "Sin fecha", date: "" },
-  ];
-  const calendar = getCadenceCalendar({ notes });
-  assert.equal(calendar.start, "2026-08-10", "empieza el lunes de la primera semana con notas");
-  assert.equal(calendar.end, "2026-08-30", "termina el domingo de la ultima");
-  assert.equal(calendar.weeks.length, 3);
-  assert.ok(calendar.weeks.every((week) => week.length === 7), "cada columna son siete dias");
-  assert.equal(calendar.datedNotes, 3);
-  assert.equal(calendar.undatedNotes, 1);
-  assert.equal(calendar.maxNotes, 2);
-
-  const dia = calendar.days.find((cell) => cell.date === "2026-08-12");
-  assert.equal(dia.weekday, 2, "miercoles es la fila 2 (lunes = 0)");
-  assert.equal(dia.notes, 2);
-  assert.equal(dia.scoredNotes, 1, "solo una de las dos tiene estadisticas");
-  assert.equal(dia.medianInteractions, 40, "la mediana sale de las notas con detalle, no de un cero por la otra");
-  const lunes = calendar.days.find((cell) => cell.date === "2026-08-24");
-  assert.equal(lunes.medianInteractions, null, "sin detalle no es cero: es ausencia");
-  const vacio = calendar.days.find((cell) => cell.date === "2026-08-13");
-  assert.equal(vacio.notes, 0);
-  assert.equal(vacio.medianInteractions, null);
-
-  // Una etiqueta de mes por columna donde el mes cambia.
-  assert.deepEqual(calendar.months.map((entry) => entry.month), ["2026-08"]);
-  assert.deepEqual(getCadenceCalendar({ notes: [] }).weeks, []);
-});
-
-test("getCadenceCalendar recorta las semanas mas antiguas y lo declara", () => {
-  const notes = [
-    { id: "v", body: "Vieja", date: "2024-01-03T10:00:00Z" },
-    { id: "n", body: "Nueva", date: "2026-08-12T10:00:00Z" },
-  ];
-  const calendar = getCadenceCalendar({ notes }, { maxWeeks: 10 });
-  assert.equal(calendar.weeks.length, 10);
-  assert.ok(calendar.truncatedWeeks > 100, "las semanas descartadas se cuentan, no se esconden");
-  assert.equal(calendar.days.some((cell) => cell.date === "2024-01-03"), false);
-  assert.equal(calendar.days.some((cell) => cell.date === "2026-08-12"), true, "las recientes siempre se conservan");
 });
