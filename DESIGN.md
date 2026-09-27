@@ -157,7 +157,7 @@ PlotStack se lee como el resumen de salud personal de una newsletter, no como un
 
 El mundo es plano y agrupado. Superficies blancas de radio 16 descansan sobre un gris agrupado, sin borde ni sombra: el cambio de tono es lo único que separa. La tinta es casi negra, las cifras y los títulos van en Geist en negrita, y todas las etiquetas están en caja de frase. Los estados se invierten (el elemento activo es un bloque lleno de tinta con texto blanco), las acciones también van en tinta, y los controles son cápsulas.
 
-La densidad es moderada: pocas cifras grandes arriba, detalle en paneles debajo. La primera pantalla del Resumen es un veredicto en negrita, tres tarjetas de métrica con su tono y su tendencia, y el gráfico de suscriptores en índigo; la acción vive en la tarjeta de recomendación.
+La densidad es moderada: pocas cifras grandes arriba, detalle en paneles debajo. La primera pantalla del Resumen es un veredicto en negrita, tres tarjetas de métrica con su tono y su tendencia, y el gráfico de suscriptores en índigo; debajo, los hallazgos.
 
 **Key Characteristics:**
 - Un solo tema claro; no hay conmutador de tema.

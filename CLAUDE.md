@@ -113,8 +113,8 @@ En Notas, el enlace pone `state.notesFilter` (en memoria; se quita con el chip o
 al entrar desde la barra lateral).
 
 **Las notas de conclusión de los paneles también son hallazgos.** Lo que un panel
-concluye de sus datos ("tu mejor día fue…", "las 3 fuentes principales
-concentran…", "publicas más los martes…", "Substack atribuye…", "X lidera…") va
+concluye de sus datos ("las 3 fuentes principales concentran…", "publicas más
+los martes…", "Substack atribuye…", "X es tu principal puerta de entrada…") va
 como `.finding` en un contenedor `<div class="findings" id="<panel>-findings">`
 **debajo del gráfico o la tabla que lo sostiene**, construido con
 `panelFinding(id, texto, muestra, serie)` y sin enlace (`target: null`), porque
@@ -122,6 +122,18 @@ ya está junto a su evidencia. Lo que solo declara de dónde salen los datos, qu
 la serie llegó incompleta o que falta muestra **no es un hallazgo**: sigue como
 `panel-copy` de fuente, debajo de los hallazgos. Una nota nueva de un panel
 sigue la misma regla: si concluye, es hallazgo; si advierte, es nota de fuente.
+
+**Una cifra, un sitio.** Ningún dato se repite dentro de una vista, ni el
+Resumen repite en sus hallazgos lo que ya dan sus tarjetas o el pie de su
+gráfico (por eso no hay hallazgo de apertura o CTR, y el titular lee la
+tendencia sin repetir el porcentaje de la tarjeta). La curva de suscriptores
+vive solo en el Resumen (Audiencia la usa como segunda serie de Seguidores);
+el reparto por actividad vive solo en el núcleo fiel; en Altas y bajas la tira
+da altas, bajas y neto (con sus ceros, vía `keepZero` de `renderLabelledGrid`)
+y la insignia solo el tramo. Una conclusión que aparece en el Resumen y en su
+vista usa el mismo umbral en los dos sitios (la fuente líder:
+`LEADER_MIN_SIGNUPS` y `LEADER_MIN_SHARE` de `insights.js`), o se
+contradicen. Antes de añadir una cifra, busca si ya está en pantalla.
 `health-score` e inventario se retiraron porque duplicaban señales o usaban un
 índice arbitrario. Los KPI de pago e ingreso mensual existen, pero están ocultos
 por defecto con `data-sensitive`; sus preferencias viven en `localStorage` bajo
@@ -266,7 +278,7 @@ listeners quedarían colgando.
 - **No se inventan endpoints.** Regla heredada de `docs/product/substack-export-map.md`: una ruta que no se haya observado en la pestaña Network del panel autenticado no se añade. Retención sigue pendiente por esto; el histórico total de seguidores se construye únicamente con capturas locales sucesivas, nunca con puntos retroactivos inventados.
 - **En el análisis de contenido, `null` nunca es `0`.** `0` es una medición; `null` es ausencia. Una nota sin `note_stats` queda fuera de la mediana en lugar de entrar como cero. Por eso `content-analytics.js` **no** reutiliza `getNotesAnalytics()`, que sí sintetiza ceros para su ranking.
 - **Ningún cociente puede emitir `Infinity` ni `NaN`**: todos pasan por el helper `ratio()`, que devuelve `null` si el denominador es cero. Los no finitos se corrompen al pasar por `chrome.storage` y se renderizarían como "∞×".
-- **Un rasgo con muestra escasa se muestra atenuado, nunca oculto.** Los tres estados (`evidence`, `insufficient`, `nodata`) tienen tratamiento visual distinto; `EVIDENCE_MIN_N` es un umbral de producto, no una prueba de significación.
+- **Los rasgos de nota solo se enuncian con evidencia.** `getFeatureInsights` conserva sus tres estados (`evidence`, `insufficient`, `nodata`; `EVIDENCE_MIN_N` es un umbral de producto, no una prueba de significación), pero ya no hay tabla de rasgos: el detector de Hallazgos solo enuncia un rasgo con `TRAIT_MIN_N` notas a cada lado y un efecto de `TRAIT_MIN_LIFT`; por debajo, calla.
 - Si añades un archivo de primer nivel al código de la extensión, agrégalo a `EXTENSION_FILES` en `scripts/extension-files.mjs`. Es la lista canónica: `validate-extension.mjs` comprueba que exista y `package-extension.mjs` construye con ella el ZIP de la tienda. Un archivo que no esté ahí **no viaja en el paquete publicado**, aunque funcione al cargar la carpeta descomprimida.
 
 ## Tests

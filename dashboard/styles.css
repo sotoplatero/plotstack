@@ -448,7 +448,6 @@ html.is-capturing .reveal { animation: none; }
 
 /* Panel de altas y bajas. */
 .churn-summary { margin: 22px calc(-1 * var(--pad)) 0; border-block: 1px solid var(--line); }
-.churn-summary h3 { margin: 0; padding: 16px var(--pad) 0; font: 700 12px/1.3 var(--sans); color: var(--paper); }
 .churn-summary .audience-totals { margin: 12px 0 0; }
 #churn-panel .chart-wrap { min-height: 240px; }
 #churn-panel .chart-bar { opacity: .92; }
