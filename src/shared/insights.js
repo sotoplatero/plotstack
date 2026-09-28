@@ -18,11 +18,14 @@ import {
   formatPercent,
   getCampaignCuts,
   getCampaignSections,
+  civilDay,
+  getCohortActivity,
   getConcentration,
   getLoyalCore,
   getMilestoneProjection,
   getReachBeyondBubble,
   getRecords,
+  LENGTH_BANDS,
   MIN_CUT_N,
   normalizeSnapshot,
   parseDay,
@@ -30,7 +33,7 @@ import {
   safeNumber,
   sourceLabel,
 } from "./analytics.js";
-import { getFeatureInsights } from "./content-analytics.js";
+import { extractNoteFeatures, getFeatureInsights } from "./content-analytics.js";
 
 export const BASELINE_WINDOW = 30;
 export const BASELINE_MIN = 10;
@@ -253,6 +256,8 @@ const TRAIT_COPY = {
 };
 
 const LENGTH_COPY = { short: "cortas", medium: "de longitud media", long: "largas" };
+// Los cortes de LENGTH_BANDS (analytics.js): hasta 700, hasta 1.500 y más.
+const POST_LENGTH_COPY = { short: "cortos (menos de 700 palabras)", medium: "de 700 a 1.500 palabras", long: "largos (más de 1.500 palabras)" };
 
 function detectNoteTraits(ctx) {
   const inRange = ctx.notes.filter((note) => ctx.inRange(note.date));
@@ -397,6 +402,26 @@ function detectPostCuts(ctx) {
   } else if (ranged.length >= 2) {
     silent.push({ group: "publicaciones", text: `Mejor día de envío: hacen falta al menos ${MIN_CUT_N} envíos en dos días distintos.` });
   }
+  const lengths = getCampaignCuts(ranged).byLength.filter((cut) => !cut.scarce && cut.openRate !== null)
+    .sort((a, b) => b.openRate - a.openRate);
+  if (lengths.length >= 2) {
+    const best = lengths[0];
+    const band = LENGTH_BANDS.find((row) => row.key === best.band);
+    const rest = weighted(ranged.filter((campaign) => campaign.wordcount > 0 && !(campaign.wordcount > band.min && campaign.wordcount <= band.max)));
+    if (rest !== null && best.openRate - rest >= CUT_MIN_POINTS) {
+      insights.push({
+        id: `post-length:${best.band}`,
+        group: "publicaciones",
+        text: `Tus artículos ${POST_LENGTH_COPY[best.band]} se abren más: ${formatPercent(best.openRate, 0)} frente al ${formatPercent(rest, 0)} del resto.`,
+        sample: `${pieces(best.posts, "envío", "envíos")} de esa longitud · apertura ponderada por entregas`,
+        score: 0.35,
+        strip: null,
+        examples: [],
+        action: null,
+        target: { view: "publicaciones", panel: "posts-by-length" },
+      });
+    }
+  }
   const sections = getCampaignSections(ranged).filter((cut) => !cut.scarce && cut.openRate !== null && cut.section !== "Sin sección");
   if (sections.length >= 2) {
     const best = sections[0];
@@ -511,17 +536,246 @@ function detectLoyalCore(ctx) {
   };
 }
 
+// ── Cuándo rinden tus notas ─────────────────────────────────────────────────
+// El mapa de "Horario de publicación" cuenta cuándo publicas; esto mide cuándo
+// RINDE: interacciones públicas (cobertura total) de las notas de una franja o
+// un día frente a las del resto. Mediana de cada grupo, nunca media.
+export const TIME_MIN_N = 8;
+const HOUR_COPY = { night: "de madrugada", morning: "de la mañana", afternoon: "de la tarde", evening: "de la noche" };
+const HOUR_REST = "del resto del día";
+const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+function detectNoteTiming(ctx) {
+  const inRange = ctx.notes.filter((note) => ctx.inRange(note.date));
+  if (inRange.length < TIME_MIN_N * 2) {
+    return inRange.length
+      ? { silent: [{ group: "notas", text: `A qué hora rinden tus notas: hacen falta al menos ${TIME_MIN_N * 2} notas en ${ctx.rangeLabel}.` }] }
+      : {};
+  }
+  const rows = inRange.map((note) => ({ note, bands: extractNoteFeatures(note, { timeZoneOffsetMinutes: ctx.timeZoneOffsetMinutes }).bands, score: noteScore(note) }));
+  const best = (key, levels) => levels
+    .map((level) => {
+      const inside = rows.filter((row) => row.bands[key] === level);
+      const outside = rows.filter((row) => row.bands[key] !== null && row.bands[key] !== level);
+      const lift = inside.length >= TIME_MIN_N && outside.length >= TIME_MIN_N
+        ? ratio(medianOf(inside.map((row) => row.score)), medianOf(outside.map((row) => row.score)))
+        : null;
+      return { level, inside, outside, lift };
+    })
+    .filter((cell) => cell.lift !== null && cell.lift >= TRAIT_MIN_LIFT)
+    .sort((a, b) => b.lift - a.lift)[0];
+  const insights = [];
+  const hour = best("hourBucket", Object.keys(HOUR_COPY));
+  if (hour) insights.push(timingInsight("hourBucket", hour, `Tus notas ${HOUR_COPY[hour.level]}`, HOUR_REST));
+  const day = best("dayOfWeek", DAY_KEYS);
+  if (day) insights.push(timingInsight("dayOfWeek", day, `Tus notas del ${DAY_NAMES[DAY_KEYS.indexOf(day.level)]}`, "del resto de la semana"));
+  return { insights };
+}
+
+function timingInsight(key, cell, label, rest) {
+  const top = [...cell.inside].sort((a, b) => b.score - a.score).slice(0, 3);
+  return {
+    id: `note-time:${key}:${cell.level}`,
+    group: "notas",
+    text: `${label} reciben ${times(cell.lift)} más interacciones que las ${rest}.`,
+    sample: `${pieces(cell.inside.length, "nota", "notas")} frente a ${cell.outside.length} · me gusta, respuestas y restacks, mediana de cada grupo`,
+    score: scoreOf(cell.lift, Math.min(cell.inside.length, cell.outside.length), TIME_MIN_N * 2),
+    strip: null,
+    examples: top.map((row) => ({ id: row.note.id, excerpt: excerptOf(row.note.body), date: row.note.date })),
+    action: null,
+    target: { view: "notas", panel: "cadence-panel", noteIds: top.map((row) => row.note.id), label: "notas de ejemplo del hallazgo" },
+  };
+}
+
+// ── Tendencia de tu nota típica ─────────────────────────────────────────────
+// Tus últimas TREND_N notas frente a las TREND_N anteriores, por mediana. No
+// depende del rango, como el hito: es "ahora frente a antes" y la muestra lo
+// declara. Con estadísticas en las dos mitades mide alcance (impresiones); si
+// no, interacciones públicas.
+export const TREND_N = 20;
+export const TREND_MIN_CHANGE = 0.25;
+
+function detectNoteTrend(ctx) {
+  if (ctx.notes.length < TREND_N * 2) return {};
+  const recent = ctx.notes.slice(-TREND_N);
+  const before = ctx.notes.slice(-TREND_N * 2, -TREND_N);
+  const reached = (rows) => rows.filter((note) => note.stats.available && note.stats.reach.impressions > 0);
+  const byReach = reached(recent).length >= BASELINE_MIN && reached(before).length >= BASELINE_MIN;
+  const valueOf = byReach ? (note) => note.stats.reach.impressions : noteScore;
+  const pool = (rows) => (byReach ? reached(rows) : rows).map(valueOf);
+  const now = medianOf(pool(recent));
+  const then = medianOf(pool(before));
+  const change = then > 0 ? ratio(now - then, then) : null;
+  if (change === null || Math.abs(change) < TREND_MIN_CHANGE) return {};
+  const up = change > 0;
+  const metric = byReach ? "llegan a" : "reciben";
+  const unit = byReach ? "impresiones" : "interacciones";
+  const pct = formatPercent(Math.abs(change) * 100, 0);
+  const recentIds = new Set(recent.map((note) => note.id));
+  const rows = [...before, ...recent]
+    .filter((note) => !byReach || (note.stats.available && note.stats.reach.impressions > 0))
+    .map((note) => ({ piece: note, value: valueOf(note) }));
+  return {
+    insights: [{
+      id: `note-trend:${byReach ? "reach" : "interactions"}`,
+      group: "notas",
+      text: byReach
+        ? `Tus últimas ${TREND_N} notas llegan a un ${pct} ${up ? "más" : "menos"} de gente que las ${TREND_N} anteriores.`
+        : `Tus últimas ${TREND_N} notas ${metric} un ${pct} ${up ? "más" : "menos"} de ${unit} que las ${TREND_N} anteriores.`,
+      sample: `Mediana de ${formatCompactNumber(Math.round(now))} frente a ${formatCompactNumber(Math.round(then))} ${unit} por nota · no depende del rango elegido`,
+      score: Math.min(3, Math.abs(Math.log((now + 1) / (then + 1)))) * 0.8,
+      strip: {
+        unit,
+        band: typicalBand(before.filter((note) => !byReach || (note.stats.available && note.stats.reach.impressions > 0)).map(valueOf)),
+        points: rows.map((row) => ({ id: row.piece.id, value: row.value, highlight: recentIds.has(row.piece.id) })),
+      },
+      examples: [],
+      action: null,
+      target: { view: "notas", panel: "notes" },
+    }],
+  };
+}
+
+// ── Tasa de interacción ─────────────────────────────────────────────────────
+// Interacciones de detalle / impresiones: separa la nota que resonó de la que
+// solo tuvo mucho alcance. Solo notas con estadísticas y un mínimo de
+// impresiones, para no coronar 3 interacciones sobre 20 vistas.
+export const RATE_MIN_IMPRESSIONS = 100;
+
+function detectNoteEngagementRate(ctx) {
+  const measured = ctx.notes.filter((note) => note.stats.available && note.stats.reach.impressions >= RATE_MIN_IMPRESSIONS);
+  if (!measured.some((note) => ctx.inRange(note.date))) return {};
+  const rateOf = (note) => {
+    const value = ratio(note.stats.interactions.total, note.stats.reach.impressions);
+    return value === null ? null : value * 100;
+  };
+  const { rows, measured: all } = rollingOutliers(measured, rateOf, (note) => ctx.inRange(note.date));
+  const evaluated = rows.filter((row) => row.z !== null);
+  const winners = evaluated
+    .filter((row) => row.z >= OUTLIER_Z && row.multiple >= 2)
+    .sort((a, b) => b.multiple - a.multiple);
+  if (!winners.length) return {};
+  const ids = new Set(winners.map((row) => row.piece.id));
+  const top = winners[0];
+  const rate = top.value.toLocaleString("es-ES", { maximumFractionDigits: 1 });
+  return {
+    insights: [{
+      id: "note-rate",
+      group: "notas",
+      text: winners.length === 1
+        ? `Tu nota del ${shortDay(top.piece.date, ctx.now)} hizo interactuar al ${rate}% de quien la vio: ${times(top.multiple)} lo habitual.`
+        : `${winners.length} notas hicieron interactuar a bastante más gente de lo habitual; la mejor, al ${rate}% de quien la vio.`,
+      sample: `Interacciones sobre impresiones · notas con estadísticas y al menos ${RATE_MIN_IMPRESSIONS} impresiones`,
+      score: scoreOf(top.multiple, evaluated.length) + 0.1,
+      strip: stripFor(evaluated, ids, "% de interacción", all.slice(-BASELINE_WINDOW).map((row) => row.value)),
+      examples: winners.slice(0, 3).map((row) => ({ id: row.piece.id, excerpt: excerptOf(row.piece.body), date: row.piece.date })),
+      action: null,
+      target: { view: "notas", panel: "notes", noteIds: [...ids], label: winners.length === 1 ? "la nota del hallazgo" : `${winners.length} notas del hallazgo` },
+    }],
+  };
+}
+
+// ── Apertura fuera de lo habitual, por arriba o por abajo ───────────────────
+// El primer detector de piezas malas, y solo aquí: la apertura mide el asunto,
+// que es lo que se puede corregir. Se exige una diferencia de al menos
+// OPEN_MIN_POINTS además de la z, y se ignoran los envíos de prueba (menos de
+// la mitad de la mediana de entregas).
+export const OPEN_MIN_POINTS = 5;
+
+function detectPostOpenRate(ctx) {
+  const sent = ctx.campaigns.filter((campaign) => campaign.delivered > 0 && campaign.opened >= 0);
+  const inRange = sent.filter((campaign) => ctx.inRange(campaign.date));
+  if (!inRange.length) return {};
+  // Sobre todo el historial: con dos envíos en el rango, la mediana del rango
+  // podía ser justo el de prueba.
+  const minDelivered = (medianOf(sent.map((campaign) => campaign.delivered)) || 0) / 2;
+  const eligible = sent.filter((campaign) => campaign.delivered >= minDelivered);
+  const openOf = (campaign) => {
+    const value = ratio(campaign.opened, campaign.delivered);
+    return value === null ? null : value * 100;
+  };
+  const { rows, measured } = rollingOutliers(eligible, openOf, (campaign) => ctx.inRange(campaign.date));
+  const evaluated = rows.filter((row) => row.z !== null);
+  if (!evaluated.length) return {};
+  const typical = (row) => row.baseline.median;
+  const high = evaluated.filter((row) => row.z >= OUTLIER_Z && row.value - typical(row) >= OPEN_MIN_POINTS).sort((a, b) => b.z - a.z)[0];
+  const low = evaluated.filter((row) => row.z <= -OUTLIER_Z && typical(row) - row.value >= OPEN_MIN_POINTS).sort((a, b) => a.z - b.z)[0];
+  const band = measured.slice(-BASELINE_WINDOW).map((row) => row.value);
+  const build = (row, up) => ({
+    id: `post-open:${up ? "high" : "low"}`,
+    group: "publicaciones",
+    text: `«${row.piece.title}» se abrió bastante ${up ? "más" : "menos"} que tu artículo típico: ${formatPercent(row.value, 0)} frente al ${formatPercent(typical(row), 0)}.`,
+    sample: `Apertura de cada envío frente a sus ${BASELINE_WINDOW} anteriores`,
+    score: Math.abs(row.z) * 0.3,
+    strip: stripFor(evaluated, new Set([row.piece.id]), "% de apertura", band),
+    examples: [{ id: row.piece.id, excerpt: row.piece.title, date: row.piece.date }],
+    action: up ? null : "Revisa su asunto: la apertura mide el asunto, no el contenido.",
+    target: { view: "publicaciones", panel: "posts-rate-panel" },
+  });
+  return { insights: [high && build(high, true), low && build(low, false)].filter(Boolean) };
+}
+
+// ── Cohortes ───────────────────────────────────────────────────────────────
+// El mes de alta que más lee frente al que menos, solo entre meses con
+// muestra (no `scarce`). Lleva el sesgo de superviviente en la muestra: Substack
+// solo lista a quien sigue suscrito.
+export const COHORT_MIN_POINTS = 15;
+export const COHORT_MIN_AGE_DAYS = 30;
+
+function detectCohorts(ctx) {
+  const timeline = ctx.analytics?.audience?.timeline;
+  if (!timeline?.cohorts?.length) return {};
+  const { rows } = getCohortActivity(timeline, ctx.growthDaily, ctx.days, ctx.now);
+  // Quien acaba de llegar aún no ha tenido tiempo de desengancharse: solo
+  // compiten meses que terminaron hace al menos COHORT_MIN_AGE_DAYS; los
+  // recientes ganarían siempre.
+  const matureBefore = civilDay(ctx.now - COHORT_MIN_AGE_DAYS * DAY_MS).slice(0, 7);
+  const usable = rows.filter((row) => !row.scarce && row.activeShare !== null && row.month < matureBefore);
+  if (usable.length < 2) {
+    return rows.length ? { silent: [{ group: "audiencia", text: "Actividad por mes de alta: hacen falta al menos dos meses con suscriptores suficientes para comparar." }] } : {};
+  }
+  const sorted = [...usable].sort((a, b) => b.activeShare - a.activeShare);
+  const best = sorted[0];
+  const worst = sorted.at(-1);
+  if (best.activeShare - worst.activeShare < COHORT_MIN_POINTS) return {};
+  const month = (row) => parseDay(`${row.month}-01`).toLocaleDateString("es-ES", { month: "long", year: parseDay(`${row.month}-01`).getFullYear() === new Date(ctx.now).getFullYear() ? undefined : "numeric" }).replace(/\s+de\s+/g, " ");
+  return {
+    insights: [{
+      id: "cohort-activity",
+      group: "audiencia",
+      // La antigüedad explica casi siempre la diferencia (quien lleva más
+      // tiempo lee menos), así que se nombra como tal. Solo cuando el mes más
+      // activo es el más antiguo la diferencia va contra la antigüedad y
+      // apunta a cómo llegaron esos lectores.
+      text: best.month > worst.month
+        ? `Tus suscriptores más antiguos leen menos: lee a menudo el ${formatPercent(best.activeShare, 0)} de los de ${month(best)} frente al ${formatPercent(worst.activeShare, 0)} de los de ${month(worst)}.`
+        : `Quienes llegaron en ${month(best)} leen más que los de ${month(worst)} pese a llevar más tiempo: ${formatPercent(best.activeShare, 0)} frente al ${formatPercent(worst.activeShare, 0)}.`,
+      sample: `${formatCompactNumber(best.current)} y ${formatCompactNumber(worst.current)} suscriptores que siguen · meses cerrados hace al menos un mes; solo cuenta a quien sigue suscrito`,
+      score: (best.activeShare - worst.activeShare) / 100 + (best.month > worst.month ? 0 : 0.4),
+      strip: null,
+      examples: [],
+      action: null,
+      target: { view: "audiencia", panel: "cohorts-panel" },
+    }],
+  };
+}
+
 const DETECTORS = [
   detectSourceLeader,
   detectBestWeek,
   detectMilestone,
   detectLoyalCore,
+  detectCohorts,
   detectNoteOutliers,
   detectNoteConverters,
+  detectNoteEngagementRate,
   detectNoteTraits,
+  detectNoteTiming,
+  detectNoteTrend,
   detectNoteConcentration,
   detectReachBeyondBubble,
   detectPostOutliers,
+  detectPostOpenRate,
   detectPostCuts,
 ];
 

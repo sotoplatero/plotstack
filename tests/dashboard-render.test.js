@@ -1047,3 +1047,29 @@ test("el eje X de un gráfico nunca lleva más de cinco fechas", async () => {
   assert.ok(fechas.length >= 2, "hay fechas en el eje");
   assert.ok(fechas.length <= 5, `demasiadas fechas en el eje: ${fechas.length}`);
 });
+
+test("un hallazgo con panel propio sale bajo su panel sin enlace y en el Resumen con él", async () => {
+  await arrancar();
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.snapshot"];
+  const aperturas = [450, 440, 460, 455, 445, 450, 452, 448, 458, 442, 447, 453];
+  const dia = (hace) => new Date(Date.now() - hace * 86400000).toISOString().slice(0, 10);
+  const envio = (id, hace, opened, title = `Post ${id}`) => ({ id: String(id), title, date: dia(hace), delivered: 1000, opened, clicked: 40, signupsWithin1Day: 3 });
+  const campaigns = [
+    ...aperturas.map((opened, index) => envio(index, 120 - index * 7, opened)),
+    envio(90, 5, 300, "El asunto flojo"),
+  ];
+  listener({ "plotstack.snapshot": { newValue: { ...original, campaigns } } }, "local");
+  await settle(4);
+  await verVista("publicaciones");
+  await rango("30");
+  const bajo = $$("#posts-rate-findings .finding");
+  assert.equal(bajo.length, 1, "el hallazgo de apertura va bajo el gráfico de apertura");
+  assert.match(bajo[0].textContent, /El asunto flojo/);
+  assert.equal(bajo[0].querySelector(".finding-link"), null, "junto a su evidencia no lleva enlace");
+  await verVista("resumen");
+  const resumen = $$("#insights-groups .finding").find((nodo) => /El asunto flojo/.test(nodo.textContent));
+  assert.ok(resumen?.querySelector(".finding-link"), "en el Resumen lleva su Ver");
+  listener({ "plotstack.snapshot": { newValue: original } }, "local");
+  await settle(4);
+});

@@ -2526,7 +2526,7 @@ function renderNotesReach(analytics) {
   }
 }
 
-function renderCadenceTable(content) {
+function renderCadenceTable(content, timingFindings = []) {
   renderCadenceHeatmap($("#cadence-heatmap"), content?.cadence);
   const busiest = content?.cadence?.busiest;
   const DAY_PLURALS = { sun: "domingos", mon: "lunes", tue: "martes", wed: "miércoles", thu: "jueves", fri: "viernes", sat: "sábados" };
@@ -2534,9 +2534,9 @@ function renderCadenceTable(content) {
   // La insignia dice sobre cuántas notas se sostiene el mapa; la conclusión es
   // un hallazgo bajo el mapa.
   $("#cadence-summary").textContent = fechadas ? `${formatCompactNumber(fechadas)} ${fechadas === 1 ? "nota fechada" : "notas fechadas"}` : "Sin notas fechadas";
-  renderFindings($("#cadence-findings"), busiest ? [panelFinding("cadence-busiest",
+  renderFindings($("#cadence-findings"), [...(busiest ? [panelFinding("cadence-busiest",
     `Publicas más los ${DAY_PLURALS[busiest.day]} a las ${String(busiest.hour).padStart(2, "0")}:00.`,
-    `${busiest.notes} ${busiest.notes === 1 ? "nota" : "notas"} en esa franja`, "notes")] : []);
+    `${busiest.notes} ${busiest.notes === 1 ? "nota" : "notas"} en esa franja`, "notes")] : []), ...timingFindings]);
   const body = $("#cadence-table-body");
   body.replaceChildren();
   const weeks = (content?.timeline?.weeks || []).slice(-12).reverse();
@@ -2725,14 +2725,24 @@ function renderNotesTable(snapshot) {
 
 const VIEW_RENDERERS = {
   resumen: (snapshot) => { renderMetrics(snapshot, state.analytics); renderChart(snapshot, state.analytics); renderGrowthBrief(snapshot, state.analytics); renderInsights(snapshot, state.analytics); },
-  audiencia: (snapshot) => { renderAudience(snapshot, state.analytics); renderLoyalCore(state.analytics); renderCohortActivity(state.analytics); },
+  audiencia: (snapshot) => {
+    renderAudience(snapshot, state.analytics); renderLoyalCore(state.analytics); renderCohortActivity(state.analytics);
+    renderFindings($("#cohort-findings"), insightsFor(viewInsights(snapshot), "audiencia", /^cohort-/));
+  },
   crecimiento: (snapshot) => renderGrowth(snapshot, state.analytics),
   notas: (snapshot) => {
     const rangedNotes = withinRange(snapshot.notes, (note) => note.date).kept;
     const rangedContent = getContentAnalytics({ ...snapshot, notes: rangedNotes }, { timeZoneOffsetMinutes: timezoneOffset(), primaryOutcome: "interactions" });
-    renderNotesOverview(snapshot); renderCadenceTable(rangedContent); renderAttribution(rangedContent); renderNotesTable(snapshot);
+    renderNotesOverview(snapshot); renderCadenceTable(rangedContent, insightsFor(viewInsights(snapshot), "notas", /^note-time:/)); renderAttribution(rangedContent); renderNotesTable(snapshot);
   },
-  publicaciones: (snapshot) => { renderCampaigns(snapshot); },
+  publicaciones: (snapshot) => {
+    renderCampaigns(snapshot);
+    const insights = viewInsights(snapshot);
+    renderFindings($("#posts-rate-findings"), insightsFor(insights, "publicaciones", /^post-open:/));
+    renderFindings($("#posts-day-findings"), insightsFor(insights, "publicaciones", /^post-day:/));
+    renderFindings($("#posts-section-findings"), insightsFor(insights, "publicaciones", /^post-section:/));
+    renderFindings($("#posts-length-findings"), insightsFor(insights, "publicaciones", /^post-length:/));
+  },
   postal: (snapshot) => renderPostal(snapshot, state.analytics),
   cobertura: (snapshot) => renderCoverage(state.analytics, snapshot),
 };
@@ -2798,8 +2808,7 @@ const dayMonth = (value) => {
 const INSIGHT_SERIES = [
   [/^note-/, "notes"],
   [/^(post-outlier|source-leader|best-week|milestone)/, "subs"],
-  [/^(rate-open|post-day|post-section)/, "open"],
-  [/^rate-click/, "click"],
+  [/^(post-open|post-day|post-section|post-length)/, "open"],
 ];
 const insightSeries = (id) => INSIGHT_SERIES.find(([pattern]) => pattern.test(id))?.[1] || "neutral";
 
@@ -2923,6 +2932,16 @@ function renderFindings(container, insights) {
 // el gráfico o la tabla que la sostiene, así que no lleva enlace. Si no hay
 // conclusión (muestra escasa, sin datos), no se fabrica: se omite.
 const panelFinding = (id, text, sample, series) => ({ id, text, sample, series, strip: null, examples: [], action: null, target: null });
+
+// Los hallazgos del módulo que tienen panel propio se pintan también bajo ese
+// panel, sin enlace: ya están junto a su evidencia. En el Resumen siguen con su
+// "Ver".
+function viewInsights(snapshot) {
+  return getInsights({ snapshot, analytics: state.analytics, days: state.days, timeZoneOffsetMinutes: timezoneOffset() });
+}
+const insightsFor = (result, group, pattern) => result.groups[group]
+  .filter((insight) => pattern.test(insight.id))
+  .map((insight) => ({ ...insight, target: null }));
 
 function renderInsights(snapshot, analytics) {
   const result = getInsights({ snapshot, analytics, days: state.days, timeZoneOffsetMinutes: timezoneOffset() });

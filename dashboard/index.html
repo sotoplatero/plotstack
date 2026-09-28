@@ -285,6 +285,7 @@
               </div>
               <div class="cohort-legend" aria-hidden="true"><span class="is-alta">Actividad alta</span><span class="is-baja">Actividad baja</span><span class="is-inactiva">Inactivos</span></div>
               <div class="cohort-list" id="cohort-list"></div>
+              <div class="findings" id="cohort-findings" hidden></div>
               <p class="panel-copy" id="cohort-note" hidden></p>
             </section>
 
@@ -536,6 +537,7 @@
                 <svg id="posts-rate-chart" viewBox="0 0 820 240" role="img" aria-label="Apertura y CTR por artículo a lo largo del tiempo"></svg>
                 <div class="chart-empty" id="posts-rate-empty" hidden>Hacen falta al menos dos artículos enviados para dibujar la serie.</div>
               </div>
+              <div class="findings" id="posts-rate-findings" hidden></div>
             </section>
 
             <section class="panel reveal" id="discovery-panel">
@@ -559,14 +561,17 @@
               <article class="panel list-panel" id="posts-by-day">
                 <div class="panel-header"><div><h2>Apertura por día</h2></div></div>
                 <div class="source-list" id="posts-day-list"></div>
+                <div class="findings" id="posts-day-findings" hidden></div>
               </article>
               <article class="panel list-panel" id="posts-by-section">
                 <div class="panel-header"><div><h2>Apertura por sección</h2></div></div>
                 <div class="source-list" id="posts-section-list"></div>
+                <div class="findings" id="posts-section-findings" hidden></div>
               </article>
               <article class="panel list-panel" id="posts-by-length">
                 <div class="panel-header"><div><h2>Apertura por longitud</h2></div></div>
                 <div class="source-list" id="posts-length-list"></div>
+                <div class="findings" id="posts-length-findings" hidden></div>
               </article>
             </section>
           </div>

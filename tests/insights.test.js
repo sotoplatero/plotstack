@@ -207,3 +207,100 @@ test("un snapshot vacio no rompe y no inventa nada", () => {
   const result = getInsights({});
   assert.equal(result.total, 0);
 });
+
+// ── Detectores de la segunda tanda ──────────────────────────────────────────
+
+const at = (daysAgo, hour) => new Date(Date.UTC(2026, 8, 27 - daysAgo, hour, 0, 0)).toISOString();
+
+test("las notas de una franja que rinde más se enuncian con su mediana", () => {
+  const notes = Array.from({ length: 24 }, (_, index) => {
+    const morning = index % 2 === 0;
+    return { ...note(index, 0, morning ? 30 + (index % 5) : 8 + (index % 3)), date: at(Math.floor(index / 2) + 1, morning ? 9 : 21) };
+  });
+  const result = getInsights({ snapshot: { notes }, days: 30, now: NOW });
+  const insight = byId(result, "note-time:hourBucket:morning");
+  assert.ok(insight, "detecta la mañana");
+  assert.match(insight.text, /^Tus notas de la mañana reciben .+× más interacciones que las del resto del día\.$/);
+  assert.equal(insight.target.panel, "cadence-panel");
+});
+
+test("sin muestra en cada franja el horario calla y lo declara", () => {
+  const notes = Array.from({ length: 10 }, (_, index) => ({ ...note(index, 0, 5), date: at(index + 1, 9) }));
+  const result = getInsights({ snapshot: { notes }, days: 30, now: NOW });
+  assert.equal(Object.values(result.groups).flat().some((row) => row.id.startsWith("note-time")), false);
+  assert.ok(result.silent.some((row) => /A qué hora rinden/.test(row.text)));
+});
+
+test("la tendencia compara tus últimas 20 notas con las 20 anteriores", () => {
+  const notes = Array.from({ length: 40 }, (_, index) => note(index, 80 - index * 2, index >= 20 ? 20 + wobble(index) : 8 + wobble(index)));
+  const result = getInsights({ snapshot: { notes }, days: 30, now: NOW });
+  const insight = byId(result, "note-trend:interactions");
+  assert.ok(insight);
+  assert.match(insight.text, /^Tus últimas 20 notas reciben un \d+% más de interacciones que las 20 anteriores\.$/);
+  assert.equal(insight.strip.points.filter((point) => point.highlight).length, 20, "las recientes van resaltadas");
+  const plano = getInsights({ snapshot: { notes: notes.map((row, index) => ({ ...row, reactions: 8 + wobble(index) })) }, days: 30, now: NOW });
+  assert.equal(byId(plano, "note-trend:interactions"), undefined, "sin cambio relevante no hay tendencia");
+});
+
+test("la tendencia mide alcance cuando las dos mitades tienen estadísticas", () => {
+  const notes = Array.from({ length: 40 }, (_, index) => note(index, 80 - index * 2, 5, { stats: detailed(0, index >= 20 ? 3000 + index : 1000 + index) }));
+  const insight = byId(getInsights({ snapshot: { notes }, days: 30, now: NOW }), "note-trend:reach");
+  assert.ok(insight);
+  assert.match(insight.text, /llegan a un \d+% más de gente/);
+});
+
+test("la tasa de interacción destaca la nota que resonó, no la de más alcance", () => {
+  const notes = Array.from({ length: 30 }, (_, index) => note(index, 60 - index * 2, 5, {
+    stats: index === 29 ? detailed(0, 500, 60) : detailed(0, 2000 + index * 10, 40 + wobble(index)),
+  }));
+  const insight = byId(getInsights({ snapshot: { notes }, days: 30, now: NOW }), "note-rate");
+  assert.ok(insight, "12% frente a ~2% de lo habitual");
+  assert.match(insight.text, /hizo interactuar al 12% de quien la vio/);
+  const pocas = notes.map((row, index) => ({ ...row, stats: index === 29 ? detailed(0, 50, 20) : row.stats }));
+  assert.equal(byId(getInsights({ snapshot: { notes: pocas }, days: 30, now: NOW }), "note-rate"), undefined, "con menos de 100 impresiones no compite");
+});
+
+test("la apertura fuera de lo habitual se enuncia por arriba y por abajo", () => {
+  const openings = [450, 440, 460, 455, 445, 450, 452, 448, 458, 442, 447, 453];
+  const campaigns = openings.map((opened, index) => campaign(index, 120 - index * 7, { opened }));
+  campaigns.push(campaign(90, 10, { opened: 300, title: "El asunto flojo" }));
+  campaigns.push(campaign(91, 3, { opened: 620, title: "El asunto bueno" }));
+  const result = getInsights({ snapshot: { campaigns }, days: 30, now: NOW });
+  assert.match(byId(result, "post-open:low").text, /^«El asunto flojo» se abrió bastante menos que tu artículo típico: 30% frente al 45%\.$/);
+  assert.match(byId(result, "post-open:low").action, /asunto/);
+  assert.match(byId(result, "post-open:high").text, /«El asunto bueno» se abrió bastante más/);
+});
+
+test("un envío de prueba a pocas personas no cuenta como apertura atípica", () => {
+  const campaigns = [450, 440, 460, 455, 445, 450, 452, 448, 458, 442, 447].map((opened, index) => campaign(index, 100 - index * 7, { opened }));
+  campaigns.push({ ...campaign(90, 2), delivered: 10, opened: 10, title: "Prueba" });
+  const result = getInsights({ snapshot: { campaigns }, days: 30, now: NOW });
+  assert.equal(byId(result, "post-open:high"), undefined);
+});
+
+test("la longitud de los artículos se enuncia con apertura ponderada", () => {
+  const campaigns = Array.from({ length: 8 }, (_, index) => ({
+    ...campaign(index, index + 1, { opened: index % 2 ? 300 : 500 }),
+    wordcount: index % 2 ? 400 : 2000,
+  }));
+  const insight = byId(getInsights({ snapshot: { campaigns }, days: 30, now: NOW }), "post-length:long");
+  assert.ok(insight);
+  assert.match(insight.text, /^Tus artículos largos \(más de 1\.500 palabras\) se abren más: 50% frente al 30% del resto\.$/);
+});
+
+test("las cohortes comparan el mes que más lee con el que menos", () => {
+  const analytics = { audience: { timeline: { cohorts: [
+    { month: "2026-06", current: 40, alta: 10, baja: 20, inactiva: 10 },
+    { month: "2026-07", current: 50, alta: 30, baja: 15, inactiva: 5 },
+    { month: "2026-05", current: 5, alta: 5, baja: 0, inactiva: 0 },
+    { month: "2026-09", current: 30, alta: 28, baja: 2, inactiva: 0 },
+  ] } } };
+  const insight = byId(getInsights({ snapshot: {}, analytics, days: Infinity, now: NOW }), "cohort-activity");
+  assert.ok(insight);
+  assert.match(insight.text, /^Tus suscriptores más antiguos leen menos: lee a menudo el 60% de los de julio frente al 25% de los de junio\.$/, "ni el mes escaso ni el que acaba de empezar compiten");
+  assert.match(insight.sample, /solo cuenta a quien sigue suscrito/);
+  analytics.audience.timeline.cohorts[0] = { month: "2026-06", current: 40, alta: 32, baja: 6, inactiva: 2 };
+  analytics.audience.timeline.cohorts[1] = { month: "2026-07", current: 50, alta: 10, baja: 30, inactiva: 10 };
+  const contra = byId(getInsights({ snapshot: {}, analytics, days: Infinity, now: NOW }), "cohort-activity");
+  assert.match(contra.text, /^Quienes llegaron en junio leen más que los de julio pese a llevar más tiempo: 80% frente al 20%\.$/, "contra la antigüedad es lo notable");
+});
