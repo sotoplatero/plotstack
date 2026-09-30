@@ -1,3 +1,5 @@
+import { t } from "../shared/i18n.js";
+
 const API_ROOT = "https://substack.com/api/v1";
 
 export class SubstackApiError extends Error {
@@ -77,14 +79,14 @@ async function performRequest(url, options = {}) {
     // eterna: aguas arriba ya hay reintento, `allSettled` y estados de
     // cobertura que saben tratar un error, pero no una espera infinita.
     if (error?.name === "TimeoutError" || error?.name === "AbortError") {
-      throw new SubstackApiError("Substack no respondió a tiempo.", 0);
+      throw new SubstackApiError(t("Substack no respondió a tiempo."), 0);
     }
     throw error;
   }
-  if (response.status === 401) throw new SubstackApiError("Tu sesión de Substack no está activa.", 401);
-  if (response.status === 403) throw new SubstackApiError("La cuenta conectada no tiene acceso a esta publicación.", 403);
-  if (response.status === 429) throw new SubstackApiError("Substack limitó temporalmente las solicitudes. Espera un momento y sincroniza de nuevo.", 429);
-  if (!response.ok) throw new SubstackApiError(`Substack respondió con un error (${response.status}).`, response.status);
+  if (response.status === 401) throw new SubstackApiError(t("Tu sesión de Substack no está activa."), 401);
+  if (response.status === 403) throw new SubstackApiError(t("La cuenta conectada no tiene acceso a esta publicación."), 403);
+  if (response.status === 429) throw new SubstackApiError(t("Substack limitó temporalmente las solicitudes. Espera un momento y sincroniza de nuevo."), 429);
+  if (!response.ok) throw new SubstackApiError(t("Substack respondió con un error ({status}).", { status: response.status }), response.status);
   if (response.status === 204) return {};
   return response.json();
 }
@@ -137,7 +139,7 @@ export async function getProfile() {
   const profile = await requestJson(`${API_ROOT}/user/profile/self`);
   // Nombre y foto del propio autor, para la postal. Es el perfil de quien usa
   // la extensión, no el de ningún suscriptor. Alias por si el campo cambia.
-  const authorName = text(profile.name, profile.handle) || "Creador";
+  const authorName = text(profile.name, profile.handle) || t("Creador");
   const authorPhotoUrl = text(profile.photo_url, profile.photoUrl, profile.profile_photo_url);
   const publications = (profile.publicationUsers || [])
     .filter((entry) => entry?.publication?.subdomain)
@@ -157,7 +159,7 @@ export async function getProfile() {
   return {
     user: {
       id: profile.id,
-      name: profile.name || profile.handle || "Creador",
+      name: profile.name || profile.handle || t("Creador"),
       handle: profile.handle || "",
       followerCount: asNumber(profile.followerCount, profile.follower_count),
     },
@@ -210,7 +212,7 @@ const rateFrom = (row, rateKeys, numeratorKeys, denominatorKeys) => {
 
 export const mapCampaign = (row, index) => ({
   id: String(row.id ?? row.post_id ?? index),
-  title: row.title || row.subject || row.post?.title || row.draft_title || "Sin título",
+  title: row.title || row.subject || row.post?.title || row.draft_title || t("Sin título"),
   subtitle: text(row.subtitle, row.social_title, row.search_engine_description, row.post?.subtitle),
   slug: text(row.slug, row.post?.slug),
   audience: text(row.audience, row.post?.audience),
@@ -702,7 +704,7 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
 
   // Detalle de publicaciones: los 12 más recientes más los que aún no lo tienen.
   const postsToRefresh = rawCampaigns.filter((row, index) => index < 12 || !previousCampaigns.get(campaignId(row, index))?.detailAvailable);
-  onProgress({ step: "Detalle de publicaciones", done: 0, total: postsToRefresh.length });
+  onProgress({ step: t("Detalle de publicaciones"), done: 0, total: postsToRefresh.length });
   let detailsDone = 0;
   const postDetailResults = await mapWithConcurrency(postsToRefresh, 3, async (row, index) => {
     try {
@@ -710,7 +712,7 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
     } finally {
       detailsDone += 1;
       if (detailsDone % 4 === 0 || detailsDone === postsToRefresh.length) {
-        onProgress({ step: "Detalle de publicaciones", done: detailsDone, total: postsToRefresh.length });
+        onProgress({ step: t("Detalle de publicaciones"), done: detailsDone, total: postsToRefresh.length });
       }
     }
   });
@@ -719,7 +721,7 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
 
   // Feed de notas: se para en cuanto una página entera ya es conocida, salvo en
   // el refresco completo semanal.
-  onProgress({ step: "Historial de notas", done: 0, total: 0 });
+  onProgress({ step: t("Historial de notas"), done: 0, total: 0 });
   let feedItems = [];
   try {
     feedItems = await getAllProfileFeedItems(publication.userId, {
@@ -743,9 +745,9 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
     if (previous?.available) return false;
     return Math.max(0, Number(previous?.attempts) || 0) < NOTE_STATS_MAX_ATTEMPTS;
   });
-  onProgress({ step: "Estadísticas de notas", done: 0, total: notesToRefresh.length });
+  onProgress({ step: t("Estadísticas de notas"), done: 0, total: notesToRefresh.length });
   const { results: refreshedById, throttled } = await collectNoteStats(notesToRefresh, {
-    onProgress: (done) => onProgress({ step: "Estadísticas de notas", done, total: notesToRefresh.length }),
+    onProgress: (done) => onProgress({ step: t("Estadísticas de notas"), done, total: notesToRefresh.length }),
   });
   notes = notes.map((note) => ({
     ...note,

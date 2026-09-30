@@ -24,6 +24,7 @@ import {
   getReachBeyondBubble,
   getRecords,
   MIN_CUT_N,
+  NO_SECTION,
   normalizeSnapshot,
   parseDay,
   ratio,
@@ -31,6 +32,7 @@ import {
   sourceLabel,
 } from "./analytics.js";
 import { getFeatureInsights } from "./content-analytics.js";
+import { LOCALE, t, tn } from "./i18n.js";
 
 export const BASELINE_WINDOW = 30;
 export const BASELINE_MIN = 10;
@@ -50,8 +52,10 @@ export const GROUPS = ["audiencia", "crecimiento", "notas", "publicaciones"];
 
 const MAD_SCALE = 1.4826;
 const DAY_MS = 86400000;
-const DAY_NAMES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-const PLACEHOLDER_BODY = "Nota sin texto";
+const DAY_NAMES = [t("domingo"), t("lunes"), t("martes"), t("miércoles"), t("jueves"), t("viernes"), t("sábado")];
+// Relleno de una nota sin cuerpo, guardado en el idioma del navegador al
+// sincronizar: se reconocen los dos.
+const PLACEHOLDER_BODIES = new Set(["Nota sin texto", t("Nota sin texto")]);
 
 // ── Núcleo estadístico ─────────────────────────────────────────────────────
 
@@ -125,18 +129,19 @@ export function rollingOutliers(pieces, valueOf, isEvaluated) {
 // Día y mes; el año solo si no es el actual ("4 mar 2027").
 const shortDay = (value, now = Date.now()) => {
   const date = parseDay(value);
-  if (!Number.isFinite(date.getTime())) return "sin fecha";
+  if (!Number.isFinite(date.getTime())) return t("sin fecha");
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  return date.toLocaleDateString("es-ES", sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
+  return date.toLocaleDateString(LOCALE, sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
 };
 
-const times = (value) => `${value.toLocaleString("es-ES", { maximumFractionDigits: value < 10 ? 1 : 0 })}×`;
+const times = (value) => `${value.toLocaleString(LOCALE, { maximumFractionDigits: value < 10 ? 1 : 0 })}×`;
 
-const pieces = (count, singular, plural) => `${formatCompactNumber(count)} ${count === 1 ? singular : plural}`;
+// Marcador `{count}` ya formateado para `tn()`: el `{n}` de tn es el número crudo.
+const counted = (count) => ({ count: formatCompactNumber(count) });
 
 const excerptOf = (body, length = 90) => {
   const raw = String(body || "").trim();
-  if (!raw || raw === PLACEHOLDER_BODY) return "(nota sin texto)";
+  if (!raw || PLACEHOLDER_BODIES.has(raw)) return t("(nota sin texto)");
   const line = raw.replace(/https?:\/\/\S+/gi, "").split(/\n+/).map((part) => part.trim()).find(Boolean) || raw;
   return line.length > length ? `${line.slice(0, length - 1).trimEnd()}…` : line;
 };
@@ -170,7 +175,7 @@ function detectNoteOutliers(ctx) {
   const { rows, measured } = rollingOutliers(ctx.notes, noteScore, (note) => ctx.inRange(note.date));
   const evaluated = rows.filter((row) => row.z !== null);
   if (!evaluated.length) {
-    return { silent: [{ group: "notas", text: `Notas fuera de lo habitual: hacen falta al menos ${BASELINE_MIN + 1} notas para tener con qué comparar.` }] };
+    return { silent: [{ group: "notas", text: t("Notas fuera de lo habitual: hacen falta al menos {n} notas para tener con qué comparar.", { n: BASELINE_MIN + 1 }) }] };
   }
   const winners = evaluated
     .filter((row) => row.z >= OUTLIER_Z && row.multiple >= 2 && row.value >= 3)
@@ -180,19 +185,19 @@ function detectNoteOutliers(ctx) {
   const recent = measured.slice(-BASELINE_WINDOW).map((row) => row.value);
   const top = winners[0];
   const text = winners.length === 1
-    ? `Tu nota del ${shortDay(top.piece.date)} tuvo ${times(top.multiple)} más interacciones que tu nota típica.`
-    : `${winners.length} notas tuvieron bastantes más interacciones que tu nota típica; la mejor, ${times(top.multiple)}.`;
+    ? t("Tu nota del {date} tuvo {times} más interacciones que tu nota típica.", { date: shortDay(top.piece.date), times: times(top.multiple) })
+    : t("{count} notas tuvieron bastantes más interacciones que tu nota típica; la mejor, {times}.", { count: winners.length, times: times(top.multiple) });
   return {
     insights: [{
       id: "note-outlier",
       group: "notas",
       text,
-      sample: `Me gusta, respuestas y restacks · cada nota frente a sus ${BASELINE_WINDOW} anteriores`,
+      sample: t("Me gusta, respuestas y restacks · cada nota frente a sus {n} anteriores", { n: BASELINE_WINDOW }),
       score: scoreOf(top.multiple, evaluated.length) + 0.2,
-      strip: stripFor(evaluated, ids, "interacciones", recent),
+      strip: stripFor(evaluated, ids, t("interacciones"), recent),
       examples: winners.slice(0, 3).map((row) => ({ id: row.piece.id, excerpt: excerptOf(row.piece.body), date: row.piece.date })),
       action: null,
-      target: { view: "notas", panel: "notes", noteIds: [...ids], label: winners.length === 1 ? "la nota del hallazgo" : `${winners.length} notas del hallazgo` },
+      target: { view: "notas", panel: "notes", noteIds: [...ids], label: tn(winners.length, "la nota del hallazgo", "{n} notas del hallazgo") },
     }],
   };
 }
@@ -210,7 +215,7 @@ function detectNoteConverters(ctx) {
   const { rows, measured } = rollingOutliers(detailed, per1000, (note) => ctx.inRange(note.date));
   const evaluated = rows.filter((row) => row.z !== null);
   if (!evaluated.length) {
-    return { silent: [{ group: "notas", text: `Conversión de tus notas: hacen falta al menos ${BASELINE_MIN + 1} notas con estadísticas de Substack.` }] };
+    return { silent: [{ group: "notas", text: t("Conversión de tus notas: hacen falta al menos {n} notas con estadísticas de Substack.", { n: BASELINE_MIN + 1 }) }] };
   }
   const winners = evaluated
     .filter((row) => row.z >= OUTLIER_Z && row.multiple >= 2 && row.piece.stats.results.freeSubscribers >= 3)
@@ -218,21 +223,21 @@ function detectNoteConverters(ctx) {
   if (!winners.length) return {};
   const ids = new Set(winners.map((row) => row.piece.id));
   const top = winners[0];
-  const rate = top.value.toLocaleString("es-ES", { maximumFractionDigits: 1 });
+  const rate = top.value.toLocaleString(LOCALE, { maximumFractionDigits: 1 });
   const text = winners.length === 1
-    ? `Tu nota del ${shortDay(top.piece.date)} convirtió ${times(top.multiple)} más que tu nota típica: ${rate} altas por cada 1.000 impresiones.`
-    : `${winners.length} notas convirtieron bastante más que tu nota típica; la mejor, ${times(top.multiple)} (${rate} altas por cada 1.000 impresiones).`;
+    ? t("Tu nota del {date} convirtió {times} más que tu nota típica: {rate} altas por cada 1.000 impresiones.", { date: shortDay(top.piece.date), times: times(top.multiple), rate })
+    : t("{count} notas convirtieron bastante más que tu nota típica; la mejor, {times} ({rate} altas por cada 1.000 impresiones).", { count: winners.length, times: times(top.multiple), rate });
   return {
     insights: [{
       id: "note-converter",
       group: "notas",
       text,
-      sample: `Altas por cada 1.000 impresiones · solo notas con estadísticas de Substack`,
+      sample: t("Altas por cada 1.000 impresiones · solo notas con estadísticas de Substack"),
       score: scoreOf(top.multiple, evaluated.length) + 0.4,
-      strip: stripFor(evaluated, ids, "altas por 1.000 impresiones", measured.slice(-BASELINE_WINDOW).map((row) => row.value)),
+      strip: stripFor(evaluated, ids, t("altas por 1.000 impresiones"), measured.slice(-BASELINE_WINDOW).map((row) => row.value)),
       examples: winners.slice(0, 3).map((row) => ({ id: row.piece.id, excerpt: excerptOf(row.piece.body), date: row.piece.date })),
-      action: "Prueba: reutiliza el enfoque de esa nota en tus próximas notas y compara su conversión.",
-      target: { view: "notas", panel: "notes", noteIds: [...ids], label: winners.length === 1 ? "la nota del hallazgo" : `${winners.length} notas del hallazgo` },
+      action: t("Prueba: reutiliza el enfoque de esa nota en tus próximas notas y compara su conversión."),
+      target: { view: "notas", panel: "notes", noteIds: [...ids], label: tn(winners.length, "la nota del hallazgo", "{n} notas del hallazgo") },
     }],
   };
 }
@@ -240,26 +245,58 @@ function detectNoteConverters(ctx) {
 // Rasgos que dependen de la escritura, no del calendario (el calendario ya lo
 // cuenta el mapa de Cuándo publicas). Frases escritas a mano: ninguna clave
 // cruda llega a la interfaz.
+// Frases completas por rasgo: el orden de palabras cambia entre idiomas.
 const TRAIT_COPY = {
-  hookIsQuestion: { with: "que abren con una pregunta", action: "abre con pregunta" },
-  endsWithQuestion: { with: "que terminan en pregunta", action: "cierra con pregunta" },
-  hasLink: { with: "con un enlace", action: "incluye un enlace en" },
-  hasMention: { with: "que mencionan a alguien", action: "menciona a alguien en" },
-  hasNumber: { with: "con alguna cifra", action: "incluye una cifra en" },
-  hasList: { with: "con una lista", action: "usa una lista en" },
-  hasQuote: { with: "con una cita", action: "incluye una cita en" },
-  hasEmoji: { with: "con emojis", action: "usa emojis en" },
-  isSelfRestack: { with: "que enlazan a tu propia publicación", action: "enlaza a tu publicación en" },
+  hookIsQuestion: {
+    text: (vars) => t("Tus notas que abren con una pregunta reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: abre con pregunta tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  endsWithQuestion: {
+    text: (vars) => t("Tus notas que terminan en pregunta reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: cierra con pregunta tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  hasLink: {
+    text: (vars) => t("Tus notas con un enlace reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: incluye un enlace en tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  hasMention: {
+    text: (vars) => t("Tus notas que mencionan a alguien reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: menciona a alguien en tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  hasNumber: {
+    text: (vars) => t("Tus notas con alguna cifra reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: incluye una cifra en tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  hasList: {
+    text: (vars) => t("Tus notas con una lista reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: usa una lista en tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  hasQuote: {
+    text: (vars) => t("Tus notas con una cita reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: incluye una cita en tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  hasEmoji: {
+    text: (vars) => t("Tus notas con emojis reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: usa emojis en tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
+  isSelfRestack: {
+    text: (vars) => t("Tus notas que enlazan a tu propia publicación reciben {times} más interacciones que el resto.", vars),
+    action: t("Prueba: enlaza a tu publicación en tus próximas 5 notas. PlotStack te dirá si se mantiene."),
+  },
 };
 
-const LENGTH_COPY = { short: "cortas", medium: "de longitud media", long: "largas" };
+const LENGTH_COPY = {
+  short: (vars) => t("Tus notas cortas reciben {times} más interacciones que el resto.", vars),
+  medium: (vars) => t("Tus notas de longitud media reciben {times} más interacciones que el resto.", vars),
+  long: (vars) => t("Tus notas largas reciben {times} más interacciones que el resto.", vars),
+};
 
 function detectNoteTraits(ctx) {
   const inRange = ctx.notes.filter((note) => ctx.inRange(note.date));
   if (!inRange.length) return {};
   const insights = getFeatureInsights({ ...ctx.snapshot, notes: inRange }, { timeZoneOffsetMinutes: ctx.timeZoneOffsetMinutes });
   if (insights.coverage.scoredNotes < TRAIT_MIN_N * 2) {
-    return { silent: [{ group: "notas", text: `Qué rasgos de tus notas rinden más: hacen falta al menos ${TRAIT_MIN_N * 2} notas con estadísticas de Substack en ${ctx.rangeLabel}.` }] };
+    return { silent: [{ group: "notas", text: t("Qué rasgos de tus notas rinden más: hacen falta al menos {n} notas con estadísticas de Substack en {range}.", { n: TRAIT_MIN_N * 2, range: ctx.rangeLabel }) }] };
   }
   const candidates = insights.features
     .filter((feature) => (feature.kind === "flag" ? TRAIT_COPY[feature.id] : feature.id === "lengthBand"))
@@ -271,23 +308,23 @@ function detectNoteTraits(ctx) {
   const byId = new Map(inRange.map((note) => [note.id, note]));
   return {
     insights: candidates.map(({ feature, cell }) => {
-      const label = feature.kind === "flag"
-        ? `Tus notas ${TRAIT_COPY[feature.id].with}`
-        : `Tus notas ${LENGTH_COPY[feature.level]}`;
-      const action = feature.kind === "flag"
-        ? `Prueba: ${TRAIT_COPY[feature.id].action} tus próximas 5 notas. PlotStack te dirá si se mantiene.`
-        : null;
+      const vars = { times: times(cell.lift) };
+      const text = feature.kind === "flag" ? TRAIT_COPY[feature.id].text(vars) : LENGTH_COPY[feature.level](vars);
+      const action = feature.kind === "flag" ? TRAIT_COPY[feature.id].action : null;
       return {
         id: `note-trait:${feature.id}:${feature.level}`,
         group: "notas",
-        text: `${label} reciben ${times(cell.lift)} más interacciones que el resto.`,
-        sample: `${pieces(feature.counts.withScored, "nota", "notas")} con el rasgo · ${pieces(feature.counts.withoutScored, "nota", "notas")} sin él · mediana de cada grupo`,
+        text,
+        sample: t("{with} con el rasgo · {without} sin él · mediana de cada grupo", {
+          with: tn(feature.counts.withScored, "{count} nota", "{count} notas", counted(feature.counts.withScored)),
+          without: tn(feature.counts.withoutScored, "{count} nota", "{count} notas", counted(feature.counts.withoutScored)),
+        }),
         score: scoreOf(cell.lift, Math.min(feature.counts.withScored, feature.counts.withoutScored), TRAIT_MIN_N * 2),
         strip: null,
         examples: feature.sampleIds.map((id) => byId.get(id)).filter(Boolean)
           .map((note) => ({ id: note.id, excerpt: excerptOf(note.body), date: note.date })),
         action,
-        target: { view: "notas", panel: "notes", noteIds: feature.sampleIds, label: "notas de ejemplo del hallazgo" },
+        target: { view: "notas", panel: "notes", noteIds: feature.sampleIds, label: t("notas de ejemplo del hallazgo") },
       };
     }),
   };
@@ -304,13 +341,16 @@ function detectNoteConcentration(ctx) {
     insights: [{
       id: "note-concentration",
       group: "notas",
-      text: `3 notas trajeron el ${formatPercent(concentration.share, 0)} de las altas que Substack atribuye a tus notas.`,
-      sample: `${formatCompactNumber(concentration.total)} altas repartidas en ${pieces(concentration.counted, "nota", "notas")}`,
+      text: t("3 notas trajeron el {share} de las altas que Substack atribuye a tus notas.", { share: formatPercent(concentration.share, 0) }),
+      sample: t("{signups} altas repartidas en {notes}", {
+        signups: formatCompactNumber(concentration.total),
+        notes: tn(concentration.counted, "{count} nota", "{count} notas", counted(concentration.counted)),
+      }),
       score: 0.5,
       strip: null,
       examples: top.map((note) => ({ id: note.id, excerpt: excerptOf(note.body), date: note.date })),
       action: null,
-      target: { view: "notas", panel: "notes", noteIds: top.map((note) => note.id), label: "las 3 notas del hallazgo" },
+      target: { view: "notas", panel: "notes", noteIds: top.map((note) => note.id), label: t("las 3 notas del hallazgo") },
     }],
   };
 }
@@ -322,8 +362,8 @@ function detectReachBeyondBubble(ctx) {
     insights: [{
       id: "note-reach",
       group: "notas",
-      text: `El ${formatPercent(reach.share, 0)} de las impresiones de tus notas llega a gente que aún no te sigue ni te lee.`,
-      sample: `${pieces(reach.scoredNotes, "nota", "notas")} con estadísticas`,
+      text: t("El {share} de las impresiones de tus notas llega a gente que aún no te sigue ni te lee.", { share: formatPercent(reach.share, 0) }),
+      sample: tn(reach.scoredNotes, "{count} nota con estadísticas", "{count} notas con estadísticas", counted(reach.scoredNotes)),
       score: 0.2,
       strip: null,
       examples: [],
@@ -342,7 +382,7 @@ function detectPostOutliers(ctx) {
   const { rows, measured } = rollingOutliers(sent, (campaign) => campaign.signupsWithin1Day, (campaign) => ctx.inRange(campaign.date));
   const evaluated = rows.filter((row) => row.z !== null);
   if (!evaluated.length) {
-    return { silent: [{ group: "publicaciones", text: `Artículos fuera de lo habitual: hacen falta al menos ${BASELINE_MIN + 1} artículos enviados para tener con qué comparar.` }] };
+    return { silent: [{ group: "publicaciones", text: t("Artículos fuera de lo habitual: hacen falta al menos {n} artículos enviados para tener con qué comparar.", { n: BASELINE_MIN + 1 }) }] };
   }
   const winners = evaluated
     .filter((row) => row.z >= OUTLIER_Z && row.multiple >= 2 && row.value >= 3)
@@ -354,12 +394,12 @@ function detectPostOutliers(ctx) {
     insights: [{
       id: "post-outlier",
       group: "publicaciones",
-      text: `«${top.piece.title}» trajo ${times(top.multiple)} más altas en su primer día que tu artículo típico (${formatCompactNumber(top.value)} altas).`,
-      sample: `Altas en las 24 h tras cada envío · cada envío frente a sus ${BASELINE_WINDOW} anteriores`,
+      text: t("«{title}» trajo {times} más altas en su primer día que tu artículo típico ({signups} altas).", { title: top.piece.title, times: times(top.multiple), signups: formatCompactNumber(top.value) }),
+      sample: t("Altas en las 24 h tras cada envío · cada envío frente a sus {n} anteriores", { n: BASELINE_WINDOW }),
       score: scoreOf(top.multiple, evaluated.length) + 0.3,
-      strip: stripFor(evaluated, ids, "altas en el primer día", measured.slice(-BASELINE_WINDOW).map((row) => row.value)),
+      strip: stripFor(evaluated, ids, t("altas en el primer día"), measured.slice(-BASELINE_WINDOW).map((row) => row.value)),
       examples: winners.slice(0, 3).map((row) => ({ id: row.piece.id, excerpt: row.piece.title, date: row.piece.date })),
-      action: "Prueba: vuelve sobre el tema o la promesa de ese envío en uno de los próximos.",
+      action: t("Prueba: vuelve sobre el tema o la promesa de ese envío en uno de los próximos."),
       target: { view: "publicaciones", panel: "campaigns" },
     }],
   };
@@ -385,8 +425,8 @@ function detectPostCuts(ctx) {
       insights.push({
         id: `post-day:${best.day}`,
         group: "publicaciones",
-        text: `Tus envíos del ${DAY_NAMES[best.day]} se abren más: ${formatPercent(best.openRate, 0)} frente al ${formatPercent(rest, 0)} del resto.`,
-        sample: `${pieces(best.posts, "envío", "envíos")} ese día · apertura ponderada por entregas`,
+        text: t("Tus envíos del {day} se abren más: {rate} frente al {rest} del resto.", { day: DAY_NAMES[best.day], rate: formatPercent(best.openRate, 0), rest: formatPercent(rest, 0) }),
+        sample: tn(best.posts, "{count} envío ese día · apertura ponderada por entregas", "{count} envíos ese día · apertura ponderada por entregas", counted(best.posts)),
         score: 0.45,
         strip: null,
         examples: [],
@@ -395,18 +435,18 @@ function detectPostCuts(ctx) {
       });
     }
   } else if (ranged.length >= 2) {
-    silent.push({ group: "publicaciones", text: `Mejor día de envío: hacen falta al menos ${MIN_CUT_N} envíos en dos días distintos.` });
+    silent.push({ group: "publicaciones", text: t("Mejor día de envío: hacen falta al menos {n} envíos en dos días distintos.", { n: MIN_CUT_N }) });
   }
-  const sections = getCampaignSections(ranged).filter((cut) => !cut.scarce && cut.openRate !== null && cut.section !== "Sin sección");
+  const sections = getCampaignSections(ranged).filter((cut) => !cut.scarce && cut.openRate !== null && cut.section !== NO_SECTION);
   if (sections.length >= 2) {
     const best = sections[0];
-    const rest = weighted(ranged.filter((campaign) => (String(campaign.section || "").trim() || "Sin sección") !== best.section));
+    const rest = weighted(ranged.filter((campaign) => (String(campaign.section || "").trim() || NO_SECTION) !== best.section));
     if (rest !== null && best.openRate - rest >= CUT_MIN_POINTS) {
       insights.push({
         id: `post-section:${best.section}`,
         group: "publicaciones",
-        text: `La sección «${best.section}» se abre más: ${formatPercent(best.openRate, 0)} frente al ${formatPercent(rest, 0)} del resto.`,
-        sample: `${pieces(best.posts, "envío", "envíos")} en la sección · apertura ponderada por entregas`,
+        text: t("La sección «{section}» se abre más: {rate} frente al {rest} del resto.", { section: best.section, rate: formatPercent(best.openRate, 0), rest: formatPercent(rest, 0) }),
+        sample: tn(best.posts, "{count} envío en la sección · apertura ponderada por entregas", "{count} envíos en la sección · apertura ponderada por entregas", counted(best.posts)),
         score: 0.4,
         strip: null,
         examples: [],
@@ -431,14 +471,14 @@ function detectSourceLeader(ctx) {
   const leader = sources[0];
   const share = ratio(safeNumber(leader.subscribers), total);
   if (safeNumber(leader.subscribers) < LEADER_MIN_SIGNUPS || share === null || share < LEADER_MIN_SHARE) {
-    return { silent: [{ group: "crecimiento", text: "Fuente principal de altas: tus altas llegan repartidas o todavía son pocas para señalar una." }] };
+    return { silent: [{ group: "crecimiento", text: t("Fuente principal de altas: tus altas llegan repartidas o todavía son pocas para señalar una.") }] };
   }
   return {
     insights: [{
       id: "source-leader",
       group: "crecimiento",
-      text: `${sourceLabel(leader.label)} es tu principal puerta de entrada: aporta el ${formatPercent(share * 100, 0)} de las altas atribuidas.`,
-      sample: `${formatCompactNumber(total)} altas con fuente atribuida`,
+      text: t("{source} es tu principal puerta de entrada: aporta el {share} de las altas atribuidas.", { source: sourceLabel(leader.label), share: formatPercent(share * 100, 0) }),
+      sample: t("{count} altas con fuente atribuida", { count: formatCompactNumber(total) }),
       score: 0.7,
       strip: null,
       examples: [],
@@ -455,8 +495,11 @@ function detectBestWeek(ctx) {
     insights: [{
       id: "best-week",
       group: "crecimiento",
-      text: `Tu mejor semana fue la del ${shortDay(records.bestWeek.weekStart)}, con ${pieces(records.bestWeek.signups, "alta", "altas")}.`,
-      sample: `Semanas de ${ctx.rangeLabel}`,
+      text: tn(records.bestWeek.signups, "Tu mejor semana fue la del {date}, con {count} alta.", "Tu mejor semana fue la del {date}, con {count} altas.", {
+        date: shortDay(records.bestWeek.weekStart),
+        ...counted(records.bestWeek.signups),
+      }),
+      sample: t("Semanas de {range}", { range: ctx.rangeLabel }),
       score: 0.3,
       strip: null,
       examples: [],
@@ -475,14 +518,14 @@ function detectMilestone(ctx) {
   // lectura: "entre el 4 y el 5 mar" es precisión fingida.
   const spread = (parseDay(dates.at(-1)).getTime() - parseDay(dates[0]).getTime()) / DAY_MS;
   const when = spread >= 7
-    ? `entre el ${shortDay(dates[0], ctx.now)} y el ${shortDay(dates.at(-1), ctx.now)}`
-    : `hacia el ${shortDay(dates[0], ctx.now)}`;
+    ? t("entre el {from} y el {to}", { from: shortDay(dates[0], ctx.now), to: shortDay(dates.at(-1), ctx.now) })
+    : t("hacia el {date}", { date: shortDay(dates[0], ctx.now) });
   return {
     insights: [{
       id: "milestone",
       group: "crecimiento",
-      text: `A este ritmo llegarás a ${formatCompactNumber(projection.target)} suscriptores ${when}.`,
-      sample: "Altas menos bajas de los últimos 30 y 90 días · una estimación, no una promesa",
+      text: t("A este ritmo llegarás a {target} suscriptores {when}.", { target: formatCompactNumber(projection.target), when }),
+      sample: t("Altas menos bajas de los últimos 30 y 90 días · una estimación, no una promesa"),
       score: 0.25,
       strip: null,
       examples: [],
@@ -495,13 +538,22 @@ function detectMilestone(ctx) {
 function detectLoyalCore(ctx) {
   const loyal = getLoyalCore(ctx.analytics?.audience?.timeline, ctx.analytics?.audience?.loyaltyHistory || [], ctx.days, ctx.now);
   if (loyal.state !== "ready" || !loyal.core) return {};
-  const change = loyal.change ? ` (${loyal.change > 0 ? "+" : "−"}${formatCompactNumber(Math.abs(loyal.change))} desde el ${shortDay(loyal.changeSince)})` : "";
+  const readers = tn(loyal.core, "{count} lector", "{count} lectores", counted(loyal.core));
+  const share = formatPercent(loyal.coreShare, 0);
+  const text = loyal.change
+    ? t("Tu núcleo fiel son {readers}, el {share} de tu lista ({change} desde el {date}).", {
+        readers,
+        share,
+        change: `${loyal.change > 0 ? "+" : "−"}${formatCompactNumber(Math.abs(loyal.change))}`,
+        date: shortDay(loyal.changeSince),
+      })
+    : t("Tu núcleo fiel son {readers}, el {share} de tu lista.", { readers, share });
   return {
     insights: [{
       id: "loyal-core",
       group: "audiencia",
-      text: `Tu núcleo fiel son ${pieces(loyal.core, "lector", "lectores")}, el ${formatPercent(loyal.coreShare, 0)} de tu lista${change}.`,
-      sample: "Máxima puntuación de actividad de Substack: 5 de 5",
+      text,
+      sample: t("Máxima puntuación de actividad de Substack: 5 de 5"),
       score: loyal.change ? 0.45 : 0.3,
       strip: null,
       examples: [],
@@ -550,7 +602,7 @@ export function getInsights({ snapshot = {}, analytics = null, days = 30, now = 
     days,
     now,
     timeZoneOffsetMinutes,
-    rangeLabel: Number.isFinite(days) ? `los últimos ${days} días` : "todo el histórico",
+    rangeLabel: Number.isFinite(days) ? t("los últimos {days} días", { days }) : t("todo el histórico"),
     inRange: (date) => {
       const time = parseDay(date).getTime();
       return Number.isFinite(time) && time >= cutoff && time <= now;

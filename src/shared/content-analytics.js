@@ -1,10 +1,13 @@
 import { normalizeSnapshot, safeNumber } from "./analytics.js";
+import { t } from "./i18n.js";
 
 export const EVIDENCE_MIN_N = 5;
 export const OUTCOME_KEYS = ["interactions", "profileVisits", "impressions", "freeSubscribers"];
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-const PLACEHOLDER_BODY = "Nota sin texto";
+// Relleno de una nota sin cuerpo. Puede haberse guardado en cualquiera de los
+// dos idiomas, según el del navegador al sincronizar.
+const PLACEHOLDER_BODIES = new Set(["Nota sin texto", t("Nota sin texto")]);
 
 export const FEATURE_DEFS = Object.freeze([
   { id: "hookIsQuestion", kind: "flag" },
@@ -39,7 +42,7 @@ const ratio = (numerator, denominator) => {
 
 const cleanBody = (body) => {
   const value = String(body || "").trim();
-  return value === PLACEHOLDER_BODY ? "" : value;
+  return PLACEHOLDER_BODIES.has(value) ? "" : value;
 };
 
 const stripUrls = (text) => text.replace(/https?:\/\/\S+/gi, " ").replace(/(^|\s)www\.\S+/gi, " ");
