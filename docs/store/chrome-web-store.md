@@ -6,7 +6,7 @@ están en el límite de caracteres que impone cada campo.
 ## Antes de subir
 
 ```powershell
-npm test          # 160 pruebas
+npm test          # 198 pruebas
 npm run icons     # regenera assets/icons/*.png desde assets/icon.svg
 npm run package   # valida y escribe dist/plotstack-<versión>.zip
 npm run screenshot -- capturas\resumen.png   # capturas a 1280x800 en dist/store/
@@ -28,6 +28,18 @@ Requisitos de cuenta, una sola vez:
 
 ## Producto
 
+La ficha tiene dos idiomas desde 1.4.0, igual que la extensión. En el
+Developer Dashboard, pestaña **Store listing**, el desplegable de idioma elige
+cuál editas: rellena **Español** y añade **English** con los textos de abajo.
+El nombre y la descripción breve los toma la tienda del manifiesto
+(`_locales/es` y `_locales/en`); la descripción detallada se pega a mano en
+cada idioma. Las capturas se pueden subir por idioma; si solo hay una tanda, la
+tienda la muestra en los dos.
+
+**Categoría:** Workflow & Planning
+
+### Español
+
 **Nombre** (45 máx.)
 
 ```
@@ -40,36 +52,48 @@ PlotStack — Newsletter Analytics
 Tus métricas de newsletter, ordenadas en un solo dashboard local.
 ```
 
-**Categoría:** Workflow & Planning
-**Idioma:** Español
-
 **Descripción detallada**
 
 ```
 PlotStack reúne en un único dashboard las métricas que Substack reparte entre
 la pantalla de estadísticas, la de crecimiento, el panel de publicaciones y la
-pestaña de Notes.
+pestaña de Notes, y te dice en frases qué se sale de lo normal.
 
 Funciona sobre la sesión que ya tienes abierta en Chrome: no hay cuenta que
 crear, ni claves de API que pegar, ni servidor intermedio. La extensión consulta
 las estadísticas de tu propia publicación y las guarda en tu equipo.
 
-SEIS VISTAS
+HALLAZGOS
 
-• Resumen — suscriptores, vistas, tasa de apertura, CTR y crecimiento neto.
-• Audiencia — suscriptores acumulados, altas por día, seguidores superpuestos
-  para ver la divergencia, países, retención y qué publicaciones comparten
-  lectores contigo.
-• Crecimiento — visitas por día y por fuente con su conversión, qué parte de tu
-  audiencia llega por la red de Substack, fuentes de adquisición, y altas y
-  bajas comparando días con envío y sin él.
-• Notas — impresiones, interacciones, visitas al perfil, clics y altas
-  atribuidas; dónde se ven y quién las ve en gráficos de pastel; mapa de
-  cadencia por día y hora, y el listado completo paginado.
-• Publicaciones — tabla ordenable y buscable con las métricas por post, cortes
-  por día de envío, longitud y sección, y cuáles se leen más allá del correo.
-• Cobertura — qué fuentes de datos respondieron y cuándo fue la última
+El Resumen escribe lo que merece tu atención: una nota o un artículo muy por
+encima de lo habitual, qué rasgo de tus notas rinde más, cuántas altas
+concentran unas pocas notas, qué fuente es tu principal puerta de entrada, tu
+mejor semana o cuándo llegarás al próximo hito. Cada pieza se compara con tus
+30 anteriores, nunca con otras newsletters, y cada hallazgo enseña su prueba.
+Lo que no supera su umbral no se muestra.
+
+SIETE VISTAS
+
+• Resumen — cómo crece tu newsletter, suscriptores, apertura, clics, la curva
+  de suscriptores y todos los hallazgos.
+• Audiencia — suscriptores y seguidores en el mismo gráfico, países, retención,
+  núcleo fiel (tus lectores más activos) y audiencias que se solapan contigo.
+• Cómo creces — récords, visitas por día, efecto de red de Substack, fuentes de
+  adquisición con su conversión, y altas y bajas.
+• Notas — superficies y audiencia de tus notas, horario de publicación por día
+  y hora, altas atribuidas y el listado completo con búsqueda.
+• Artículos — tabla ordenable con las métricas por post, apertura y CTR por
+  artículo, lectura fuera del correo, diagnóstico asunto/contenido y cortes por
+  día, sección y longitud.
+• Postal — una tarjeta con tus cifras públicas lista para compartir, en
+  vertical o cuadrada y en tres colores.
+• Estado de datos — qué fuentes respondieron y cuándo fue la última
   sincronización.
+
+EN ESPAÑOL O EN INGLÉS
+
+La interfaz sale en el idioma de tu navegador: español si lo prefiere, inglés
+en cualquier otro caso. Fechas y números, en el formato de cada idioma.
 
 RIGOR EN LAS CIFRAS
 
@@ -78,10 +102,8 @@ RIGOR EN LAS CIFRAS
   como un hallazgo.
 • Un dato ausente se muestra como ausente, no como un cero.
 • Un crecimiento sin base previa no se convierte en «+100 %».
-• Si una fuente de Substack falla, se conserva el dato anterior y el panel de
-  Cobertura lo dice; nunca se rellena con ceros.
-• Lo estimado se llama estimado: el reparto de altas por superficie de una nota
-  es una proporción, y la interfaz lo declara en vez de presentarlo como medido.
+• Si una fuente de Substack falla, se conserva el dato anterior y Estado de
+  datos lo dice; nunca se rellena con ceros.
 
 PRIVACIDAD
 
@@ -97,8 +119,8 @@ PRIVACIDAD
 EXPORTAR
 
 Captura en PNG cualquier vista o tarjeta concreta —al portapapeles o a un
-archivo— y descarga las tablas de publicaciones y notas en CSV. Todo se genera
-en tu navegador.
+archivo— y descarga las tablas de artículos y notas en CSV. Todo se genera en
+tu navegador.
 
 LIMITACIONES
 
@@ -108,6 +130,99 @@ lectura del propio panel de Substack, que no están documentados públicamente y
 pueden cambiar.
 
 PlotStack es software de código abierto y no está afiliado a Substack Inc.
+```
+
+### English
+
+**Name** (45 max.)
+
+```
+PlotStack — Newsletter Analytics
+```
+
+**Summary** (132 max.)
+
+```
+Your newsletter metrics, organized in a single local dashboard.
+```
+
+**Detailed description**
+
+```
+PlotStack brings together in one dashboard the metrics Substack spreads across
+its stats page, its growth page, the posts dashboard and the Notes tab, and
+tells you in plain sentences what stands out.
+
+It works on the session you already have open in Chrome: no account to create,
+no API keys to paste, no server in between. The extension reads the stats of
+your own publication and keeps them on your computer.
+
+FINDINGS
+
+The Overview writes down what deserves your attention: a note or a post far
+above your usual, which trait of your notes performs best, how many signups a
+handful of notes bring in, which source is your main way in, your best week, or
+when you'll reach your next milestone. Every piece is compared with your
+previous 30, never with other newsletters, and every finding shows its
+evidence. Anything below its threshold stays out.
+
+SEVEN VIEWS
+
+• Overview — how your newsletter is growing, subscribers, open rate, clicks,
+  the subscriber curve and every finding.
+• Audience — subscribers and followers on the same chart, countries,
+  retention, your loyal core (your most active readers) and publications that
+  share readers with you.
+• Growth — records, daily visits, the Substack network effect, acquisition
+  sources with their conversion, and signups and unsubscribes.
+• Notes — where your notes are seen and by whom, a day-by-hour posting
+  schedule, attributed signups and the full searchable list.
+• Posts — a sortable table with per-post metrics, open rate and CTR per post,
+  reading beyond the inbox, a subject-vs-content diagnosis, and cuts by day,
+  section and length.
+• Postcard — a card with your public numbers ready to share, portrait or
+  square, in three colors.
+• Data status — which sources responded and when the last sync happened.
+
+IN ENGLISH OR SPANISH
+
+The interface follows your browser's language: Spanish if it prefers it,
+English otherwise. Dates and numbers use each language's format.
+
+NUMBERS YOU CAN TRUST
+
+• Aggregate rates are weighted by sends; rates are never averaged.
+• A cut with few sends is flagged as a small sample instead of being presented
+  as a finding.
+• Missing data is shown as missing, not as zero.
+• Growth with no prior baseline never becomes "+100%".
+• If a Substack source fails, the previous value is kept and Data status says
+  so; nothing is filled in with zeros.
+
+PRIVACY
+
+• There is no PlotStack server. No telemetry, no usage analytics.
+• Your cookie values are never read or stored: the extension only checks that
+  a Substack session exists.
+• Subscriber emails and individual profiles are discarded before anything is
+  saved. Only aggregate metrics are kept.
+• Paid subscriber and revenue figures are hidden by default, and every PNG
+  capture hides them again, even if you show them on screen.
+• "Disconnect" deletes the saved metrics. It doesn't sign you out of Substack.
+
+EXPORT
+
+Capture any view or a single card as a PNG — to the clipboard or to a file —
+and download the posts and notes tables as CSV. Everything is generated in
+your browser.
+
+LIMITATIONS
+
+This version supports publications on *.substack.com; custom domains are not
+supported. PlotStack uses the read-only internal endpoints of Substack's own
+dashboard, which are not publicly documented and may change.
+
+PlotStack is open-source software and is not affiliated with Substack Inc.
 ```
 
 ## Privacidad — pestaña «Practices»
@@ -248,6 +363,13 @@ Código fuente completo: https://github.com/sotoplatero/plotstack
 La tienda no tiene un campo de «What's new» propio: el cambio se cuenta en la
 descripción detallada y, si se quiere, en el primer párrafo. Texto listo para
 usar en el anuncio o en el repositorio:
+
+```
+1.4.0
+
+• PlotStack habla el idioma de tu navegador: español si lo prefiere, inglés
+  en cualquier otro caso. Vistas, hallazgos, avisos, fechas y números.
+```
 
 ```
 1.1.0
