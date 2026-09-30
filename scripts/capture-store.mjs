@@ -19,13 +19,14 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-// Con `en`, la vista previa sirve la muestra en inglés y fuerza el idioma
-// del navegador (`?lang=en`); las capturas van a su propia carpeta para
-// subirlas en la ficha inglesa.
+// El idioma se fuerza SIEMPRE en la URL (`?lang=es` o `?lang=en`): Chrome
+// headless toma el del sistema, y en uno en inglés la ficha española salía en
+// inglés. Con `en`, la vista previa sirve además la muestra en inglés y las
+// capturas van a su propia carpeta para subirlas en la ficha inglesa.
 const LANG = process.argv[2] === "en" ? "en" : "es";
 const OUT = path.join(process.cwd(), "dist", "store", ...(LANG === "en" ? ["en"] : []));
 const BASE_URL = process.env.PLOTSTACK_PREVIEW_URL || "http://localhost:4173/dashboard/";
-const URL = LANG === "en" ? `${BASE_URL}?lang=en` : BASE_URL;
+const URL = `${BASE_URL}?lang=${LANG}`;
 const PORT = 9333;
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,

@@ -418,13 +418,16 @@ const sampleData = (lang) => {
 };
 
 // `src/shared/i18n.js` lee `navigator` al importarse: el script clásico del
-// <head> corre antes que el módulo, así que basta con fijarlo aquí.
-const LANGUAGE_OVERRIDE = `
-  Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"] });
-  Object.defineProperty(navigator, "language", { get: () => "en-US" });`;
+// <head> corre antes que el módulo, así que basta con fijarlo aquí. Con
+// `?lang=es` o `?lang=en` se fuerza ese idioma; sin parámetro manda el del
+// navegador (un Chrome headless en un sistema en inglés sale en inglés).
+const languageOverride = (tag) => `
+  Object.defineProperty(navigator, "languages", { get: () => ["${tag}", "${tag.slice(0, 2)}"] });
+  Object.defineProperty(navigator, "language", { get: () => "${tag}" });`;
+const LANGUAGE_TAGS = { es: "es-ES", en: "en-US" };
 
-const stubFor = (lang) => `
-<script>${lang === "en" ? LANGUAGE_OVERRIDE : ""}
+const stubFor = (lang, forced) => `
+<script>${forced ? languageOverride(LANGUAGE_TAGS[lang]) : ""}
   const DATA = ${JSON.stringify(sampleData(lang))};
   globalThis.chrome = {
     runtime: { sendMessage: async () => ({ ok: true }), getURL: (p) => p },
@@ -441,7 +444,7 @@ const stubFor = (lang) => `
   };
 </script>
 `;
-const STUBS = { es: stubFor("es"), en: stubFor("en") };
+const STUBS = { default: stubFor("es", false), es: stubFor("es", true), en: stubFor("en", true) };
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://localhost:${port}`);
@@ -459,8 +462,8 @@ const server = createServer(async (request, response) => {
     if (file.endsWith("index.html")) {
       // El stub tiene que existir ANTES de que se evalúe el módulo: app.js
       // llama a chrome.storage en cuanto se importa.
-      const lang = url.searchParams.get("lang") === "en" ? "en" : "es";
-      body = body.toString("utf8").replace("</head>", `${STUBS[lang]}</head>`);
+      const stub = STUBS[url.searchParams.get("lang")] || STUBS.default;
+      body = body.toString("utf8").replace("</head>", `${stub}</head>`);
     }
     response.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" });
     response.end(body);
