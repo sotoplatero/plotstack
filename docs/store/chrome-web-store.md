@@ -288,6 +288,13 @@ Lo que la tienda exige y lo que ya está resuelto:
 | Mosaico pequeño | 440×280 PNG | ⏳ opcional |
 | Imagen destacada | 1400×560 PNG | ⏳ opcional |
 
+**Ficha inglesa:** otras cinco en `dist/store/en/` (`plotstack-overview`,
+`plotstack-findings`, `plotstack-growth`, `plotstack-notes`,
+`plotstack-postcard`), con la publicación ficticia «Sample Letter» y la
+interfaz en inglés. Se regeneran con `npm run store-shots -- en` (la vista
+previa sirve la muestra inglesa en `?lang=en`) y se suben con el idioma
+**English** seleccionado en la ficha.
+
 Se suben cinco, en este orden: `plotstack-resumen`, `plotstack-hallazgos`,
 `plotstack-crecimiento`, `plotstack-notas`, `plotstack-postal`. `dist/` está en
 `.gitignore`, así que las capturas no viven en el repo: hay que regenerarlas

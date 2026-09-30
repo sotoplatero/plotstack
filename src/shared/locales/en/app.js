@@ -240,7 +240,7 @@ export default {
   "Por {name}": "By {name}",
   "Nuevos lectores": "New readers",
   "Abren tus correos": "Open your emails",
-  "De tu lista es núcleo fiel": "Of your list is loyal core",
+  "De tu lista es núcleo fiel": "Of your list is your loyal core",
   "Semanas de racha": "Week streak",
   "Mejor semana: {count} altas, la del {date}.": "Best week: {count} signups, the week of {date}.",
 

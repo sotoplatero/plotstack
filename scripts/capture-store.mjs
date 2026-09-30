@@ -2,6 +2,7 @@
 //
 //   npm run preview        # en otra terminal: http://localhost:4173/dashboard/
 //   npm run store-shots    # escribe dist/store/plotstack-*.png a 1280x800
+//   npm run store-shots -- en   # la ficha inglesa, en dist/store/en/
 //
 // Abre Chrome en modo headless y lo maneja por el DevTools Protocol con el
 // WebSocket nativo de Node: sin dependencias, como el resto de scripts. El
@@ -18,8 +19,13 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-const OUT = path.join(process.cwd(), "dist", "store");
-const URL = process.env.PLOTSTACK_PREVIEW_URL || "http://localhost:4173/dashboard/";
+// Con `en`, la vista previa sirve la muestra en inglés y fuerza el idioma
+// del navegador (`?lang=en`); las capturas van a su propia carpeta para
+// subirlas en la ficha inglesa.
+const LANG = process.argv[2] === "en" ? "en" : "es";
+const OUT = path.join(process.cwd(), "dist", "store", ...(LANG === "en" ? ["en"] : []));
+const BASE_URL = process.env.PLOTSTACK_PREVIEW_URL || "http://localhost:4173/dashboard/";
+const URL = LANG === "en" ? `${BASE_URL}?lang=en` : BASE_URL;
 const PORT = 9333;
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
@@ -33,12 +39,12 @@ const CHROME_CANDIDATES = [
 // Orden de subida. El Resumen va a 30 días porque la vista previa trae base de
 // comparación para ese rango; el resto a 90, que es donde salen más hallazgos.
 const SHOTS = [
-  { file: "plotstack-resumen.png", view: "resumen", days: "30" },
-  { file: "plotstack-hallazgos.png", view: "resumen", days: "90", scrollTo: "#insights-panel" },
-  { file: "plotstack-crecimiento.png", view: "crecimiento", days: "90" },
-  { file: "plotstack-notas.png", view: "notas", days: "90" },
-  { file: "plotstack-postal.png", view: "postal", days: "90" },
-];
+  { file: { es: "plotstack-resumen.png", en: "plotstack-overview.png" }, view: "resumen", days: "30" },
+  { file: { es: "plotstack-hallazgos.png", en: "plotstack-findings.png" }, view: "resumen", days: "90", scrollTo: "#insights-panel" },
+  { file: { es: "plotstack-crecimiento.png", en: "plotstack-growth.png" }, view: "crecimiento", days: "90" },
+  { file: { es: "plotstack-notas.png", en: "plotstack-notes.png" }, view: "notas", days: "90" },
+  { file: { es: "plotstack-postal.png", en: "plotstack-postcard.png" }, view: "postal", days: "90" },
+].map((shot) => ({ ...shot, file: shot.file[LANG] }));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -112,7 +118,7 @@ try {
     })()`);
     const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     await writeFile(path.join(OUT, shot.file), Buffer.from(data, "base64"));
-    console.log(`✓ dist/store/${shot.file}`);
+    console.log(`✓ ${path.relative(process.cwd(), path.join(OUT, shot.file))}`);
   }
   socket.close();
 } finally {
