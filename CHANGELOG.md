@@ -4,6 +4,16 @@ Las versiones que se han subido a la Chrome Web Store. La tienda **no permite
 bajar** un número de versión, así que cada entrada aquí corresponde a un
 `manifest.json` que ya se publicó o está listo para publicarse.
 
+## 1.4.0 — 30 de septiembre de 2026
+
+### Inglés
+
+- **El dashboard habla el idioma de tu navegador.** Si tu navegador prefiere
+  español, PlotStack se muestra en español; en cualquier otro idioma, en
+  inglés. Se traducen las vistas, los hallazgos, los avisos de sincronización,
+  las fechas y los números, y también el nombre y la descripción de la
+  extensión.
+
 ## 1.3.0 — 27 de septiembre de 2026
 
 ### Hallazgos

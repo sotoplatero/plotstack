@@ -1,6 +1,7 @@
 import { normalizeSnapshot, withLoyaltyHistory } from "./shared/analytics.js";
 import { enrichSnapshot, getCoreSnapshot, getProfile, SubstackApiError } from "./providers/substack-api.js";
 import { getExtendedAnalytics } from "./providers/substack-extended.js";
+import { t } from "./shared/i18n.js";
 
 const DASHBOARD_URL = chrome.runtime.getURL("dashboard/index.html");
 const SNAPSHOT_KEY = "plotstack.snapshot";
@@ -138,7 +139,7 @@ async function recoverOrphanProgress() {
     ...progress,
     phase: "error",
     finishedAt: new Date().toISOString(),
-    error: "La sincronización se interrumpió antes de terminar. Vuelve a sincronizar.",
+    error: t("La sincronización se interrumpió antes de terminar. Vuelve a sincronizar."),
   });
 }
 
@@ -156,18 +157,18 @@ async function runDetailPhase(publication, core, startedAt) {
         void writeProgress({ phase: "detail", step, detail: { done, total }, startedAt, finishedAt: "", error: "" });
       },
     });
-    const enriched = await withDeadline(trabajo, deadlines.detailMs, "El detalle tardó demasiado y se detuvo.");
+    const enriched = await withDeadline(trabajo, deadlines.detailMs, t("El detalle tardó demasiado y se detuvo."));
     await chrome.storage.local.set({ [SNAPSHOT_KEY]: normalizeSnapshot(enriched) });
     await writeProgress({ phase: "done", step: "", detail: { done: 0, total: 0 }, startedAt, finishedAt: new Date().toISOString(), error: "" });
   } catch (error) {
-    const donde = ultimoPaso ? ` Se quedó en: ${ultimoPaso}.` : "";
+    const mensaje = error.message || t("No se pudo completar el detalle.");
     await writeProgress({
       phase: "error",
-      step: ultimoPaso || "Detalle por publicación y por nota",
+      step: ultimoPaso || t("Detalle por publicación y por nota"),
       detail: { done: 0, total: 0 },
       startedAt,
       finishedAt: new Date().toISOString(),
-      error: `${error.message || "No se pudo completar el detalle."}${donde}`,
+      error: ultimoPaso ? t("{error} Se quedó en: {step}.", { error: mensaje, step: ultimoPaso }) : mensaje,
     });
   } finally {
     stopHeartbeat();
@@ -179,7 +180,7 @@ async function syncPublication(publication) {
   syncInFlight = (async () => {
     const startedAt = new Date().toISOString();
     try {
-      await writeProgress({ phase: "core", step: "Resumen, publicaciones y audiencia", detail: { done: 0, total: 0 }, startedAt, finishedAt: "", error: "" });
+      await writeProgress({ phase: "core", step: t("Resumen, publicaciones y audiencia"), detail: { done: 0, total: 0 }, startedAt, finishedAt: "", error: "" });
       const stored = await chrome.storage.local.get([SNAPSHOT_KEY, ANALYTICS_KEY]);
       // Fase rápida: escalares y listas. Devuelve un snapshot completo y válido
       // para pintar sin esperar a una sola petición de detalle.
@@ -193,7 +194,7 @@ async function syncPublication(publication) {
           getExtendedAnalytics(publication),
         ]),
         deadlines.coreMs,
-        "La fase rápida tardó demasiado y se detuvo.",
+        t("La fase rápida tardó demasiado y se detuvo."),
       );
       const snapshot = normalizeSnapshot(core.snapshot);
       // El núcleo fiel solo tiene evolución si PlotStack la guarda: Substack da
@@ -208,11 +209,11 @@ async function syncPublication(publication) {
     } catch (error) {
       await writeProgress({
         phase: "error",
-        step: "Resumen, publicaciones y audiencia",
+        step: t("Resumen, publicaciones y audiencia"),
         detail: { done: 0, total: 0 },
         startedAt,
         finishedAt: new Date().toISOString(),
-        error: error.message || "No se pudo sincronizar.",
+        error: error.message || t("No se pudo sincronizar."),
       });
       throw error;
     }
@@ -227,7 +228,7 @@ async function syncPublication(publication) {
 async function syncConnected() {
   const stored = await chrome.storage.local.get([CONNECTION_KEY]);
   const publication = stored[CONNECTION_KEY]?.publication;
-  if (!publication) throw new Error("Conecta una publicación primero.");
+  if (!publication) throw new Error(t("Conecta una publicación primero."));
   // El perfil se refresca en CADA sync, no solo cuando falta `userId`. Ahí vive
   // `followerCount`, que es un número vivo: cachearlo desde el momento de la
   // conexión lo dejaba a 0 en cualquier conexión creada antes de mapearlo.
@@ -263,6 +264,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   action()
     // `detailPhase` es una promesa: no puede viajar por sendMessage.
     .then(({ detailPhase, ...result } = {}) => sendResponse({ ok: !result?.needsLogin, ...result }))
-    .catch((error) => sendResponse({ ok: false, error: error.message || "No se pudo completar la operación." }));
+    .catch((error) => sendResponse({ ok: false, error: error.message || t("No se pudo completar la operación.") }));
   return true;
 });

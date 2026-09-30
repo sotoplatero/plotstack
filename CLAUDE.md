@@ -305,7 +305,8 @@ entre peticiones multiplicaba por diez la duración de la suite.
 
 - ES modules nativos en todas partes (`"type": "module"`); sin transpilación ni TypeScript.
 - Los tests parchean `globalThis.fetch` y lo restauran en `finally`; no hay librería de mocks.
-- Todo el texto de interfaz, mensajes de error y documentación está en español.
+- Todo el texto de interfaz, mensajes de error y documentación está en español, que es el **idioma fuente**; la interfaz también se sirve en inglés (ver abajo).
+- **Idiomas: español o inglés, según el navegador.** `src/shared/i18n.js` recorre `navigator.languages` y se queda con el primero que sabe pintar (`es`/`en`); cualquier otro cae al inglés. Lo usan igual el service worker y el dashboard. Estilo gettext: la clave es la cadena española literal, `t("Hace {n} días", { n })` o `tn(count, "{n} nota", "{n} notas")`, y el diccionario inglés vive en `src/shared/locales/en/*.js` (uno por zona). El HTML estático se traduce al arrancar con `translateDocument()` (nodos de texto y `title`/`aria-label`/`placeholder`/`alt`), así que un texto nuevo en `index.html` necesita su entrada en `en/html.js`. Reglas: el primer argumento de `t()` es **siempre un literal** entre comillas dobles (el test de `tests/i18n.test.js` lo extrae y exige traducción, igual que para cada texto del HTML); las frases se traducen enteras con marcadores, no por trozos concatenados; ningún `Intl`/`toLocale*` fija `"es-ES"`: se usa `LOCALE`. La suite corre forzada a español con `--import ./tests/fixtures/locale-es.js`. El nombre y la descripción del manifiesto van por `_locales/` (`default_locale: "en"`).
 - **Las fechas `YYYY-MM-DD` van por `parseDay()`, nunca por `new Date(valor)` directo.** `new Date("2026-06-10")` es medianoche **UTC**, así que en zonas negativas se renderiza como 9 jun. Son fechas civiles, no instantes.
 - El alcance de la v1 son publicaciones bajo `*.substack.com`; los dominios personalizados quedan fuera.
 

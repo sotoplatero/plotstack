@@ -353,17 +353,79 @@ ANALYTICS.audience.overlap = [
   { name: "How to AI", subdomain: "ruben", share: 0.19 },
 ];
 
-const STUB = `
-<script>
-  const DATA = ${JSON.stringify({
+// --- Muestra en inglés -----------------------------------------------------
+// Con `?lang=en` la vista previa fuerza el idioma del navegador a inglés y
+// sirve la misma publicación con textos ingleses, para las capturas de la
+// ficha en inglés. Las cifras son idénticas: solo cambian las palabras.
+const EN_TITLES = [
+  "The week the product changed", "Notes from the edge", "How to read a metric without fooling yourself",
+  "The cost of publishing every day", "Three charts I did decide to delete", "What the Substack dashboard doesn't tell you",
+  "A short letter about editing", "Starting over, with data", "The archive nobody opens", "Against the pretty chart",
+  "What to ask before you measure", "A hundred numbers and one decision", "The metric I gave up on",
+  "Write less, revise more", "A year of letters", "How I started this list",
+];
+const EN_NOTES = [
+  "A good metric removes a doubt; it doesn't add another screen.",
+  "What would you look at first to know whether a post worked?",
+  "Publishing every week for a year teaches you more about editing than about writing.",
+  "The chart I look at most isn't the subscriber one.",
+  "An open rate without its denominator next to it means nothing.",
+  "Writing for a thousand people is very different from writing for a hundred.",
+];
+const EN_SOURCES = ["Substack Notes", "Recommendations", "Direct search", "Substack network", "External links"];
+const EN_COVERAGE = {
+  audience: "Audience", subscriberTimeline: "Signups per day", growthSources: "Acquisition sources",
+  followerTimeseries: "Followers", audienceLocation: "Location", freeSubscriberGrowth: "Free growth",
+  paidSubscriberGrowth: "Paid growth", freeRetention: "Free retention", paidRetention: "Paid retention",
+};
+const EN_OVERLAP = ["AI Mafia", "AI for Everyone", "Freelance Notes", "How to AI"];
+const EN_LOCATION = ["US", "GB", "CA", "AU", "IN", "DE"];
+
+const sampleData = (lang) => {
+  const english = lang === "en";
+  const snapshot = english
+    ? {
+      ...SNAPSHOT,
+      publication: "Sample Letter",
+      campaigns: SNAPSHOT.campaigns.map((row, index) => ({ ...row, title: EN_TITLES[index] })),
+      notes: SNAPSHOT.notes.map((row, index) => ({ ...row, body: EN_NOTES[index] })),
+    }
+    : SNAPSHOT;
+  const analytics = english ? structuredClone(ANALYTICS) : ANALYTICS;
+  if (english) {
+    analytics.growth.benchmark.outcomeCopy = "Above the Substack average";
+    for (const window of Object.values(analytics.growth.sources)) {
+      window.sources.forEach((row, index) => { row.label = EN_SOURCES[index]; });
+    }
+    analytics.coverage.forEach((row) => {
+      row.label = EN_COVERAGE[row.key] || row.label;
+      if (row.error) row.error = "Unavailable";
+    });
+    analytics.audience.overlap.forEach((row, index) => { row.name = EN_OVERLAP[index]; });
+    analytics.audience.location.rows.forEach((row, index) => { row.code = EN_LOCATION[index]; });
+  }
+  return {
     "plotstack.connection": {
       provider: "substack",
-      publication: { name: "Carta de muestra", subdomain: "muestra", logoUrl: "", authorName: "Ana Autora", authorPhotoUrl: "https://substack.com/img/avatars/default-light.png" },
+      publication: english
+        ? { name: "Sample Letter", subdomain: "sample", logoUrl: "", authorName: "Ann Author", authorPhotoUrl: "https://substack.com/img/avatars/default-light.png" }
+        : { name: "Carta de muestra", subdomain: "muestra", logoUrl: "", authorName: "Ana Autora", authorPhotoUrl: "https://substack.com/img/avatars/default-light.png" },
       connectedAt: CAPTURED_AT,
     },
-    "plotstack.snapshot": normalizeSnapshot(SNAPSHOT),
-    "plotstack.analytics": ANALYTICS,
-  })};
+    "plotstack.snapshot": normalizeSnapshot(snapshot),
+    "plotstack.analytics": analytics,
+  };
+};
+
+// `src/shared/i18n.js` lee `navigator` al importarse: el script clásico del
+// <head> corre antes que el módulo, así que basta con fijarlo aquí.
+const LANGUAGE_OVERRIDE = `
+  Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"] });
+  Object.defineProperty(navigator, "language", { get: () => "en-US" });`;
+
+const stubFor = (lang) => `
+<script>${lang === "en" ? LANGUAGE_OVERRIDE : ""}
+  const DATA = ${JSON.stringify(sampleData(lang))};
   globalThis.chrome = {
     runtime: { sendMessage: async () => ({ ok: true }), getURL: (p) => p },
     downloads: { download: async () => 1 },
@@ -379,6 +441,7 @@ const STUB = `
   };
 </script>
 `;
+const STUBS = { es: stubFor("es"), en: stubFor("en") };
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://localhost:${port}`);
@@ -396,7 +459,8 @@ const server = createServer(async (request, response) => {
     if (file.endsWith("index.html")) {
       // El stub tiene que existir ANTES de que se evalúe el módulo: app.js
       // llama a chrome.storage en cuanto se importa.
-      body = body.toString("utf8").replace("</head>", `${STUB}</head>`);
+      const lang = url.searchParams.get("lang") === "en" ? "en" : "es";
+      body = body.toString("utf8").replace("</head>", `${STUBS[lang]}</head>`);
     }
     response.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" });
     response.end(body);
@@ -407,5 +471,5 @@ const server = createServer(async (request, response) => {
 
 server.listen(port, () => {
   console.log(`Dashboard de muestra en http://localhost:${port}/dashboard/`);
-  console.log("Publicación ficticia «Carta de muestra». Ctrl+C para parar.");
+  console.log("Publicación ficticia «Carta de muestra»; en inglés, con ?lang=en. Ctrl+C para parar.");
 });

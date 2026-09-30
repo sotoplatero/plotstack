@@ -1,4 +1,5 @@
 import { requestJson } from "./substack-api.js";
+import { t } from "../shared/i18n.js";
 
 const asNumber = (...values) => {
   for (const value of values) {
@@ -46,7 +47,7 @@ const metricSeries = (metrics, name) => {
 
 const mapSource = (row, index) => ({
   id: String(row?.source ?? index),
-  label: text(row?.sourceName, row?.source, "Sin identificar"),
+  label: text(row?.sourceName, row?.source, t("Sin identificar")),
   category: text(row?.category),
   visitors: metricTotal(row?.metrics, "traffic"),
   subscribers: metricTotal(row?.metrics, "subscribers"),
@@ -172,7 +173,7 @@ export const NETWORK_WINDOWS = { 7: "7 days", 30: "30 days", 90: "90 days", all:
 // (comprobado contra el donut del panel, 114 con cuatro filas).
 export function normalizeNetworkAttribution(payload = {}) {
   const rows = rowsFrom(payload, ["rows"]).map((row) => ({
-    label: text(row?.label, row?.name, "Sin identificar"),
+    label: text(row?.label, row?.name, t("Sin identificar")),
     subscribers: asNumber(row?.subs_count, row?.subscribers),
     // Viene en fraccion 0-1. Se guarda tal cual y el renderer decide.
     share: Number(row?.pct_time_window_total),
@@ -192,8 +193,8 @@ export function normalizeVisitorSources(payload = {}) {
     const users = asNumber(row?.users);
     const freeSignups = row?.free_signup === null || row?.free_signup === undefined ? null : asNumber(row.free_signup);
     return {
-      source: text(row?.source, "sin identificar"),
-      category: text(row?.source_category, "Otros"),
+      source: text(row?.source, t("sin identificar")),
+      category: text(row?.source_category, t("Otros")),
       views: asNumber(row?.views),
       users,
       freeSignups,
@@ -213,9 +214,9 @@ export function normalizeVisitorSources(payload = {}) {
 // Veredicto que publica Substack comparando con otras publicaciones. No se puede
 // derivar de datos propios, asi que o llega o no existe: nada de estimarlo.
 export const COMPARISON_COPY = {
-  above_average: "Por encima de la media de Substack",
-  average: "En la media de Substack",
-  below_average: "Por debajo de la media de Substack",
+  above_average: t("Por encima de la media de Substack"),
+  average: t("En la media de Substack"),
+  below_average: t("Por debajo de la media de Substack"),
 };
 
 export function normalizeGrowthBenchmark(payload = {}) {
@@ -236,7 +237,7 @@ export function normalizeGrowthBenchmark(payload = {}) {
 // guardan nombre y subdominio: el resto es configuracion ajena entera.
 export function normalizeAudienceOverlap(payload) {
   return rowsFrom(payload).map((row) => ({
-    name: text(row?.pub?.name, row?.name, "Sin nombre"),
+    name: text(row?.pub?.name, row?.name, t("Sin nombre")),
     subdomain: text(row?.pub?.subdomain, row?.subdomain),
     // Fraccion 0-1 servida como cadena.
     share: Number(row?.percentOverlap),
@@ -492,10 +493,10 @@ export async function getExtendedAnalytics(publication) {
   };
 
   const sources = [
-    { key: "subscriberTimeline", label: "Altas por día", request: () => getSubscriberTimeline(base), normalize: normalizeSubscriberTimeline },
+    { key: "subscriberTimeline", label: t("Altas por día"), request: () => getSubscriberTimeline(base), normalize: normalizeSubscriberTimeline },
     {
       key: "growthSources",
-      label: "Fuentes de crecimiento",
+      label: t("Fuentes de crecimiento"),
       request: byRange(
         (desde, hasta) => requestJson(`${base}/publication/stats/growth/sources?from_date=${desde}&to_date=${hasta}&order_by=users&order_direction=desc`),
         normalizeGrowthSources,
@@ -504,7 +505,7 @@ export async function getExtendedAnalytics(publication) {
     },
     {
       key: "visitorSources",
-      label: "Fuentes de tráfico",
+      label: t("Fuentes de tráfico"),
       request: byRange(
         (desde, hasta) => requestJson(`${base}/publication/stats/visitor_sources?from_date=${desde}&to_date=${hasta}&offset=0&limit=20&order_by=views&order_direction=desc`),
         normalizeVisitorSources,
@@ -513,7 +514,7 @@ export async function getExtendedAnalytics(publication) {
     },
     {
       key: "networkAttribution",
-      label: "Efecto de red",
+      label: t("Efecto de red"),
       request: async () => {
         const entries = await Promise.all(Object.entries(NETWORK_WINDOWS).map(async ([key, window]) => {
           try {
@@ -528,7 +529,7 @@ export async function getExtendedAnalytics(publication) {
     },
     {
       key: "trafficTimeseries",
-      label: "Visitas por día",
+      label: t("Visitas por día"),
       // Esta SI es diaria, asi que basta una peticion de 12 meses y el
       // dashboard recorta por fecha como con las demas series.
       request: () => requestJson(`${base}/publication/stats/publication_traffic/timeseries?from=${from}&to=${to}&category`),
@@ -536,22 +537,22 @@ export async function getExtendedAnalytics(publication) {
     },
     {
       key: "growthBenchmark",
-      label: "Comparación con Substack",
+      label: t("Comparación con Substack"),
       request: () => requestJson(`${base}/publication/stats/paid_subscriber_growth/summary?is_subscribed=false`),
       normalize: normalizeGrowthBenchmark,
     },
     {
       key: "audienceOverlap",
-      label: "Solapamiento de audiencia",
+      label: t("Solapamiento de audiencia"),
       request: () => requestJson(`${base}/publication/stats/audience_insights/overlap?limit=6`),
       normalize: normalizeAudienceOverlap,
     },
-    { key: "followerTimeseries", label: "Histórico de seguidores", request: () => requestJson(`${base}/publication/stats/followers/timeseries?from=${encodeURIComponent(fromIso)}`), normalize: normalizeTimeseries },
-    { key: "audienceLocation", label: "Ubicación de la audiencia", request: locationRequest, normalize: (payload) => ({ rows: normalizeAudienceLocation(payload.rows), totals: payload.totals || {} }) },
-    { key: "freeSubscriberGrowth", label: "Altas y bajas gratuitas", request: () => requestJson(`${base}/publication/stats/paid_subscriber_growth?${growthQuery}&is_subscribed=false`), normalize: normalizeSubscriberGrowth },
-    { key: "paidSubscriberGrowth", label: "Altas y bajas de pago", request: () => requestJson(`${base}/publication/stats/paid_subscriber_growth?${growthQuery}&is_subscribed=true`), normalize: normalizeSubscriberGrowth },
-    { key: "freeRetention", label: "Retención gratuita", request: () => retentionRequest(false), normalize: normalizeRetention },
-    { key: "paidRetention", label: "Retención de pago", request: () => retentionRequest(true), normalize: normalizeRetention },
+    { key: "followerTimeseries", label: t("Histórico de seguidores"), request: () => requestJson(`${base}/publication/stats/followers/timeseries?from=${encodeURIComponent(fromIso)}`), normalize: normalizeTimeseries },
+    { key: "audienceLocation", label: t("Ubicación de la audiencia"), request: locationRequest, normalize: (payload) => ({ rows: normalizeAudienceLocation(payload.rows), totals: payload.totals || {} }) },
+    { key: "freeSubscriberGrowth", label: t("Altas y bajas gratuitas"), request: () => requestJson(`${base}/publication/stats/paid_subscriber_growth?${growthQuery}&is_subscribed=false`), normalize: normalizeSubscriberGrowth },
+    { key: "paidSubscriberGrowth", label: t("Altas y bajas de pago"), request: () => requestJson(`${base}/publication/stats/paid_subscriber_growth?${growthQuery}&is_subscribed=true`), normalize: normalizeSubscriberGrowth },
+    { key: "freeRetention", label: t("Retención gratuita"), request: () => retentionRequest(false), normalize: normalizeRetention },
+    { key: "paidRetention", label: t("Retención de pago"), request: () => retentionRequest(true), normalize: normalizeRetention },
   ];
 
   const settled = await Promise.allSettled(sources.map((source) => source.request()));
@@ -560,8 +561,8 @@ export async function getExtendedAnalytics(publication) {
   const coverage = settled.map((result, index) => {
     const source = sources[index];
     if (result.status === "rejected") {
-      data[source.key] = source.normalize({ sourceState: "unavailable", sourceError: result.reason?.message || "No disponible" });
-      return { key: source.key, label: source.label, status: "unavailable", records: 0, error: result.reason?.message || "No disponible" };
+      data[source.key] = source.normalize({ sourceState: "unavailable", sourceError: result.reason?.message || t("No disponible") });
+      return { key: source.key, label: source.label, status: "unavailable", records: 0, error: result.reason?.message || t("No disponible") };
     }
     raw[source.key] = result.value;
     data[source.key] = source.normalize(result.value);
@@ -574,10 +575,10 @@ export async function getExtendedAnalytics(publication) {
   const timelineCoverage = coverage.find((row) => row.key === "subscriberTimeline");
   coverage.unshift({
     key: "audience",
-    label: "Audiencia",
+    label: t("Audiencia"),
     status: timelineCoverage?.status === "ready" ? "ready" : "unavailable",
     records: recordCount(data.audience),
-    error: timelineCoverage?.status === "ready" ? "" : timelineCoverage?.error || "No disponible",
+    error: timelineCoverage?.status === "ready" ? "" : timelineCoverage?.error || t("No disponible"),
   });
 
   return {

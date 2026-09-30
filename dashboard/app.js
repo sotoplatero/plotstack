@@ -19,6 +19,7 @@ import {
   safeNumber,
   sourceLabel,
   normalizeSnapshot,
+  noteBodyLabel,
   parseDay,
   getRecords,
   getMilestoneProjection,
@@ -38,6 +39,7 @@ import {
   readSensitivePreferences,
   writeSensitivePreference,
 } from "./privacy.js";
+import { t, tn, LANG, LOCALE, translateDocument } from "../src/shared/i18n.js";
 
 const SNAPSHOT_KEY = "plotstack.snapshot";
 const CONNECTION_KEY = "plotstack.connection";
@@ -75,12 +77,12 @@ const state = {
 
 const sendMessage = (type, payload = {}) => chrome.runtime.sendMessage({ type, ...payload });
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const decimal = (value, digits = 1) => Number(value || 0).toLocaleString("es-ES", { maximumFractionDigits: digits });
+const decimal = (value, digits = 1) => Number(value || 0).toLocaleString(LOCALE, { maximumFractionDigits: digits });
 // `parseDay` vive en analytics.js para que el criterio de fecha civil sea el
 // mismo en render y en cálculo.
-const shortDate = (value) => (value ? parseDay(value).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : "Sin fecha");
+const shortDate = (value) => (value ? parseDay(value).toLocaleDateString(LOCALE, { day: "numeric", month: "short", year: "numeric" }) : t("Sin fecha"));
 const timezoneOffset = () => -new Date().getTimezoneOffset();
-const rangeLabel = () => (state.days === ALL_TIME ? "todo el histórico" : `los últimos ${state.days} días`);
+const rangeLabel = () => (state.days === ALL_TIME ? t("todo el histórico") : t("los últimos {days} días", { days: state.days }));
 
 // Un único hint para toda la aplicación: aparece sin la demora del tooltip
 // nativo, funciona con ratón y teclado, y evita crear un nodo por elemento.
@@ -163,10 +165,10 @@ function setConnectionStatus(message = "", error = false) {
   status.style.color = error ? "var(--danger)" : "var(--muted)";
 }
 
-function setConnecting(active, label = "Conectando…") {
+function setConnecting(active, label = t("Conectando…")) {
   const button = $("#connect-button");
   button.disabled = active;
-  button.querySelector("span").textContent = active ? label : "Volver a detectar";
+  button.querySelector("span").textContent = active ? label : t("Volver a detectar");
   $("#connect-card").classList.toggle("is-detecting", active);
 }
 
@@ -225,27 +227,27 @@ async function connect() {
   setConnecting(true);
   $("#connect-button").hidden = true;
   $("#login-button").hidden = true;
-  setConnectionStatus("Comprobando tu sesión de Substack…");
+  setConnectionStatus(t("Comprobando tu sesión de Substack…"));
   try {
     const response = await sendMessage("PLOTSTACK_CONNECT");
     if (response?.needsLogin) {
       $("#login-button").hidden = false;
       $("#connect-button").hidden = false;
-      setConnectionStatus("No hay una sesión activa de Substack en este navegador.", true);
+      setConnectionStatus(t("No hay una sesión activa de Substack en este navegador."), true);
       return;
     }
-    if (!response?.ok) throw new Error(response?.error || "No se pudo conectar.");
+    if (!response?.ok) throw new Error(response?.error || t("No se pudo conectar."));
     const publications = response.publications || [];
     if (!publications.length) {
       $("#connect-button").hidden = false;
-      setConnectionStatus("Esta cuenta no administra ninguna publicación.", true);
+      setConnectionStatus(t("Esta cuenta no administra ninguna publicación."), true);
       return;
     }
     setConnectionStatus("");
     showPublicationPicker(publications);
   } catch (error) {
     $("#connect-button").hidden = false;
-    setConnectionStatus(error.message || "No se pudo conectar.", true);
+    setConnectionStatus(error.message || t("No se pudo conectar."), true);
   } finally {
     setConnecting(false);
   }
@@ -253,17 +255,17 @@ async function connect() {
 
 async function selectPublication(publication, button) {
   if (button) button.disabled = true;
-  setConnectionStatus(`Sincronizando ${publication.name}…`);
+  setConnectionStatus(t("Sincronizando {name}…", { name: publication.name }));
   try {
     const response = await sendMessage("PLOTSTACK_SELECT_PUBLICATION", { publication });
-    if (!response?.ok) throw new Error(response?.error || "No se pudo sincronizar.");
+    if (!response?.ok) throw new Error(response?.error || t("No se pudo sincronizar."));
     state.snapshot = normalizeSnapshot(response.snapshot);
     state.connection = response.connection;
     state.analytics = response.analytics || null;
     showDashboard();
     renderProgress();
   } catch (error) {
-    setConnectionStatus(error.message || "No se pudo sincronizar.", true);
+    setConnectionStatus(error.message || t("No se pudo sincronizar."), true);
   } finally {
     if (button) button.disabled = false;
   }
@@ -277,7 +279,7 @@ function deltaMarkup(value, suffix, versus, format) {
   return `${sign}${format(value)}${suffix} ${versus}`.trim();
 }
 
-function setDelta(selector, value, { suffix = "%", versus = "vs. periodo anterior", missing = "Sin valor anterior para comparar", format = decimal } = {}) {
+function setDelta(selector, value, { suffix = "%", versus = t("vs. periodo anterior"), missing = t("Sin valor anterior para comparar"), format = decimal } = {}) {
   const element = $(selector);
   if (value === null || value === undefined) {
     element.className = "delta";
@@ -306,8 +308,8 @@ function setRateDelta(selector, windows, key = "openRate") {
     const node = $(selector);
     node.className = "delta";
     node.textContent = windows.previous.posts
-      ? "Sin envíos con destinatarios para comparar"
-      : "Sin periodo anterior para comparar";
+      ? t("Sin envíos con destinatarios para comparar")
+      : t("Sin periodo anterior para comparar");
     return;
   }
   setDelta(selector, now - before, { suffix: " pts" });
@@ -320,17 +322,17 @@ function setRateDelta(selector, windows, key = "openRate") {
 function comparisonCopy(comparison) {
   if (comparison?.basis === "range") {
     return {
-      versus: `vs. hace ${comparison.days} días`,
-      missing: `Sin base de hace ${comparison.days} días para comparar`,
+      versus: t("vs. hace {days} días", { days: comparison.days }),
+      missing: t("Sin base de hace {days} días para comparar", { days: comparison.days }),
     };
   }
   if (comparison?.basis === "history") {
     return {
-      versus: `desde ${shortDate(comparison.sinceDate)}`,
-      missing: "Sin histórico anterior para comparar",
+      versus: t("desde {date}", { date: shortDate(comparison.sinceDate) }),
+      missing: t("Sin histórico anterior para comparar"),
     };
   }
-  return { versus: "", missing: "Sin base de comparación para este rango" };
+  return { versus: "", missing: t("Sin base de comparación para este rango") };
 }
 
 function renderMetrics(snapshot, analytics) {
@@ -340,21 +342,21 @@ function renderMetrics(snapshot, analytics) {
   // marca el selector, y el copy lo dice. Antes decía "vs. sincronización
   // anterior" mientras la base era siempre la de 30 días.
   const versusRange = comparisonCopy(derived.comparison);
-  const versusSync = { versus: "vs. sincronización anterior", missing: "Sin sincronización anterior para comparar" };
+  const versusSync = { versus: t("vs. sincronización anterior"), missing: t("Sin sincronización anterior para comparar") };
   $("#metric-subscribers").textContent = formatCompactNumber(metrics.subscribers);
   // La apertura se calcula sobre la ventana activa, igual que el CTR. Sin
   // fallback silencioso a `metrics.openRate`: esa cifra es histórica de la API
   // y mostrarla bajo la etiqueta del rango elegido sería mentir.
   const windows = getRateWindows(snapshot, state.days);
   const openNow = windows.current.openRate;
-  $("#metric-open-rate").textContent = openNow === null ? "Sin dato" : formatPercent(openNow);
+  $("#metric-open-rate").textContent = openNow === null ? t("Sin dato") : formatPercent(openNow);
   $("#metric-paid").textContent = formatCompactNumber(metrics.paidSubscribers);
   $("#paid-conversion").textContent = formatPercent(derived.paidConversion);
   $("#metric-revenue").textContent = formatCurrency(metrics.monthlyRevenue);
   setDelta("#delta-subscribers", derived.subscriberGrowth, versusRange);
   // "+2740%" no se lee: a partir de duplicar, se dice por cuánto se multiplicó.
   if (derived.subscriberGrowth !== null && derived.subscriberGrowth >= GROWTH_AS_MULTIPLE) {
-    $("#delta-subscribers").textContent = `Multiplicado por ${decimal(metrics.subscribers / derived.comparison.subscribers)} ${versusRange.versus}`.trim();
+    $("#delta-subscribers").textContent = t("Multiplicado por {times} {versus}", { times: decimal(metrics.subscribers / derived.comparison.subscribers), versus: versusRange.versus }).trim();
   }
   setRateDelta("#delta-open-rate", windows);
   setDelta("#delta-paid", derived.paidGrowth, versusRange);
@@ -366,16 +368,16 @@ function renderMetrics(snapshot, analytics) {
   const sends = withinRange(snapshot.campaigns, (campaign) => campaign.date).kept
     .filter((campaign) => campaign.delivered > 0 && campaign.date)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  renderSparkBars($("#open-bars"), sends.map((campaign) => ({ value: campaign.openRate, hint: `${campaign.title}: ${formatPercent(campaign.openRate)} de apertura` })));
-  renderSparkBars($("#click-bars"), sends.map((campaign) => ({ value: campaign.clickRate, hint: `${campaign.title}: ${formatPercent(campaign.clickRate)} de CTR` })));
+  renderSparkBars($("#open-bars"), sends.map((campaign) => ({ value: campaign.openRate, hint: t("{title}: {rate} de apertura", { title: campaign.title, rate: formatPercent(campaign.openRate) }) })));
+  renderSparkBars($("#click-bars"), sends.map((campaign) => ({ value: campaign.clickRate, hint: t("{title}: {rate} de CTR", { title: campaign.title, rate: formatPercent(campaign.clickRate) }) })));
   $("#open-reference").textContent = ownMedian === null
-    ? "Sin envíos para comparar"
-    : `Tu mediana histórica · ${formatPercent(ownMedian)}`;
+    ? t("Sin envíos para comparar")
+    : t("Tu mediana histórica · {rate}", { rate: formatPercent(ownMedian) });
 
   const clickNow = windows.current.clickRate;
-  $("#metric-click-rate").textContent = clickNow === null ? "Sin dato" : formatPercent(clickNow);
+  $("#metric-click-rate").textContent = clickNow === null ? t("Sin dato") : formatPercent(clickNow);
   setRateDelta("#delta-click-rate", windows, "clickRate");
-  $("#click-basis").textContent = `${windows.current.posts} ${windows.current.posts === 1 ? "envío" : "envíos"} en ${rangeLabel()}`;
+  $("#click-basis").textContent = tn(windows.current.posts, "{n} envío en {range}", "{n} envíos en {range}", { range: rangeLabel() });
 
   // El sparkline muestra altas diarias del periodo escaladas desde cero. El
   // anterior normalizaba min-max el total acumulado con suelo al 20%: una
@@ -383,9 +385,9 @@ function renderMetrics(snapshot, analytics) {
   const daily = fillDailyGaps(windowedSubscriberDaily(analytics), (date) => ({ date, signups: 0 })).slice(-60);
   renderSparkBars($("#subscriber-bars"), daily.map((point) => ({
     value: point.signups,
-    hint: `${shortDate(point.date)}: ${point.signups} ${point.signups === 1 ? "alta" : "altas"}`,
+    hint: tn(point.signups, "{date}: {n} alta", "{date}: {n} altas", { date: shortDate(point.date) }),
   })));
-  $("#subscriber-caption").textContent = daily.length >= 2 ? `Altas por día en ${rangeLabel()}` : "Sin altas diarias en este periodo";
+  $("#subscriber-caption").textContent = daily.length >= 2 ? t("Altas por día en {range}", { range: rangeLabel() }) : t("Sin altas diarias en este periodo");
 }
 
 // Minigráfico de barras desde cero; con menos de dos valores no se dibuja.
@@ -472,25 +474,25 @@ function chartGeometry(svg, { fallbackHeight, minHeight }) {
 // El `aria-label` fijo del SVG ("Visitas por día") no decía nada a un lector de
 // pantalla: los valores solo existían en el tooltip. Se le añade un resumen
 // calculado de la serie que se acaba de pintar.
-function describeChart(svg, points, { primaryLabel = "Valor", secondaryLabel = "", formatValue = formatCompactNumber, minPoints = 1 } = {}) {
+function describeChart(svg, points, { primaryLabel = t("Valor"), secondaryLabel = "", formatValue = formatCompactNumber, minPoints = 1 } = {}) {
   if (!svg?.setAttribute) return;
   if (svg.dataset.baseLabel === undefined) svg.dataset.baseLabel = svg.getAttribute?.("aria-label") || "";
   const base = svg.dataset.baseLabel;
   if (points.length < minPoints) {
-    svg.setAttribute("aria-label", `${base}. Sin datos suficientes en este periodo.`);
+    svg.setAttribute("aria-label", t("{base}. Sin datos suficientes en este periodo.", { base }));
     return;
   }
   const values = points.map((point) => safeNumber(point.value));
   const dated = points[0].date && points.at(-1).date;
-  const span = dated ? ` del ${shortDate(points[0].date)} al ${shortDate(points.at(-1).date)}` : "";
-  const parts = [`${primaryLabel}${span}: último valor ${formatValue(values.at(-1))}, mínimo ${formatValue(Math.min(...values))}, máximo ${formatValue(Math.max(...values))}`];
+  const span = dated ? t(" del {from} al {to}", { from: shortDate(points[0].date), to: shortDate(points.at(-1).date) }) : "";
+  const parts = [t("{label}{span}: último valor {last}, mínimo {min}, máximo {max}", { label: primaryLabel, span, last: formatValue(values.at(-1)), min: formatValue(Math.min(...values)), max: formatValue(Math.max(...values)) })];
   const secondary = points.map((point) => point.secondary).filter((value) => Number.isFinite(value));
-  if (secondaryLabel && secondary.length) parts.push(`${secondaryLabel}: último valor ${formatValue(secondary.at(-1))}`);
+  if (secondaryLabel && secondary.length) parts.push(t("{label}: último valor {last}", { label: secondaryLabel, last: formatValue(secondary.at(-1)) }));
   svg.setAttribute("aria-label", `${base}. ${parts.join(". ")}.`);
 }
 
 function drawLineChart(svg, points, gradientId, options = {}) {
-  const { baselineZero = false, secondaryLabel = "", primaryLabel = "Valor", events = [], formatValue = formatCompactNumber } = options;
+  const { baselineZero = false, secondaryLabel = "", primaryLabel = t("Valor"), events = [], formatValue = formatCompactNumber } = options;
   svg.replaceChildren();
   describeChart(svg, points, { primaryLabel, secondaryLabel, formatValue, minPoints: 2 });
   if (points.length < 2) return false;
@@ -534,7 +536,7 @@ function drawLineChart(svg, points, gradientId, options = {}) {
   const tickValues = [0, 1, 2, 3].map((index) => max - (index / 3) * spread);
   let ticks = tickValues.map((value) => formatValue(value));
   if (new Set(ticks).size < ticks.length) {
-    ticks = tickValues.map((value) => Math.round(value).toLocaleString("es-ES"));
+    ticks = tickValues.map((value) => Math.round(value).toLocaleString(LOCALE));
   }
   for (let index = 0; index < 4; index += 1) {
     const gy = top + (index / 3) * (height - top - bottom);
@@ -606,12 +608,12 @@ function drawLineChart(svg, points, gradientId, options = {}) {
     }
   }
   appendAxisLabels(svg, points, { width, height, left, right, bottom }, x);
-  attachChartTooltip(svg, points, x, { primaryLabel, secondaryLabel: secondaryLabel || "Secundario", formatValue });
+  attachChartTooltip(svg, points, x, { primaryLabel, secondaryLabel: secondaryLabel || t("Secundario"), formatValue });
   return true;
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const axisDate = (value) => parseDay(value).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+const axisDate = (value) => parseDay(value).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
 
 // Etiquetas de eje X: hasta 5, repartidas. Sin esto un grafico temporal no dice
 // cuando paso nada, que era el caso de los dos graficos anteriores. Reciben la
@@ -647,7 +649,7 @@ function appendAxisLabels(svg, points, geometry, x) {
   }
 }
 
-function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = "Valor", formatValue = formatCompactNumber } = {}) {
+function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = t("Valor"), formatValue = formatCompactNumber } = {}) {
   if (!svg) return false;
   svg.replaceChildren();
   describeChart(svg, points, { primaryLabel, secondaryLabel, formatValue });
@@ -704,7 +706,7 @@ function drawBarChart(svg, points, { secondaryLabel = "", primaryLabel = "Valor"
   svg.append(peak);
   const xOf = (index) => left + index * slot + slot / 2;
   appendAxisLabels(svg, points, { width, height, left, right, bottom }, xOf);
-  attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel: secondaryLabel || "Secundario", formatValue });
+  attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel: secondaryLabel || t("Secundario"), formatValue });
   return true;
 }
 
@@ -728,15 +730,15 @@ function fillDailyGaps(rows, makeZero = (date) => ({ date })) {
   return filled;
 }
 
-const DAY_NAMES = { sun: "Dom", mon: "Lun", tue: "Mar", wed: "Mié", thu: "Jue", fri: "Vie", sat: "Sáb" };
+const DAY_NAMES = { sun: t("Dom"), mon: t("Lun"), tue: t("Mar"), wed: t("Mié"), thu: t("Jue"), fri: t("Vie"), sat: t("Sáb") };
 const WEEK_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 // Copy por estado de captura: "en proceso" aplicado a una nota de hace dos años
 // sería mentira, por eso cada estado tiene el suyo.
 const NOTE_STATE_COPY = {
-  pending: "Estadísticas en proceso",
-  throttled: "Aplazado por el límite de peticiones de Substack",
-  unavailable: "Substack no ofrece estadísticas de esta nota",
+  pending: t("Estadísticas en proceso"),
+  throttled: t("Aplazado por el límite de peticiones de Substack"),
+  unavailable: t("Substack no ofrece estadísticas de esta nota"),
   ready: "",
 };
 
@@ -750,7 +752,7 @@ function renderCadenceHeatmap(container, cadence) {
   container.replaceChildren();
   const cells = cadence?.cells || [];
   if (!cells.length || !cadence.datedNotes) {
-    return emptyMessage(container, "No hay notas con fecha para construir el mapa.", "coverage-empty");
+    return emptyMessage(container, t("No hay notas con fecha para construir el mapa."), "coverage-empty");
   }
   const byKey = new Map(cells.map((cell) => [`${cell.day}:${cell.hour}`, cell]));
   const max = Math.max(1, cadence.maxNotes);
@@ -764,7 +766,7 @@ function renderCadenceHeatmap(container, cadence) {
   header.className = "heatmap-row is-header";
   header.setAttribute("aria-hidden", "true");
   const axis = document.createElement("span");
-  axis.textContent = "Hora";
+  axis.textContent = t("Hora");
   header.append(axis);
   for (let hour = 0; hour < 24; hour += 1) {
     const label = document.createElement("small");
@@ -793,12 +795,12 @@ function renderCadenceHeatmap(container, cadence) {
         box.classList.add("is-filled", `is-level-${level}`);
         focusable ||= box;
         const detail = cell.medianInteractions === null
-          ? "sin estadísticas"
-          : `mediana ${decimal(cell.medianInteractions)} interacciones (${cell.scoredNotes}/${cell.notes} con detalle)`;
-        setHint(box, `${DAY_NAMES[day]} a las ${hora}: ${cell.notes} ${cell.notes === 1 ? "nota publicada" : "notas publicadas"}; ${detail}.`);
+          ? t("sin estadísticas")
+          : t("mediana {median} interacciones ({scored}/{total} con detalle)", { median: decimal(cell.medianInteractions), scored: cell.scoredNotes, total: cell.notes });
+        setHint(box, tn(cell.notes, "{day} a las {hour}: {n} nota publicada; {detail}.", "{day} a las {hour}: {n} notas publicadas; {detail}.", { day: DAY_NAMES[day], hour: hora, detail }));
         box.setAttribute("aria-label", box.dataset.hint);
       } else {
-        setHint(box, `${DAY_NAMES[day]} a las ${hora}: no publicaste notas.`);
+        setHint(box, t("{day} a las {hour}: no publicaste notas.", { day: DAY_NAMES[day], hour: hora }));
         box.setAttribute("aria-label", box.dataset.hint);
       }
       row.append(box);
@@ -867,12 +869,12 @@ function renderChart(snapshot, analytics) {
     $("#growth-chart"),
     points.map((point) => ({ date: point.date, value: point.subscribers })),
     "area-gradient",
-    { events: eventos, primaryLabel: "Suscriptores" },
+    { events: eventos, primaryLabel: t("Suscriptores") },
   );
   $("#chart-empty").hidden = drawn;
   const timeline = analytics?.audience?.timeline;
   $("#growth-note").textContent = timeline?.partial
-    ? `Serie parcial: ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} altas; faltan las más antiguas.`
+    ? t("Serie parcial: {counted} de {total} altas; faltan las más antiguas.", { counted: formatCompactNumber(timeline.counted), total: formatCompactNumber(timeline.total) })
     : "";
   $("#growth-note").hidden = !timeline?.partial;
   if (!drawn) return;
@@ -885,10 +887,10 @@ function renderChart(snapshot, analytics) {
   let net, netLabel;
   if (growthDaily.length) {
     net = growthDaily.reduce((sum, point) => sum + safeNumber(point.new) - Math.abs(safeNumber(point.losses)), 0);
-    netLabel = "Crecimiento neto";
+    netLabel = t("Crecimiento neto");
   } else {
     net = last.subscribers - first.subscribers;
-    netLabel = "Variación del histórico";
+    netLabel = t("Variación del histórico");
   }
   $("#net-growth-label").textContent = netLabel;
   $("#net-growth").textContent = `${net >= 0 ? "+" : ""}${formatCompactNumber(net)}`;
@@ -900,7 +902,7 @@ function renderChart(snapshot, analytics) {
     : windowedSubscriberDaily(analytics).map((point) => ({ date: point.date, value: point.signups }));
   const best = [...altasDiarias].sort((a, b) => b.value - a.value)[0];
   $("#best-day").textContent = best && best.value > 0
-    ? parseDay(best.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })
+    ? parseDay(best.date).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })
     : "—";
 }
 
@@ -930,11 +932,11 @@ function renderAudience(snapshot, analytics) {
   const composition = timeline?.composition || {};
   const metrics = snapshot.metrics || {};
   const cards = [
-    ["Suscriptores", audience?.total || timeline?.total || 0, ""],
-    ["Seguidores", audience?.followers?.total || metrics.followers || 0, ""],
-    ["Lectores en la app", metrics.appSubscribers || 0, ""],
-    ["Con email", audience?.emailable || 0, ""],
-    ["De pago", composition.paid || audience?.composition?.paidSubscribers || 0, "paid"],
+    [t("Suscriptores"), audience?.total || timeline?.total || 0, ""],
+    [t("Seguidores"), audience?.followers?.total || metrics.followers || 0, ""],
+    [t("Lectores en la app"), metrics.appSubscribers || 0, ""],
+    [t("Con email"), audience?.emailable || 0, ""],
+    [t("De pago"), composition.paid || audience?.composition?.paidSubscribers || 0, "paid"],
   ];
   $("#audience-totals").replaceChildren(...cards.map(([label, value, sensitive]) => {
     const item = document.createElement("div");
@@ -968,15 +970,15 @@ function renderAudience(snapshot, analytics) {
     $("#followers-chart"),
     followers.map((point) => ({ ...point, secondary: fechasAcumulado.length ? suscriptoresA(point.date) : undefined })),
     "audience-gradient",
-    { primaryLabel: "Seguidores", secondaryLabel: "Suscriptores" },
+    { primaryLabel: t("Seguidores"), secondaryLabel: t("Suscriptores") },
   );
   $("#followers-empty").hidden = followersDrawn;
   const followerDelta = followers.length > 1 ? followers.at(-1).value - followers[0].value : null;
   $("#followers-change").textContent = followerDelta === null
     ? ""
-    : `${followerDelta >= 0 ? "+" : ""}${formatCompactNumber(followerDelta)} en ${rangeLabel()}`;
+    : t("{delta} en {range}", { delta: `${followerDelta >= 0 ? "+" : ""}${formatCompactNumber(followerDelta)}`, range: rangeLabel() });
 
-  const displayNames = typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["es"], { type: "region" }) : null;
+  const displayNames = typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames([LANG], { type: "region" }) : null;
   const locations = (audience?.location?.rows || []).map((row) => {
     let label = row.code;
     try { label = displayNames?.of(row.code) || row.code; } catch { /* conserva el código desconocido */ }
@@ -984,9 +986,9 @@ function renderAudience(snapshot, analytics) {
   });
   const locationCount = audience?.location?.totals?.global?.locations || locations.length;
   $("#audience-location-count").textContent = locationCount
-    ? `${formatCompactNumber(locationCount)} ${locationCount === 1 ? "país" : "países"}`
+    ? tn(locationCount, "{count} país", "{count} países", { count: formatCompactNumber(locationCount) })
     : "";
-  renderRankedList($("#audience-location-list"), locations, "Substack no devolvió ubicaciones de la audiencia. Sincroniza de nuevo; si persiste, revisa Estado de datos.");
+  renderRankedList($("#audience-location-list"), locations, t("Substack no devolvió ubicaciones de la audiencia. Sincroniza de nuevo; si persiste, revisa Estado de datos."));
 
   // Solapamiento: `percentOverlap` viene en fraccion 0-1.
   renderRankedList(
@@ -996,7 +998,7 @@ function renderAudience(snapshot, analytics) {
       value: row.share * 100,
       display: formatPercent(row.share * 100),
     })),
-    "Ninguna otra publicación comparte lectores contigo todavía, o Substack no lo publicó.",
+    t("Ninguna otra publicación comparte lectores contigo todavía, o Substack no lo publicó."),
   );
 
   const freeRetention = analytics?.retention?.free;
@@ -1011,8 +1013,8 @@ function renderAudience(snapshot, analytics) {
     || safeNumber(timeline?.composition?.paid) > 0;
   $("#retention-panel").hidden = !hasRetention && !paymentsEnabled;
   if (hasRetention || paymentsEnabled) {
-    renderRetention($("#retention-list"), freeRetention, "Suscriptores gratuitos");
-    renderRetention($("#paid-retention-list"), paidRetention, "Suscriptores de pago");
+    renderRetention($("#retention-list"), freeRetention, t("Suscriptores gratuitos"));
+    renderRetention($("#paid-retention-list"), paidRetention, t("Suscriptores de pago"));
   }
   renderComposition(analytics);
 }
@@ -1026,13 +1028,13 @@ function renderComposition(analytics) {
   // Sin celda "De pago": la tira de Audiencia de esta misma vista ya la pinta
   // (también sensible), y con ella esta tira pasaba del tope de una fila.
   renderLabelledGrid($("#composition-grid"), [
-    ["Fundadores", composition.founding],
-    ["Regalo", composition.gift],
-    ["Cortesía", composition.comp],
-    ["Prueba gratuita", composition.freeTrial],
-    ["Plan mensual", intervals.get("month") ?? intervals.get("monthly")],
-    ["Plan anual", intervals.get("year") ?? intervals.get("yearly") ?? intervals.get("annual")],
-  ], "Substack no devolvió la composición de la suscripción. Sincroniza de nuevo; si persiste, revisa Estado de datos.");
+    [t("Fundadores"), composition.founding],
+    [t("Regalo"), composition.gift],
+    [t("Cortesía"), composition.comp],
+    [t("Prueba gratuita"), composition.freeTrial],
+    [t("Plan mensual"), intervals.get("month") ?? intervals.get("monthly")],
+    [t("Plan anual"), intervals.get("year") ?? intervals.get("yearly") ?? intervals.get("annual")],
+  ], t("Substack no devolvió la composición de la suscripción. Sincroniza de nuevo; si persiste, revisa Estado de datos."));
 }
 
 // Donut en SVG. Cada segmento es un arco de `circle` con stroke-dasharray, así
@@ -1135,12 +1137,12 @@ function renderRetention(container, retention, label) {
   const cohorts = (retention?.cohorts || []).filter((cohort) => cohort.points?.length);
   if (!rates.length && !cohorts.length) {
     if (retention?.sourceState === "unsupported") {
-      return emptyMessage(container, "Substack devolvió la retención en un formato que PlotStack todavía no reconoce.", "coverage-empty");
+      return emptyMessage(container, t("Substack devolvió la retención en un formato que PlotStack todavía no reconoce."), "coverage-empty");
     }
     if (retention?.sourceState === "partial" || retention?.sourceState === "unavailable") {
-      return emptyMessage(container, "No se pudo completar la retención en esta sincronización. Vuelve a sincronizar para intentarlo de nuevo.", "coverage-empty");
+      return emptyMessage(container, t("No se pudo completar la retención en esta sincronización. Vuelve a sincronizar para intentarlo de nuevo."), "coverage-empty");
     }
-    return emptyMessage(container, "Substack todavía no ha calculado la retención. Puede tardar 30 días desde el primer suscriptor de pago.", "coverage-empty");
+    return emptyMessage(container, t("Substack todavía no ha calculado la retención. Puede tardar 30 días desde el primer suscriptor de pago."), "coverage-empty");
   }
   const heading = document.createElement("p");
   heading.className = "retention-label";
@@ -1150,7 +1152,7 @@ function renderRetention(container, retention, label) {
     const isFraction = isFractionScale(rates.map((row) => row.rate));
     for (const rate of rates) {
       const row = document.createElement("div");
-      const month = document.createElement("span"); month.textContent = `${rate.month} ${rate.month === 1 ? "mes" : "meses"}`;
+      const month = document.createElement("span"); month.textContent = tn(rate.month, "{n} mes", "{n} meses");
       const value = document.createElement("strong"); value.textContent = formatPercent(isFraction ? rate.rate * 100 : rate.rate);
       row.append(month, value);
       container.append(row);
@@ -1160,7 +1162,7 @@ function renderRetention(container, retention, label) {
   if (retention?.sourceState === "partial") {
     const warning = document.createElement("p");
     warning.className = "range-note is-neutral";
-    warning.textContent = "Datos parciales: una de las dos fuentes de retención no respondió.";
+    warning.textContent = t("Datos parciales: una de las dos fuentes de retención no respondió.");
     container.append(warning);
   }
 }
@@ -1181,17 +1183,17 @@ function renderCohorts(container, cohorts) {
 
   const heading = document.createElement("p");
   heading.className = "retention-label";
-  heading.textContent = "Por cohorte de alta";
+  heading.textContent = t("Por cohorte de alta");
   const grid = document.createElement("div");
   grid.className = "cohort-grid";
   grid.style.gridTemplateColumns = `auto repeat(${months.length}, 1fr)`;
 
   const corner = document.createElement("small");
-  corner.textContent = "Alta";
+  corner.textContent = t("Alta");
   grid.append(corner);
   for (const month of months) {
     const label = document.createElement("small");
-    label.textContent = `M${month}`;
+    label.textContent = t("M{month}", { month });
     grid.append(label);
   }
   for (const cohort of withPoints.slice(-12)) {
@@ -1207,10 +1209,10 @@ function renderCohorts(container, cohorts) {
       // Un mes sin medición no es un 0%: queda vacío y lo dice el tooltip.
       if (rate === undefined) {
         cell.classList.add("is-empty");
-        setHint(cell, `${cohort.cohort} · mes ${month} · sin dato`);
+        setHint(cell, t("{cohort} · mes {month} · sin dato", { cohort: cohort.cohort, month }));
       } else {
         cell.style.opacity = String(0.2 + Math.min(1, asPercent(rate) / 100) * 0.8);
-        setHint(cell, `${cohort.cohort} · mes ${month} · ${formatPercent(asPercent(rate))}`);
+        setHint(cell, t("{cohort} · mes {month} · {rate}", { cohort: cohort.cohort, month, rate: formatPercent(asPercent(rate)) }));
       }
       grid.append(cell);
     }
@@ -1239,10 +1241,10 @@ const byRange = (source) => {
 // Un color por canal de adquisición, el mismo en todas las vistas: quien ve
 // Notas en verde en el Resumen la encuentra en verde en Crecimiento.
 const CHANNEL_COLORS = [
-  [/nota/i, "--cat-notes"],
-  [/recomend/i, "--cat-recs"],
+  [/nota|\bnotes?\b/i, "--cat-notes"],
+  [/recomend|recommend/i, "--cat-recs"],
   [/twitter|facebook|linkedin|reddit|instagram|threads|bluesky|social/i, "--cat-social"],
-  [/substack|\bred\b|\bapp\b/i, "--cat-substack"],
+  [/substack|\bred\b|\bnetwork\b|\bapp\b/i, "--cat-substack"],
   [/directo|direct/i, "--cat-direct"],
   [/b[uú]squeda|google|bing|duckduckgo|search/i, "--cat-search"],
   [/email|correo/i, "--cat-email"],
@@ -1262,13 +1264,13 @@ function renderGrowthBrief(snapshot, analytics) {
 
   // El titular lee la tendencia; la cifra y su base ya las da la tarjeta de
   // suscriptores justo debajo. Solo añade lo que no está en pantalla: altas.
-  const altas = gained ? ` y sumó ${formatCompactNumber(gained)} ${gained === 1 ? "alta" : "altas"}` : "";
+  const altas = gained ? tn(gained, " y sumó {count} alta", " y sumó {count} altas", { count: formatCompactNumber(gained) }) : "";
   $("#growth-verdict").textContent = growth === null
-    ? "Aún falta historial para saber si el ritmo mejora."
-    : growth >= GROWTH_AS_MULTIPLE ? `Tu audiencia se ha multiplicado en ${rangeLabel()}${altas}.`
-    : growth > 1 ? `Tu audiencia crece${altas}.`
-    : growth >= 0 ? "Tu audiencia se mantiene estable."
-    : "Tu audiencia retrocede. Revisa Altas y bajas en Cómo creces.";
+    ? t("Aún falta historial para saber si el ritmo mejora.")
+    : growth >= GROWTH_AS_MULTIPLE ? t("Tu audiencia se ha multiplicado en {range}{signups}.", { range: rangeLabel(), signups: altas })
+    : growth > 1 ? t("Tu audiencia crece{signups}.", { signups: altas })
+    : growth >= 0 ? t("Tu audiencia se mantiene estable.")
+    : t("Tu audiencia retrocede. Revisa Altas y bajas en Cómo creces.");
 }
 
 function renderSourcesTable(analytics) {
@@ -1279,18 +1281,18 @@ function renderSourcesTable(analytics) {
   $("#acquisition-visitors").textContent = formatCompactNumber(totals.visitors);
   $("#acquisition-conversion").textContent = totals.visitors
     ? formatPercent((totals.subscribers / totals.visitors) * 100)
-    : "Sin dato";
+    : t("Sin dato");
   const leader = [...sources].sort((a, b) => b.subscribers - a.subscribers || b.visitors - a.visitors)[0];
   // Mismo umbral que el hallazgo del Resumen (PRODUCT.md): con pocas altas o un
   // reparto parejo no se nombra una fuente principal en ningún sitio.
   const leaderShare = leader && totals.subscribers ? leader.subscribers / totals.subscribers : null;
   const hasLeader = Boolean(leader) && leader.subscribers >= LEADER_MIN_SIGNUPS && leaderShare !== null && leaderShare >= LEADER_MIN_SHARE;
   renderFindings($("#acquisition-leader"), hasLeader ? [panelFinding("acquisition-leader",
-    `${sourceLabel(leader.label)} es tu principal puerta de entrada: aporta el ${formatPercent(leaderShare * 100, 0)} de tus altas.`,
-    "Sobre las altas con fuente atribuida", "subs")] : []);
+    t("{source} es tu principal puerta de entrada: aporta el {share} de tus altas.", { source: sourceLabel(leader.label), share: formatPercent(leaderShare * 100, 0) }),
+    t("Sobre las altas con fuente atribuida"), "subs")] : []);
   $("#acquisition-note").textContent = hasLeader ? ""
-    : totals.subscribers ? "Tus altas llegan repartidas o todavía son pocas para señalar una fuente principal."
-    : "Sin altas atribuidas a una fuente en este periodo. Prueba con un rango más amplio.";
+    : totals.subscribers ? t("Tus altas llegan repartidas o todavía son pocas para señalar una fuente principal.")
+    : t("Sin altas atribuidas a una fuente en este periodo. Prueba con un rango más amplio.");
   $("#acquisition-note").hidden = hasLeader;
   // Ya NO es de periodo fijo: el endpoint acepta `from_date`/`to_date` y la
   // sincronizacion pide una ventana por cada opcion del selector. El badge decia
@@ -1299,7 +1301,7 @@ function renderSourcesTable(analytics) {
   // nombre del rango elegido.
   $("#acquisition-period").textContent = isRanged(analytics?.growth?.sources)
     ? rangeLabel()
-    : "Sincroniza para aplicar el rango";
+    : t("Sincroniza para aplicar el rango");
 
   const body = $("#sources-body");
   body.replaceChildren();
@@ -1311,7 +1313,7 @@ function renderSourcesTable(analytics) {
     const cell = document.createElement("td");
     cell.colSpan = 5;
     cell.className = "source-empty";
-    cell.textContent = "Sin fuentes de adquisición en este periodo. Prueba con un rango más amplio.";
+    cell.textContent = t("Sin fuentes de adquisición en este periodo. Prueba con un rango más amplio.");
     row.append(cell);
     body.append(row);
     return;
@@ -1359,7 +1361,7 @@ function sourceRow(source, isChild) {
     spark.append(...points.map((point) => {
       const bar = document.createElement("i");
       bar.style.height = `${Math.max(6, (point.value / max) * 100)}%`;
-      setHint(bar, `${shortDate(point.date)}: ${point.value} altas`);
+      setHint(bar, tn(point.value, "{date}: {n} alta", "{date}: {n} altas", { date: shortDate(point.date) }));
       return bar;
     }));
     trend.append(spark);
@@ -1383,7 +1385,7 @@ function renderRankedList(container, rows, emptyCopy) {
     detail.className = "source-detail";
     const header = document.createElement("div");
     const label = document.createElement("span");
-    label.textContent = entry.muted ? `${entry.label} · muestra escasa` : entry.label;
+    label.textContent = entry.muted ? t("{label} · muestra escasa", { label: entry.label }) : entry.label;
     const number = document.createElement("strong"); number.textContent = entry.display ?? formatCompactNumber(entry.value);
     header.append(label, number);
     const track = document.createElement("div"); track.className = "source-track";
@@ -1488,11 +1490,11 @@ function renderChurn(snapshot, analytics) {
   // Altas medias de un dia con publicacion frente a uno en silencio.
   const ritmo = getPublishingRhythm(snapshot, growthDaily.length ? growthDaily : daily, state.days);
   renderLabelledGrid($("#churn-kpis"), ventana.length ? [
-    ["Altas", totalAltas, "", { keepZero: true }],
-    ["Bajas", totalBajas, "", { keepZero: true }],
-    ["Neto", neto, "", { keepZero: true }],
-    ["Tasa de bajas", tasaBajas, "percent"],
-  ] : [], "Sin movimientos de audiencia en este periodo.");
+    [t("Altas"), totalAltas, "", { keepZero: true }],
+    [t("Bajas"), totalBajas, "", { keepZero: true }],
+    [t("Neto"), neto, "", { keepZero: true }],
+    [t("Tasa de bajas"), tasaBajas, "percent"],
+  ] : [], t("Sin movimientos de audiencia en este periodo."));
   // Las conclusiones del panel son hallazgos bajo el gráfico; lo que declara
   // de dónde salen los datos o que falta muestra va en la nota de fuente.
   const churnFindings = [];
@@ -1501,72 +1503,76 @@ function renderChurn(snapshot, analytics) {
     const canales = [];
     const ventanas = [];
     if (channels.email.pieces) {
-      canales.push(`${formatCompactNumber(channels.email.signups)} a tus envíos`);
-      ventanas.push(`24 h tras cada envío${channels.email.perPiece === null ? "" : ` (${formatCompactNumber(channels.email.perPiece)} por envío)`}`);
+      canales.push(t("{count} a tus envíos", { count: formatCompactNumber(channels.email.signups) }));
+      ventanas.push(channels.email.perPiece === null
+        ? t("24 h tras cada envío")
+        : t("24 h tras cada envío ({count} por envío)", { count: formatCompactNumber(channels.email.perPiece) }));
     }
     if (channels.notes.pieces) {
-      canales.push(`${formatCompactNumber(channels.notes.signups)} a tus notas`);
-      ventanas.push(`acumulado por nota${channels.notes.perPiece === null ? "" : ` (${formatCompactNumber(channels.notes.perPiece)} por nota medida)`}`);
+      canales.push(t("{count} a tus notas", { count: formatCompactNumber(channels.notes.signups) }));
+      ventanas.push(channels.notes.perPiece === null
+        ? t("acumulado por nota")
+        : t("acumulado por nota ({count} por nota medida)", { count: formatCompactNumber(channels.notes.perPiece) }));
     }
     churnFindings.push(panelFinding("churn-channels",
-      `Substack atribuye ${canales.join(" y ")}.`,
-      `Ventanas distintas: ${ventanas.join("; ")}. No suman el total. Notas con estadísticas: ${channels.notes.scoredPieces} de ${channels.notes.pieces}; sin ellas no cuentan como cero`,
+      t("Substack atribuye {channels}.", { channels: canales.join(t(" y ")) }),
+      t("Ventanas distintas: {windows}. No suman el total. Notas con estadísticas: {scored} de {total}; sin ellas no cuentan como cero", { windows: ventanas.join("; "), scored: channels.notes.scoredPieces, total: channels.notes.pieces }),
       "subs"));
   }
   // Con pocos días medidos la media es anécdota: no es un hallazgo, se declara.
   if (ritmo.state === "evidence" && ritmo.lift !== null && ritmo.onPublish !== null && ritmo.onQuiet !== null) {
     churnFindings.push(panelFinding("churn-rhythm",
-      `Un día con envío trae ${decimal(ritmo.lift)}× más altas que uno sin envío: ${decimal(ritmo.onPublish)} frente a ${decimal(ritmo.onQuiet)} de media.`,
-      `${ritmo.publishDays} días con envío frente a ${ritmo.quietDays} sin él`, "subs"));
+      t("Un día con envío trae {lift}× más altas que uno sin envío: {publish} frente a {quiet} de media.", { lift: decimal(ritmo.lift), publish: decimal(ritmo.onPublish), quiet: decimal(ritmo.onQuiet) }),
+      t("{publish} días con envío frente a {quiet} sin él", { publish: ritmo.publishDays, quiet: ritmo.quietDays }), "subs"));
   } else if (ritmo.state !== "nodata" && (ritmo.publishDays || ritmo.quietDays)) {
-    cautelas.push(`Muestra escasa para comparar días con y sin envío: ${ritmo.publishDays} con envío y ${ritmo.quietDays} sin él.`);
+    cautelas.push(t("Muestra escasa para comparar días con y sin envío: {publish} con envío y {quiet} sin él.", { publish: ritmo.publishDays, quiet: ritmo.quietDays }));
   }
   // El único dato de este panel que no sale de la propia publicación.
   const marca = analytics?.growth?.benchmark;
   if (marca?.outcomeCopy && marca.growthRate !== null) {
     // Sin `toLowerCase`: degradaba el nombre propio a "substack".
     churnFindings.push(panelFinding("churn-benchmark",
-      `${marca.outcomeCopy}: un ${formatPercent(marca.growthRate)} de crecimiento en ${marca.periodDays} días.`,
-      "Según la comparación que publica Substack; no se deriva de tus datos", "subs"));
+      t("{outcome}: un {rate} de crecimiento en {days} días.", { outcome: t(marca.outcomeCopy), rate: formatPercent(marca.growthRate), days: marca.periodDays }),
+      t("Según la comparación que publica Substack; no se deriva de tus datos"), "subs"));
   }
   renderFindings($("#churn-findings"), churnFindings);
   // La insignia solo dice de qué tramo son las cifras: altas, bajas y neto ya
   // están en la tira, con sus ceros.
   $("#churn-net").textContent = !ventana.length ? ""
-    : showingLatestAvailable ? `Último tramo disponible · hasta ${shortDate(ventana.at(-1).date)}`
+    : showingLatestAvailable ? t("Último tramo disponible · hasta {date}", { date: shortDate(ventana.at(-1).date) })
     : rangeLabel().replace(/^./, (letra) => letra.toUpperCase());
 
   const serieContinua = fillDailyGaps(ventana, (date) => ({ date, altas: 0, bajas: 0 }));
   const dibujado = drawBarChart(
     $("#churn-chart"),
     serieContinua.map((point) => ({ date: point.date, value: point.altas, secondary: point.bajas })),
-    { primaryLabel: "Altas", secondaryLabel: "Bajas" },
+    { primaryLabel: t("Altas"), secondaryLabel: t("Bajas") },
   );
   $("#churn-empty").hidden = dibujado;
-  const stalePrefix = `${showingLatestAvailable ? "Sin movimientos en el rango actual: se muestra el último tramo con datos. " : ""}${cautelas.map((texto) => `${texto} `).join("")}`;
-  $("#churn-basis").textContent = growthHasSignups
-    ? `${stalePrefix}Fuente: histórico de crecimiento de Substack.`
+  const stalePrefix = `${showingLatestAvailable ? `${t("Sin movimientos en el rango actual: se muestra el último tramo con datos.")} ` : ""}${cautelas.map((texto) => `${texto} `).join("")}`;
+  $("#churn-basis").textContent = stalePrefix + (growthHasSignups
+    ? t("Fuente: histórico de crecimiento de Substack.")
     : growthDaily.length && sourceDaily.length
-    ? `${stalePrefix}Altas de las fuentes de crecimiento; bajas del histórico de Substack.`
+    ? t("Altas de las fuentes de crecimiento; bajas del histórico de Substack.")
     : growthDaily.length && daily.length
-    ? `${stalePrefix}Altas del historial de audiencia; bajas del histórico de Substack.`
+    ? t("Altas del historial de audiencia; bajas del histórico de Substack.")
     : !daily.length && campaignDaily.length
-    ? `${stalePrefix}Solo las primeras 24 h tras cada envío: no son todas las altas y bajas.`
+    ? t("Solo las primeras 24 h tras cada envío: no son todas las altas y bajas.")
     : bajasPorDia.size
-    ? `${stalePrefix}Bajas solo de las 24 h tras cada envío: el histórico general no respondió.`
-    : `${stalePrefix}Substack solo da las bajas de las 24 h tras cada envío: un cero aquí no prueba que nadie se fuera.`;
+    ? t("Bajas solo de las 24 h tras cada envío: el histórico general no respondió.")
+    : t("Substack solo da las bajas de las 24 h tras cada envío: un cero aquí no prueba que nadie se fuera."));
 }
 
 // Visitas: la serie diaria SI es diaria, asi que se recorta por fecha como las
 // demas. Las fuentes de trafico se agregan en servidor y llegan por ventana.
 function renderTraffic(analytics) {
   const daily = withinRange(analytics?.traffic?.daily || [], (point) => point.date).kept;
-  const drawn = drawLineChart($("#traffic-chart"), daily, "rates-gradient", { primaryLabel: "Visitas", baselineZero: true });
+  const drawn = drawLineChart($("#traffic-chart"), daily, "rates-gradient", { primaryLabel: t("Visitas"), baselineZero: true });
   $("#traffic-empty").hidden = drawn;
   const totalVisitas = daily.reduce((sum, point) => sum + safeValue(point.value), 0);
   $("#traffic-total").textContent = daily.length
-    ? `${formatCompactNumber(totalVisitas)} visitas en ${rangeLabel()}`
-    : "Sin visitas";
+    ? t("{count} visitas en {range}", { count: formatCompactNumber(totalVisitas), range: rangeLabel() })
+    : t("Sin visitas");
 
   const fuentes = byRange(analytics?.growth?.visitors);
   const filas = fuentes?.rows || [];
@@ -1575,15 +1581,15 @@ function renderTraffic(analytics) {
   // vuelve tres veces no puede contar como tres oportunidades de alta.
   const conversion = ratio(totales.freeSignups, totales.users);
   renderLabelledGrid($("#traffic-kpis"), [
-    ["Visitantes", totales.users],
+    [t("Visitantes"), totales.users],
     // No es la misma cifra que "Altas por fuente" (Fuentes de adquisición): aquí
     // solo cuentan las altas de visitantes de la web; allí, todas las que
     // Substack atribuye, app y Notas incluidas. Mismo nombre, cifras distintas,
     // era una contradicción a la vista.
-    ["Altas tras una visita", totales.freeSignups],
-    ["Conversión", conversion === null ? null : conversion * 100, "percent"],
-    ["Vistas por visitante", ratio(totales.views, totales.users)],
-  ], "Sin visitas registradas en este periodo. Prueba con un rango más amplio.");
+    [t("Altas tras una visita"), totales.freeSignups],
+    [t("Conversión"), conversion === null ? null : conversion * 100, "percent"],
+    [t("Vistas por visitante"), ratio(totales.views, totales.users)],
+  ], t("Sin visitas registradas en este periodo. Prueba con un rango más amplio."));
 
   const body = $("#visitor-sources-body");
   body.replaceChildren();
@@ -1592,7 +1598,7 @@ function renderTraffic(analytics) {
     const cell = document.createElement("td");
     cell.colSpan = 6;
     cell.className = "source-empty";
-    cell.textContent = "Sin fuentes de tráfico en este periodo. Prueba con un rango más amplio.";
+    cell.textContent = t("Sin fuentes de tráfico en este periodo. Prueba con un rango más amplio.");
     row.append(cell);
     body.append(row);
   } else {
@@ -1616,7 +1622,7 @@ function renderTraffic(analytics) {
           dot.style.background = channelColor(fila.source);
           cell.prepend?.(dot);
         }
-        if (value === "—" && index >= 4) setHint(cell, "Substack no atribuye altas a esta fuente");
+        if (value === "—" && index >= 4) setHint(cell, t("Substack no atribuye altas a esta fuente"));
         row.append(cell);
       });
       body.append(row);
@@ -1625,11 +1631,11 @@ function renderTraffic(analytics) {
   // Concentracion: la cifra que dice si dependes de un solo canal.
   const concentracion = getConcentration(filas, (fila) => fila.views);
   renderFindings($("#traffic-findings"), concentracion.share === null ? [] : [panelFinding("traffic-concentration",
-    `Las ${concentracion.top} fuentes principales concentran el ${formatPercent(concentracion.share, 0)} de tus visitas.`,
-    `Sobre ${concentracion.counted} fuentes medidas`, "views")]);
+    t("Las {top} fuentes principales concentran el {share} de tus visitas.", { top: concentracion.top, share: formatPercent(concentracion.share, 0) }),
+    t("Sobre {count} fuentes medidas", { count: concentracion.counted }), "views")]);
   $("#traffic-note").textContent = concentracion.share === null
-    ? "Sin visitas medidas por fuente en este periodo."
-    : "Este desglose y la serie diaria se miden por separado: no tienen por qué sumar lo mismo. Aquí solo cuentan las altas desde la web; las de app y Notas están en Fuentes de adquisición.";
+    ? t("Sin visitas medidas por fuente en este periodo.")
+    : t("Este desglose y la serie diaria se miden por separado: no tienen por qué sumar lo mismo. Aquí solo cuentan las altas desde la web; las de app y Notas están en Fuentes de adquisición.");
 }
 
 // Efecto de red: `network_attribution` respondia 500 solo porque se llamaba sin
@@ -1643,12 +1649,12 @@ function renderNetwork(analytics) {
     $("#network-bar"),
     $("#network-legend"),
     filas.map((fila, index) => [NETWORK_SEGMENTS[index] || "s7", sourceLabel(fila.label), fila.subscribers]),
-    "Sin reparto de la red de Substack para este periodo. Prueba con un rango más amplio.",
+    t("Sin reparto de la red de Substack para este periodo. Prueba con un rango más amplio."),
   );
-  $("#network-total").textContent = red?.total ? `${formatCompactNumber(red.total)} suscriptores` : "Sin dato";
+  $("#network-total").textContent = red?.total ? t("{count} suscriptores", { count: formatCompactNumber(red.total) }) : t("Sin dato");
   const note = $("#network-note");
   if (drawn && red?.updatedAt) {
-    note.textContent = `Substack actualizó este reparto el ${shortDate(String(red.updatedAt).slice(0, 10))}.`;
+    note.textContent = t("Substack actualizó este reparto el {date}.", { date: shortDate(String(red.updatedAt).slice(0, 10)) });
     note.hidden = false;
   } else note.hidden = true;
 }
@@ -1672,7 +1678,7 @@ const subscriberDailyOf = (analytics) => {
 };
 
 const monthLabel = (month) => parseDay(`${month}-01`)
-  .toLocaleDateString("es-ES", { month: "long", year: "numeric" })
+  .toLocaleDateString(LOCALE, { month: "long", year: "numeric" })
   .replace(/\s+de\s+/g, " ");
 
 const clip = (value, length = 64) => (value.length > length ? `${value.slice(0, length - 1).trimEnd()}…` : value);
@@ -1700,34 +1706,34 @@ function renderRecords(snapshot, analytics) {
   $("#records-period").textContent = rangeLabel();
   const { current, longest } = records.streak;
   $("#records-streak").textContent = current > 0
-    ? `Racha: ${current} ${current === 1 ? "semana" : "semanas"} publicando`
-    : "Sin racha activa esta semana";
+    ? tn(current, "Racha: {n} semana publicando", "Racha: {n} semanas publicando")
+    : t("Sin racha activa esta semana");
   renderRecordCells($("#records-grid"), [
-    ["Mejor semana de altas", records.bestWeek && `${formatCompactNumber(records.bestWeek.signups)} altas`, records.bestWeek && `Semana del ${shortDate(records.bestWeek.weekStart)}`],
-    ["Mejor apertura", records.bestOpen && formatPercent(records.bestOpen.value), records.bestOpen?.title],
-    ["Artículo que más convirtió", records.bestSignups && `${formatCompactNumber(records.bestSignups.value)} altas`, records.bestSignups && `${records.bestSignups.title} · primer día`],
-    ["Nota con más interacciones", records.bestNote && formatCompactNumber(records.bestNote.value), records.bestNote?.body],
-    ["Racha más larga", longest >= 2 && `${longest} semanas`, longest >= 2 && "Publicando al menos una vez por semana"],
-  ], `Aún no hay récords en ${rangeLabel()}. Prueba con un rango más amplio.`);
+    [t("Mejor semana de altas"), records.bestWeek && t("{count} altas", { count: formatCompactNumber(records.bestWeek.signups) }), records.bestWeek && t("Semana del {date}", { date: shortDate(records.bestWeek.weekStart) })],
+    [t("Mejor apertura"), records.bestOpen && formatPercent(records.bestOpen.value), records.bestOpen?.title],
+    [t("Artículo que más convirtió"), records.bestSignups && t("{count} altas", { count: formatCompactNumber(records.bestSignups.value) }), records.bestSignups && t("{title} · primer día", { title: records.bestSignups.title })],
+    [t("Nota con más interacciones"), records.bestNote && formatCompactNumber(records.bestNote.value), records.bestNote && noteBodyLabel(records.bestNote.body)],
+    [t("Racha más larga"), longest >= 2 && t("{n} semanas", { n: longest }), longest >= 2 && t("Publicando al menos una vez por semana")],
+  ], t("Aún no hay récords en {range}. Prueba con un rango más amplio.", { range: rangeLabel() }));
 
   // El hito no depende del rango: es una proyección y declara sus ventanas.
   const projection = getMilestoneProjection({ current: snapshot.metrics.subscribers, growthDaily: analytics?.growth?.subscribers?.free?.daily || [] });
-  $("#milestone-target").textContent = `${formatCompactNumber(projection.target)} suscriptores`;
+  $("#milestone-target").textContent = t("{count} suscriptores", { count: formatCompactNumber(projection.target) });
   $("#milestone-progress").style.width = `${clamp((projection.progress ?? 0) * 100, 2, 100)}%`;
-  const faltan = `Te faltan ${formatCompactNumber(projection.remaining)}.`;
+  const faltan = t("Te faltan {count}.", { count: formatCompactNumber(projection.remaining) });
   const [d30, d90] = projection.estimates.map((row) => row.date);
   $("#milestone-copy").textContent = projection.state === "projected"
-    ? `${faltan} ${[
-      d30 && `Al ritmo de 30 días, hacia el ${shortDate(d30)}`,
-      d90 && `al de 90, hacia el ${shortDate(d90)}`,
-    ].filter(Boolean).join("; ")}. Estimación con altas menos bajas, no una promesa.`
+    ? t("{missing} {estimates}. Estimación con altas menos bajas, no una promesa.", { missing: faltan, estimates: [
+      d30 && t("Al ritmo de 30 días, hacia el {date}", { date: shortDate(d30) }),
+      d90 && t("al de 90, hacia el {date}", { date: shortDate(d90) }),
+    ].filter(Boolean).join("; ") })
     : projection.state === "flat"
-    ? `${faltan} Con el ritmo actual (altas menos bajas) no hay fecha que estimar.`
-    : `${faltan} Para estimar la fecha hace falta el histórico de altas y bajas de Substack.`;
+    ? t("{missing} Con el ritmo actual (altas menos bajas) no hay fecha que estimar.", { missing: faltan })
+    : t("{missing} Para estimar la fecha hace falta el histórico de altas y bajas de Substack.", { missing: faltan });
 }
 
 const RATING_SEGMENTS = [
-  ["r5", "5 de 5", 5], ["r4", "4", 4], ["r3", "3", 3], ["r2", "2", 2], ["r1", "1", 1], ["r0", "Sin actividad", 0],
+  ["r5", t("5 de 5"), 5], ["r4", "4", 4], ["r3", "3", 3], ["r2", "2", 2], ["r1", "1", 1], ["r0", t("Sin actividad"), 0],
 ];
 
 function renderLoyalCore(analytics) {
@@ -1735,8 +1741,8 @@ function renderLoyalCore(analytics) {
   const loyal = getLoyalCore(timeline, analytics?.audience?.loyaltyHistory || [], state.days);
   const badge = $("#loyal-change");
   if (loyal.state === "nodata") {
-    badge.textContent = "Sin dato";
-    emptyMessage($("#loyal-kpis"), "Substack no devolvió la puntuación de actividad. Sincroniza de nuevo; si persiste, revisa Estado de datos.", "coverage-empty");
+    badge.textContent = t("Sin dato");
+    emptyMessage($("#loyal-kpis"), t("Substack no devolvió la puntuación de actividad. Sincroniza de nuevo; si persiste, revisa Estado de datos."), "coverage-empty");
     renderStackedBar($("#loyal-bar"), $("#loyal-legend"), [], "");
     $("#loyal-legend").replaceChildren();
     drawLineChart($("#loyal-chart"), [], "loyal-gradient");
@@ -1746,21 +1752,21 @@ function renderLoyalCore(analytics) {
   }
   // Un delta sin base previa no es +0: se dice que es la primera medición.
   badge.textContent = loyal.change === null
-    ? "Primera medición del periodo"
-    : `${loyal.change > 0 ? "+" : ""}${formatCompactNumber(loyal.change)} desde el ${shortDate(loyal.changeSince)}`;
+    ? t("Primera medición del periodo")
+    : t("{delta} desde el {date}", { delta: `${loyal.change > 0 ? "+" : ""}${formatCompactNumber(loyal.change)}`, date: shortDate(loyal.changeSince) });
   renderLabelledGrid($("#loyal-kpis"), [
-    ["Núcleo fiel (5 de 5)", loyal.core],
-    ["Parte de tu lista", loyal.coreShare, "percent"],
-    ["Muy activos (4 o 5)", loyal.active],
-    ["Parte de tu lista (4 o 5)", loyal.activeShare, "percent"],
-  ], "Todavía nadie tiene la máxima actividad.");
+    [t("Núcleo fiel (5 de 5)"), loyal.core],
+    [t("Parte de tu lista"), loyal.coreShare, "percent"],
+    [t("Muy activos (4 o 5)"), loyal.active],
+    [t("Parte de tu lista (4 o 5)"), loyal.activeShare, "percent"],
+  ], t("Todavía nadie tiene la máxima actividad."));
   renderStackedBar($("#loyal-bar"), $("#loyal-legend"),
     RATING_SEGMENTS.map(([key, label, rating]) => [key, label, loyal.ratings[rating]]), "");
-  const drawn = drawLineChart($("#loyal-chart"), loyal.history.map((point) => ({ date: point.date, value: point.core })), "loyal-gradient", { primaryLabel: "Núcleo fiel", baselineZero: true, formatValue: (value) => formatCompactNumber(Math.round(value)) });
+  const drawn = drawLineChart($("#loyal-chart"), loyal.history.map((point) => ({ date: point.date, value: point.core })), "loyal-gradient", { primaryLabel: t("Núcleo fiel"), baselineZero: true, formatValue: (value) => formatCompactNumber(Math.round(value)) });
   $("#loyal-empty").hidden = drawn;
   const note = $("#loyal-note");
   note.textContent = loyal.partial
-    ? `Sobre ${formatCompactNumber(timeline.counted)} de ${formatCompactNumber(timeline.total)} suscriptores; faltan los más antiguos.`
+    ? t("Sobre {counted} de {total} suscriptores; faltan los más antiguos.", { counted: formatCompactNumber(timeline.counted), total: formatCompactNumber(timeline.total) })
     : "";
   note.hidden = !loyal.partial;
 }
@@ -1773,8 +1779,8 @@ function renderCohortActivity(analytics) {
   const note = $("#cohort-note");
   if (!rows.length) {
     emptyMessage(list, (timeline?.cohorts || []).length
-      ? `No hay suscriptores que se dieran de alta en ${rangeLabel()}. Prueba con un rango más amplio.`
-      : "Substack no devolvió fechas de alta con actividad. Sincroniza de nuevo; si persiste, revisa Estado de datos.", "coverage-empty");
+      ? t("No hay suscriptores que se dieran de alta en {range}. Prueba con un rango más amplio.", { range: rangeLabel() })
+      : t("Substack no devolvió fechas de alta con actividad. Sincroniza de nuevo; si persiste, revisa Estado de datos."), "coverage-empty");
     note.hidden = true;
     return;
   }
@@ -1787,13 +1793,13 @@ function renderCohortActivity(analytics) {
     name.textContent = monthLabel(row.month);
     const count = document.createElement("small");
     const kept = row.stayedShare === null
-      ? `${formatCompactNumber(row.current)} siguen suscritos`
-      : `${formatCompactNumber(row.current)} de ${formatCompactNumber(row.joined)} siguen suscritos (${formatPercent(row.stayedShare, 0)})`;
-    count.textContent = `${kept}${row.scarce ? " · muestra escasa" : ""}`;
+      ? t("{current} siguen suscritos", { current: formatCompactNumber(row.current) })
+      : t("{current} de {joined} siguen suscritos ({share})", { current: formatCompactNumber(row.current), joined: formatCompactNumber(row.joined), share: formatPercent(row.stayedShare, 0) });
+    count.textContent = row.scarce ? t("{label} · muestra escasa", { label: kept }) : kept;
     name.append(count);
     const bar = document.createElement("div");
     bar.className = "engagement-bar cohort-bar";
-    for (const [key, label] of [["alta", "Actividad alta"], ["baja", "Actividad baja"], ["inactiva", "Inactivos"]]) {
+    for (const [key, label] of [["alta", t("Actividad alta")], ["baja", t("Actividad baja")], ["inactiva", t("Inactivos")]]) {
       if (!row[key]) continue;
       const segment = document.createElement("i");
       segment.className = `is-${key}`;
@@ -1806,14 +1812,14 @@ function renderCohortActivity(analytics) {
     const share = document.createElement("strong");
     share.textContent = row.activeShare === null ? "—" : formatPercent(row.activeShare, 0);
     const shareLabel = document.createElement("small");
-    shareLabel.textContent = "leen a menudo";
+    shareLabel.textContent = t("leen a menudo");
     figure.append(share, shareLabel);
     item.append(name, bar, figure);
     return item;
   }));
   note.textContent = [
-    "Substack solo lista a quien sigue suscrito: la barra reparte a los que se quedaron. «Siguen» cruza con las altas de ese mes; si no cuadran, se omite.",
-    partial ? "El mes más antiguo se omite: la lista llegó incompleta." : "",
+    t("Substack solo lista a quien sigue suscrito: la barra reparte a los que se quedaron. «Siguen» cruza con las altas de ese mes; si no cuadran, se omite."),
+    partial ? t("El mes más antiguo se omite: la lista llegó incompleta.") : "",
   ].filter(Boolean).join(" ");
   note.hidden = false;
 }
@@ -1828,7 +1834,7 @@ const POSTAL_WIDTH = 1080;
 // dato de la newsletter. `localStorage` puede fallar (ventana privada, datos
 // bloqueados): entonces se usa la de fábrica y la postal sigue funcionando.
 const POSTAL_KEY = "plotstack.postal";
-const POSTAL_FORMATS = { portrait: { ratio: 5 / 4, copy: "1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X." }, square: { ratio: 1, copy: "1080 × 1080 px, cuadrado." } };
+const POSTAL_FORMATS = { portrait: { ratio: 5 / 4, copy: t("1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X.") }, square: { ratio: 1, copy: t("1080 × 1080 px, cuadrado.") } };
 const POSTAL_THEMES = ["ink", "light", "indigo"];
 const POSTAL_SECTIONS = ["chart", "tiles", "record", "milestone", "author"];
 const POSTAL_DEFAULTS = { format: "portrait", theme: "ink", show: { chart: true, tiles: true, record: true, milestone: true, author: true } };
@@ -1926,7 +1932,7 @@ function renderPostalChart(series) {
   stroke.setAttribute("class", "postal-chart-line");
   stroke.setAttribute("d", line);
   svg.append(area, stroke);
-  svg.setAttribute("aria-label", `Suscriptores: de ${formatCompactNumber(first.value)} el ${shortDate(first.date)} a ${formatCompactNumber(last.value)} el ${shortDate(last.date)}.`);
+  svg.setAttribute("aria-label", t("Suscriptores: de {from} el {fromDate} a {to} el {toDate}.", { from: formatCompactNumber(first.value), fromDate: shortDate(first.date), to: formatCompactNumber(last.value), toDate: shortDate(last.date) }));
   $("#postal-chart-start").textContent = `${formatCompactNumber(first.value)} · ${shortDate(first.date)}`;
   $("#postal-chart-end").textContent = `${formatCompactNumber(last.value)} · ${shortDate(last.date)}`;
 }
@@ -1946,13 +1952,13 @@ function renderPostal(snapshot, analytics) {
   applyPostalConfig();
   const metrics = snapshot.metrics || {};
   const derived = getDerivedMetrics(snapshot, state.days);
-  const period = state.days === ALL_TIME ? "Desde el principio" : `Últimos ${state.days} días`;
-  $("#postal-period").textContent = `${period} · ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}`;
-  $("#postal-name").textContent = snapshot.publication || "Tu newsletter";
+  const period = state.days === ALL_TIME ? t("Desde el principio") : t("Últimos {days} días", { days: state.days });
+  $("#postal-period").textContent = `${period} · ${new Date().toLocaleDateString(LOCALE, { day: "numeric", month: "long", year: "numeric" })}`;
+  $("#postal-name").textContent = snapshot.publication || t("Tu newsletter");
   const publication = state.connection?.publication || {};
   setPostalImage($("#postal-logo"), $("#postal-logo-initial"), publication.logoUrl, snapshot.publication || publication.name);
   setPostalImage($("#postal-avatar"), $("#postal-avatar-initial"), publication.authorPhotoUrl, publication.authorName);
-  $("#postal-author").textContent = publication.authorName ? `Por ${publication.authorName}` : "";
+  $("#postal-author").textContent = publication.authorName ? t("Por {name}", { name: publication.authorName }) : "";
   $(".postal-author").hidden = !publication.authorName;
   $("#postal-subscribers").textContent = formatCompactNumber(metrics.subscribers);
 
@@ -1961,7 +1967,7 @@ function renderPostal(snapshot, analytics) {
   $("#postal-growth").textContent = growth === null
     ? ""
     : growth >= GROWTH_AS_MULTIPLE
-    ? `Multiplicado por ${decimal(metrics.subscribers / derived.comparison.subscribers)} ${versus}`.trim()
+    ? t("Multiplicado por {times} {versus}", { times: decimal(metrics.subscribers / derived.comparison.subscribers), versus }).trim()
     : `${growth > 0 ? "+" : ""}${formatPercent(growth)} ${versus}`.trim();
   $("#postal-growth").hidden = growth === null;
 
@@ -1974,10 +1980,10 @@ function renderPostal(snapshot, analytics) {
   const records = getRecords({ snapshot, subscriberDaily: subscriberDailyOf(analytics).rows, days: state.days });
   const streak = records.streak.current;
   const tiles = [
-    ["subs", "Nuevos lectores", gained > 0 ? `+${formatCompactNumber(gained)}` : null],
-    ["open", "Abren tus correos", openRate === null ? null : formatPercent(openRate, 0)],
-    ["notes", "De tu lista es núcleo fiel", loyal.coreShare === null ? null : formatPercent(loyal.coreShare, 0)],
-    ["click", "Semanas de racha", streak > 0 ? String(streak) : null],
+    ["subs", t("Nuevos lectores"), gained > 0 ? `+${formatCompactNumber(gained)}` : null],
+    ["open", t("Abren tus correos"), openRate === null ? null : formatPercent(openRate, 0)],
+    ["notes", t("De tu lista es núcleo fiel"), loyal.coreShare === null ? null : formatPercent(loyal.coreShare, 0)],
+    ["click", t("Semanas de racha"), streak > 0 ? String(streak) : null],
   ].filter(([, , value]) => value);
   $("#postal-tiles").replaceChildren(...tiles.map(([tone, label, value]) => {
     const tile = document.createElement("div");
@@ -1990,13 +1996,13 @@ function renderPostal(snapshot, analytics) {
 
   const record = $("#postal-record");
   record.textContent = records.bestWeek
-    ? `Mejor semana: ${formatCompactNumber(records.bestWeek.signups)} altas, la del ${shortDate(records.bestWeek.weekStart)}.`
+    ? t("Mejor semana: {count} altas, la del {date}.", { count: formatCompactNumber(records.bestWeek.signups), date: shortDate(records.bestWeek.weekStart) })
     : "";
   record.hidden = !records.bestWeek;
 
   const projection = getMilestoneProjection({ current: metrics.subscribers, growthDaily: analytics?.growth?.subscribers?.free?.daily || [] });
   $("#postal-milestone").hidden = !metrics.subscribers;
-  $("#postal-milestone-target").textContent = `${formatCompactNumber(projection.target)} suscriptores`;
+  $("#postal-milestone-target").textContent = t("{count} suscriptores", { count: formatCompactNumber(projection.target) });
   $("#postal-milestone-progress").style.width = `${clamp((projection.progress ?? 0) * 100, 2, 100)}%`;
 }
 
@@ -2008,13 +2014,13 @@ function renderPaidChurn(analytics) {
   const totalBajas = daily.reduce((sum, point) => sum + Math.abs(safeNumber(point.losses)), 0);
   const neto = totalAltas - totalBajas;
   $("#paid-churn-net").textContent = daily.length
-    ? `${neto >= 0 ? "+" : ""}${formatCompactNumber(neto)} neto · ${formatCompactNumber(totalAltas)} altas − ${formatCompactNumber(totalBajas)} bajas en ${rangeLabel()}`
-    : "Sin movimientos de pago en este periodo.";
+    ? t("{net} neto · {signups} altas − {losses} bajas en {range}", { net: `${neto >= 0 ? "+" : ""}${formatCompactNumber(neto)}`, signups: formatCompactNumber(totalAltas), losses: formatCompactNumber(totalBajas), range: rangeLabel() })
+    : t("Sin movimientos de pago en este periodo.");
   const serie = fillDailyGaps(daily, (date) => ({ date, new: 0, losses: 0 }));
   const drawn = drawBarChart(
     $("#paid-churn-chart"),
     serie.map((point) => ({ date: point.date, value: safeNumber(point.new), secondary: Math.abs(safeNumber(point.losses)) })),
-    { primaryLabel: "Altas de pago", secondaryLabel: "Bajas de pago" },
+    { primaryLabel: t("Altas de pago"), secondaryLabel: t("Bajas de pago") },
   );
   $("#paid-churn-empty").hidden = drawn;
 }
@@ -2024,7 +2030,9 @@ function coverageRow({ label, meta = "", status, statusCopy, title = "" }) {
   const row = document.createElement("div");
   row.className = `coverage-item is-${status}`;
   const name = document.createElement("span");
-  name.textContent = label;
+  // Las etiquetas guardadas en una sincronización en español se traducen aquí
+  // si el navegador cambió de idioma; `t()` deja intacta una ya traducida.
+  name.textContent = t(label);
   const detail = document.createElement("span");
   detail.className = "coverage-records";
   detail.textContent = meta;
@@ -2043,12 +2051,12 @@ function renderCoverage(analytics, snapshot) {
   // Dos marcas de tiempo distintas: el snapshot principal y las fuentes
   // ampliadas. Sin la segunda, decir "Sin sincronizar" contradecía al pie de
   // página, que sí fecha la sincronización principal.
-  const stamp = (value) => new Date(value).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+  const stamp = (value) => new Date(value).toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "short" });
   $("#coverage-synced").textContent = analytics?.syncedAt
-    ? `Última sincronización de fuentes ampliadas: ${stamp(analytics.syncedAt)}`
+    ? t("Última sincronización de fuentes ampliadas: {date}", { date: stamp(analytics.syncedAt) })
     : snapshot?.capturedAt
-    ? `Datos principales sincronizados el ${stamp(snapshot.capturedAt)}. Las fuentes ampliadas se comprobarán en la próxima sincronización.`
-    : "Todavía no has sincronizado.";
+    ? t("Datos principales sincronizados el {date}. Las fuentes ampliadas se comprobarán en la próxima sincronización.", { date: stamp(snapshot.capturedAt) })
+    : t("Todavía no has sincronizado.");
 
   const list = $("#coverage-list");
   list.replaceChildren();
@@ -2061,31 +2069,31 @@ function renderCoverage(analytics, snapshot) {
   if (campaigns.length || summary?.total) {
     const heading = document.createElement("p");
     heading.className = "retention-label";
-    heading.textContent = "Datos principales";
+    heading.textContent = t("Datos principales");
     list.append(heading);
     if (campaigns.length) {
       const conDetalle = campaigns.filter((campaign) => campaign.detailAvailable).length;
       list.append(coverageRow({
-        label: "Detalle por artículo",
-        meta: `${conDetalle}/${campaigns.length} artículos`,
+        label: t("Detalle por artículo"),
+        meta: t("{done}/{total} artículos", { done: conDetalle, total: campaigns.length }),
         status: conDetalle === campaigns.length ? "ready" : "pending",
-        statusCopy: conDetalle === campaigns.length ? "Completo" : "Parcial",
-        title: "Se refrescan las 12 más recientes y las que aún no tienen métricas.",
+        statusCopy: conDetalle === campaigns.length ? t("Completo") : t("Parcial"),
+        title: t("Se refrescan las 12 más recientes y las que aún no tienen métricas."),
       }));
     }
     if (summary?.total) {
       // Los cuatro estados tienen copy distinto porque significan cosas
       // distintas: "aplazada por el límite" no es "Substack no las da".
       const partes = [
-        `${summary.detailAvailable} con datos`,
-        summary.detailPending ? `${summary.detailPending} en proceso` : "",
-        summary.detailUnavailable ? `${summary.detailUnavailable} sin datos` : "",
+        t("{count} con datos", { count: summary.detailAvailable }),
+        summary.detailPending ? t("{count} en proceso", { count: summary.detailPending }) : "",
+        summary.detailUnavailable ? t("{count} sin datos", { count: summary.detailUnavailable }) : "",
       ].filter(Boolean);
       list.append(coverageRow({
-        label: "Estadísticas por nota",
-        meta: `${partes.join(" · ")} de ${summary.total}`,
+        label: t("Estadísticas por nota"),
+        meta: t("{parts} de {total}", { parts: partes.join(" · "), total: summary.total }),
         status: summary.statsThrottled || summary.detailUnavailable ? "pending" : summary.detailAvailable ? "ready" : "unavailable",
-        statusCopy: summary.statsThrottled ? "Aplazado" : summary.detailAvailable === summary.total ? "Completo" : "Parcial",
+        statusCopy: summary.statsThrottled ? t("Aplazado") : summary.detailAvailable === summary.total ? t("Completo") : t("Parcial"),
         title: summary.statsThrottled ? NOTE_STATE_COPY.throttled : "",
       }));
     }
@@ -2098,10 +2106,10 @@ function renderCoverage(analytics, snapshot) {
     const detenida = progressStalled(state.progress);
     const fallida = detenida || state.progress.phase === "error";
     list.append(coverageRow({
-      label: "Sincronización en curso",
-      meta: total > 0 ? `${state.progress.step} ${done}/${total}` : "Preparando datos principales",
+      label: t("Sincronización en curso"),
+      meta: total > 0 ? `${t(state.progress.step)} ${done}/${total}` : t("Preparando datos principales"),
       status: fallida ? "unavailable" : "pending",
-      statusCopy: fallida ? "Interrumpida" : "En marcha",
+      statusCopy: fallida ? t("Interrumpida") : t("En marcha"),
       title: detenida ? PROGRESS_STALLED_COPY : state.progress.error || "",
     }));
   }
@@ -2109,20 +2117,20 @@ function renderCoverage(analytics, snapshot) {
   if (!coverage.length) {
     const empty = document.createElement("p");
     empty.className = "coverage-empty";
-    empty.textContent = "Sincroniza de nuevo para comprobar las fuentes ampliadas.";
+    empty.textContent = t("Sincroniza de nuevo para comprobar las fuentes ampliadas.");
     list.append(empty);
     return;
   }
   const heading = document.createElement("p");
   heading.className = "retention-label";
-  heading.textContent = "Fuentes ampliadas";
+  heading.textContent = t("Fuentes ampliadas");
   list.append(heading);
   coverage.forEach((source) => {
     list.append(coverageRow({
       label: source.label,
-      meta: source.status === "ready" ? `${formatCompactNumber(source.records || 0)} registros` : "",
+      meta: source.status === "ready" ? t("{count} registros", { count: formatCompactNumber(source.records || 0) }) : "",
       status: source.status,
-      statusCopy: source.status === "ready" ? "Disponible" : "No disponible",
+      statusCopy: source.status === "ready" ? t("Disponible") : t("No disponible"),
       title: source.error || "",
     }));
   });
@@ -2137,25 +2145,25 @@ function renderCoverage(analytics, snapshot) {
 // Cabeceras abreviadas como en la tabla de Notas: `short` es lo que se pinta,
 // `label` el nombre completo (en `data-label` y en el título de la abreviatura).
 const POST_COLUMNS = [
-  { key: "title", label: "Artículo", type: "text" },
-  { key: "date", label: "Fecha", short: "Fecha", type: "date", hint: "Fecha de publicación" },
-  { key: "delivered", label: "Entregados", short: "ENT", type: "number", hint: "Correos entregados" },
-  { key: "openRate", label: "Apertura", short: "APE", type: "percent", hint: "Aperturas únicas sobre entregados" },
-  { key: "clickRate", label: "CTR", short: "CTR", type: "percent", hint: "Clics únicos sobre entregados" },
+  { key: "title", label: t("Artículo"), type: "text" },
+  { key: "date", label: t("Fecha"), short: t("Fecha"), type: "date", hint: t("Fecha de publicación") },
+  { key: "delivered", label: t("Entregados"), short: t("ENT"), type: "number", hint: t("Correos entregados") },
+  { key: "openRate", label: t("Apertura"), short: t("APE"), type: "percent", hint: t("Aperturas únicas sobre entregados") },
+  { key: "clickRate", label: "CTR", short: "CTR", type: "percent", hint: t("Clics únicos sobre entregados") },
   // CTOR = clics únicos / aperturas únicas: separa "asunto flojo" (apertura
   // baja) de "contenido flojo" (CTOR bajo). Derivado en memoria, no se persiste.
-  { key: "ctor", label: "CTOR", short: "CTOR", type: "percent", hint: "Clics únicos sobre aperturas únicas" },
-  { key: "engagementRate", label: "Engagement", short: "ENG", type: "percent", hint: "Tasa de interacción que devuelve Substack" },
-  { key: "views", label: "Vistas", short: "VIS", type: "number", hint: "Vistas totales: correo, web y app" },
-  { key: "reactions", label: "Reacciones", short: "REA", type: "number", hint: "Me gusta" },
-  { key: "comments", label: "Comentarios", short: "COM", type: "number", hint: "Comentarios" },
-  { key: "shares", label: "Shares", short: "SHR", type: "number", hint: "Veces compartida" },
-  { key: "signupsWithin1Day", label: "Altas D1", short: "A/D1", type: "number", hint: "Nuevos suscriptores durante el primer día" },
+  { key: "ctor", label: "CTOR", short: "CTOR", type: "percent", hint: t("Clics únicos sobre aperturas únicas") },
+  { key: "engagementRate", label: "Engagement", short: "ENG", type: "percent", hint: t("Tasa de interacción que devuelve Substack") },
+  { key: "views", label: t("Vistas"), short: t("VIS"), type: "number", hint: t("Vistas totales: correo, web y app") },
+  { key: "reactions", label: t("Reacciones"), short: t("REA"), type: "number", hint: t("Me gusta") },
+  { key: "comments", label: t("Comentarios"), short: t("COM"), type: "number", hint: t("Comentarios") },
+  { key: "shares", label: "Shares", short: "SHR", type: "number", hint: t("Veces compartida") },
+  { key: "signupsWithin1Day", label: t("Altas D1"), short: t("A/D1"), type: "number", hint: t("Nuevos suscriptores durante el primer día") },
 ];
 
 // Mismo formato de fecha que la tabla de Notas: cabe en la columna sin partirse.
 const tableDate = (value) => parseDay(value)
-  .toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "2-digit" })
+  .toLocaleDateString(LOCALE, { day: "2-digit", month: "short", year: "2-digit" })
   .replace(/\s+de\s+/g, " ");
 
 const formatCell = (campaign, column) => {
@@ -2224,10 +2232,10 @@ function sortedCampaigns(campaigns) {
 // Apertura ponderada por entregados y umbral de muestra: un corte con menos de
 // MIN_CUT_N envíos se atenúa (nunca se oculta) y lo dice en su etiqueta.
 function renderPostCuts(campaigns) {
-  const dayNames = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  const dayNames = [t("domingo"), t("lunes"), t("martes"), t("miércoles"), t("jueves"), t("viernes"), t("sábado")];
   const cuts = getCampaignCuts(campaigns);
   const cutEntry = (label, row) => ({
-    label: `${label} · ${row.posts} ${row.posts === 1 ? "envío" : "envíos"}`,
+    label: tn(row.posts, "{label} · {n} envío", "{label} · {n} envíos", { label }),
     value: row.openRate ?? 0,
     display: row.openRate === null ? "—" : formatPercent(row.openRate),
     muted: row.scarce,
@@ -2235,14 +2243,14 @@ function renderPostCuts(campaigns) {
   renderRankedList(
     $("#posts-day-list"),
     cuts.byDay.map((row) => cutEntry(dayNames[row.day], row)),
-    "Sin envíos con entregas para cruzar.",
+    t("Sin envíos con entregas para cruzar."),
   );
 
-  const bandLabels = { short: "Corto (≤700)", medium: "Medio (701-1500)", long: "Largo (>1500)" };
+  const bandLabels = { short: t("Corto (≤700)"), medium: t("Medio (701-1500)"), long: t("Largo (>1500)") };
   renderRankedList(
     $("#posts-length-list"),
     cuts.byLength.map((row) => cutEntry(bandLabels[row.band], row)),
-    "Substack no da la longitud de tus artículos.",
+    t("Substack no da la longitud de tus artículos."),
   );
 }
 
@@ -2283,10 +2291,10 @@ function renderCampaigns(snapshot) {
     const cell = document.createElement("td");
     cell.colSpan = POST_COLUMNS.length;
     cell.textContent = search
-      ? "Ningún artículo coincide con la búsqueda."
+      ? t("Ningún artículo coincide con la búsqueda.")
       : snapshot.campaigns.length
-      ? `No publicaste artículos en ${rangeLabel()}. Prueba con un rango más amplio.`
-      : "Todavía no hay artículos sincronizados.";
+      ? t("No publicaste artículos en {range}. Prueba con un rango más amplio.", { range: rangeLabel() })
+      : t("Todavía no hay artículos sincronizados.");
     row.append(cell); body.append(row);
   } else {
     // Mismo resaltado que la tabla de Notas: en cada columna se destacan los
@@ -2319,11 +2327,11 @@ function renderCampaigns(snapshot) {
         const hints = [];
         if (Number.isFinite(raw) && raw > 0 && raw >= (standout[column.key] ?? Infinity)) {
           cell.classList.add("is-standout");
-          hints.push("Valor destacado dentro del periodo seleccionado");
+          hints.push(t("Valor destacado dentro del periodo seleccionado"));
         }
         // La mediana propia sigue siendo la referencia de la apertura, ahora
         // como dato en el hint y no como un segundo código de color.
-        if (column.key === "openRate" && ownMedian !== null && campaign.delivered > 0) hints.push(`Tu mediana: ${formatPercent(ownMedian)}`);
+        if (column.key === "openRate" && ownMedian !== null && campaign.delivered > 0) hints.push(t("Tu mediana: {rate}", { rate: formatPercent(ownMedian) }));
         if (hints.length) setHint(cell, hints.join(" · "));
         row.append(cell);
       });
@@ -2344,12 +2352,12 @@ function renderSections(campaigns) {
   renderRankedList(
     $("#posts-section-list"),
     cortes.filter((row) => row.openRate !== null).map((row) => ({
-      label: `${row.section} · ${row.posts} ${row.posts === 1 ? "envío" : "envíos"}`,
+      label: tn(row.posts, "{label} · {n} envío", "{label} · {n} envíos", { label: row.section }),
       value: row.openRate,
       display: formatPercent(row.openRate),
       muted: row.scarce,
     })),
-    "Ningún artículo enviado tiene sección.",
+    t("Ningún artículo enviado tiene sección."),
   );
 }
 
@@ -2359,13 +2367,13 @@ function renderSections(campaigns) {
 function renderDiscovery(campaigns) {
   const mezcla = getDiscoveryMix(campaigns);
   $("#discovery-median").textContent = mezcla.median === null
-    ? "Sin artículos medidos"
-    : `Tu mediana · ${decimal(mezcla.median, 2)} vistas por entrega`;
+    ? t("Sin artículos medidos")
+    : t("Tu mediana · {ratio} vistas por entrega", { ratio: decimal(mezcla.median, 2) });
   renderLabelledGrid($("#discovery-kpis"), [
-    ["Artículos medidos", mezcla.posts],
-    ["Se leen fuera del correo", mezcla.beyondEmail],
-    ["Dependen del correo", mezcla.emailBound],
-  ], "Ningún artículo tiene vistas y entregas a la vez.");
+    [t("Artículos medidos"), mezcla.posts],
+    [t("Se leen fuera del correo"), mezcla.beyondEmail],
+    [t("Dependen del correo"), mezcla.emailBound],
+  ], t("Ningún artículo tiene vistas y entregas a la vez."));
   renderRankedList(
     $("#discovery-list"),
     mezcla.top.map((row) => ({
@@ -2373,15 +2381,15 @@ function renderDiscovery(campaigns) {
       value: row.ratio,
       display: `${decimal(row.ratio, 2)}×`,
     })),
-    "Sin envíos con vistas medidas.",
+    t("Sin envíos con vistas medidas."),
   );
 }
 
 const QUADRANT_COPY = {
-  winner: { label: "Ganadores", copy: "Asunto y contenido por encima de tu mediana: repite la fórmula." },
-  subject: { label: "Asunto flojo", copy: "Quien abre hace clic, pero pocos abren: el titular no vende lo que el cuerpo cumple." },
-  content: { label: "Contenido flojo", copy: "Se abre bien pero no genera clics: el cuerpo no cumple lo que el asunto promete." },
-  weak: { label: "Flojos", copy: "Por debajo de tu mediana en apertura y en CTOR." },
+  winner: { label: t("Ganadores"), copy: t("Asunto y contenido por encima de tu mediana: repite la fórmula.") },
+  subject: { label: t("Asunto flojo"), copy: t("Quien abre hace clic, pero pocos abren: el titular no vende lo que el cuerpo cumple.") },
+  content: { label: t("Contenido flojo"), copy: t("Se abre bien pero no genera clics: el cuerpo no cumple lo que el asunto promete.") },
+  weak: { label: t("Flojos"), copy: t("Por debajo de tu mediana en apertura y en CTOR.") },
 };
 
 // Cuatro diagnósticos accionables en vez de dos columnas de porcentajes: qué
@@ -2391,10 +2399,10 @@ function renderDiagnosis(campaigns) {
   const grid = $("#diagnosis-grid");
   const badge = $("#diagnosis-medians");
   if (diagnosis.state !== "evidence") {
-    badge.textContent = "Muestra escasa";
-    return emptyMessage(grid, `Hacen falta al menos 4 envíos con aperturas para diagnosticar; hay ${diagnosis.sample}.`, "coverage-empty");
+    badge.textContent = t("Muestra escasa");
+    return emptyMessage(grid, t("Hacen falta al menos 4 envíos con aperturas para diagnosticar; hay {count}.", { count: diagnosis.sample }), "coverage-empty");
   }
-  badge.textContent = `Tus medianas del periodo · ${formatPercent(diagnosis.medianOpenRate)} apertura / ${formatPercent(diagnosis.medianCtor)} CTOR`;
+  badge.textContent = t("Tus medianas del periodo · {open} apertura / {ctor} CTOR", { open: formatPercent(diagnosis.medianOpenRate), ctor: formatPercent(diagnosis.medianCtor) });
   grid.replaceChildren(...["winner", "subject", "content", "weak"].map((key) => {
     const posts = diagnosis.quadrants[key];
     const cell = document.createElement("div");
@@ -2406,7 +2414,7 @@ function renderDiagnosis(campaigns) {
     cell.append(head, copy);
     posts.slice(0, 3).forEach((post) => {
       const item = document.createElement("small");
-      item.textContent = `${post.title} · ${formatPercent(post.openRate)} apertura / ${formatPercent(post.ctor)} CTOR`;
+      item.textContent = t("{title} · {open} apertura / {ctor} CTOR", { title: post.title, open: formatPercent(post.openRate), ctor: formatPercent(post.ctor) });
       cell.append(item);
     });
     return cell;
@@ -2427,14 +2435,14 @@ function renderPostRates(campaigns, ownMedian) {
     .sort((a, b) => a.date.localeCompare(b.date));
   const drawn = drawLineChart($("#posts-rate-chart"), points, "rates-gradient", {
     baselineZero: true,
-    primaryLabel: "Apertura",
+    primaryLabel: t("Apertura"),
     secondaryLabel: "CTR",
     formatValue: (value) => formatPercent(value),
   });
   $("#posts-rate-empty").hidden = drawn;
   $("#posts-rate-median").textContent = ownMedian === null
-    ? "Sin mediana propia"
-    : `Tu mediana histórica · ${formatPercent(ownMedian)}`;
+    ? t("Sin mediana propia")
+    : t("Tu mediana histórica · {rate}", { rate: formatPercent(ownMedian) });
 }
 
 // Altas por cada mil impresiones: conversión de alcance a suscriptor, la
@@ -2466,21 +2474,21 @@ function renderNotesOverview(snapshot) {
 // API ("Profile page", "Unconnected"): iterarlas colaría inglés crudo en una
 // interfaz en español, que es el fallo que la lista blanca de rejillas evitó.
 const NOTE_SURFACE_LABELS = [
-  ["s1", "Feed", "Feed"],
-  ["s2", "Notifications", "Notificaciones"],
-  ["s3", "Profile page", "Perfil"],
-  ["s4", "Permalinks", "Enlaces directos"],
-  ["s5", "Notes", "Pestaña Notas"],
-  ["s6", "Search", "Búsqueda"],
-  ["s7", "Other", "Otros"],
+  ["s1", "Feed", t("Feed")],
+  ["s2", "Notifications", t("Notificaciones")],
+  ["s3", "Profile page", t("Perfil")],
+  ["s4", "Permalinks", t("Enlaces directos")],
+  ["s5", "Notes", t("Pestaña Notas")],
+  ["s6", "Search", t("Búsqueda")],
+  ["s7", "Other", t("Otros")],
 ];
 // El primer segmento lleva el lima (`alta`) y es el que el centro del donut
 // cuenta: con Suscriptores en lima y "47% fuera de tu audiencia" en el centro,
 // la cifra grande no correspondía al arco destacado.
 const NOTE_AUDIENCE_LABELS = [
-  ["alta", "Unconnected", "Fuera de tu audiencia"],
-  ["baja", "Followers", "Seguidores"],
-  ["inactiva", "Subscribers", "Suscriptores"],
+  ["alta", "Unconnected", t("Fuera de tu audiencia")],
+  ["baja", "Followers", t("Seguidores")],
+  ["inactiva", "Subscribers", t("Suscriptores")],
 ];
 
 // Dos cards con un pastel cada una. El centro del segundo lleva la cifra que
@@ -2490,8 +2498,8 @@ function renderNotesReach(analytics) {
   const surfaces = NOTE_SURFACE_LABELS.map(([key, apiKey, label]) => ({ key, label, value: analytics.surfaces?.[apiKey] || 0 }));
   const audience = NOTE_AUDIENCE_LABELS.map(([key, apiKey, label]) => ({ key, label, value: analytics.audience?.[apiKey] || 0 }));
   const cobertura = analytics.ranked.length
-    ? `${analytics.detailedCount} de ${analytics.ranked.length} notas`
-    : "Sin notas";
+    ? t("{scored} de {total} notas", { scored: analytics.detailedCount, total: analytics.ranked.length })
+    : t("Sin notas");
   $("#notes-surfaces-coverage").textContent = cobertura;
   $("#notes-audience-coverage").textContent = cobertura;
 
@@ -2507,7 +2515,7 @@ function renderNotesReach(analytics) {
     surfacesCenter.append(big, label);
   } else {
     surfacesCenter.replaceChildren();
-    emptyMessage($("#notes-surfaces-legend"), "Ninguna nota del periodo tiene desglose de superficies.", "coverage-empty");
+    emptyMessage($("#notes-surfaces-legend"), t("Ninguna nota del periodo tiene desglose de superficies."), "coverage-empty");
   }
 
   const audienceDrawn = drawDonut($("#notes-audience-donut"), audience);
@@ -2518,32 +2526,42 @@ function renderNotesReach(analytics) {
     audienceCenter.replaceChildren();
     const big = document.createElement("strong");
     big.textContent = burbuja.share === null ? "—" : formatPercent(burbuja.share, 0);
-    const label = document.createElement("span"); label.textContent = "fuera de tu audiencia";
+    const label = document.createElement("span"); label.textContent = t("fuera de tu audiencia");
     audienceCenter.append(big, label);
   } else {
     audienceCenter.replaceChildren();
-    emptyMessage($("#notes-audience-legend"), "Ninguna nota del periodo tiene desglose de audiencia.", "coverage-empty");
+    emptyMessage($("#notes-audience-legend"), t("Ninguna nota del periodo tiene desglose de audiencia."), "coverage-empty");
   }
 }
 
 function renderCadenceTable(content) {
   renderCadenceHeatmap($("#cadence-heatmap"), content?.cadence);
   const busiest = content?.cadence?.busiest;
-  const DAY_PLURALS = { sun: "domingos", mon: "lunes", tue: "martes", wed: "miércoles", thu: "jueves", fri: "viernes", sat: "sábados" };
+  // Frase entera por día: en inglés el plural del día va sin artículo
+  // ("on Tuesdays"), así que no se compone con un fragmento traducido.
+  const BUSIEST_COPY = {
+    sun: (hour) => t("Publicas más los domingos a las {hour}.", { hour }),
+    mon: (hour) => t("Publicas más los lunes a las {hour}.", { hour }),
+    tue: (hour) => t("Publicas más los martes a las {hour}.", { hour }),
+    wed: (hour) => t("Publicas más los miércoles a las {hour}.", { hour }),
+    thu: (hour) => t("Publicas más los jueves a las {hour}.", { hour }),
+    fri: (hour) => t("Publicas más los viernes a las {hour}.", { hour }),
+    sat: (hour) => t("Publicas más los sábados a las {hour}.", { hour }),
+  };
   const fechadas = (content?.cadence?.cells || []).reduce((sum, cell) => sum + safeNumber(cell.notes), 0);
   // La insignia dice sobre cuántas notas se sostiene el mapa; la conclusión es
   // un hallazgo bajo el mapa.
-  $("#cadence-summary").textContent = fechadas ? `${formatCompactNumber(fechadas)} ${fechadas === 1 ? "nota fechada" : "notas fechadas"}` : "Sin notas fechadas";
+  $("#cadence-summary").textContent = fechadas ? tn(fechadas, "{count} nota fechada", "{count} notas fechadas", { count: formatCompactNumber(fechadas) }) : t("Sin notas fechadas");
   renderFindings($("#cadence-findings"), busiest ? [panelFinding("cadence-busiest",
-    `Publicas más los ${DAY_PLURALS[busiest.day]} a las ${String(busiest.hour).padStart(2, "0")}:00.`,
-    `${busiest.notes} ${busiest.notes === 1 ? "nota" : "notas"} en esa franja`, "notes")] : []);
+    BUSIEST_COPY[busiest.day](`${String(busiest.hour).padStart(2, "0")}:00`),
+    tn(busiest.notes, "{n} nota en esa franja", "{n} notas en esa franja"), "notes")] : []);
   const body = $("#cadence-table-body");
   body.replaceChildren();
   const weeks = (content?.timeline?.weeks || []).slice(-12).reverse();
   if (!weeks.length) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 4; cell.textContent = "Sin semanas con notas fechadas.";
+    cell.colSpan = 4; cell.textContent = t("Sin semanas con notas fechadas.");
     row.append(cell); body.append(row); return;
   }
   const max = Math.max(1, ...weeks.map((week) => week.notes));
@@ -2551,9 +2569,9 @@ function renderCadenceTable(content) {
     const row = document.createElement("tr");
     const average = week.scoredNotes ? week.interactions / week.scoredNotes : 0;
     const measured = week.scoredNotes
-      ? `${formatCompactNumber(week.interactions)} en ${week.scoredNotes} ${week.scoredNotes === 1 ? "nota" : "notas"}`
-      : "Sin datos todavía";
-    const values = [shortDate(week.weekStart), `${week.notes} ${week.notes === 1 ? "nota" : "notas"}`, measured, week.scoredNotes ? decimal(average) : "—"];
+      ? tn(week.scoredNotes, "{count} en {n} nota", "{count} en {n} notas", { count: formatCompactNumber(week.interactions) })
+      : t("Sin datos todavía");
+    const values = [shortDate(week.weekStart), tn(week.notes, "{n} nota", "{n} notas"), measured, week.scoredNotes ? decimal(average) : "—"];
     values.forEach((value, index) => {
       const cell = document.createElement("td");
       if (index === 1) {
@@ -2578,12 +2596,12 @@ function renderAttribution(content) {
   const drawn = drawBarChart(
     $("#attribution-chart"),
     serie.map((point) => ({ date: point.date, value: point.freeSubscribers })),
-    { primaryLabel: "Altas atribuidas" },
+    { primaryLabel: t("Altas atribuidas") },
   );
   $("#attribution-empty").hidden = drawn;
   $("#attribution-coverage").textContent = attribution && attribution.totalNotes
-    ? `${attribution.scoredNotes} de ${attribution.totalNotes} notas con estadísticas`
-    : "Sin notas";
+    ? t("{scored} de {total} notas con estadísticas", { scored: attribution.scoredNotes, total: attribution.totalNotes })
+    : t("Sin notas");
 
 }
 
@@ -2595,7 +2613,7 @@ function renderNotesPager(total, totalPages) {
   pager.hidden = totalPages <= 1;
   const from = total ? state.notesPage * NOTES_PAGE_SIZE + 1 : 0;
   const to = Math.min(total, (state.notesPage + 1) * NOTES_PAGE_SIZE);
-  $("#notes-pager-status").textContent = total ? `${from}–${to} de ${total} notas` : "";
+  $("#notes-pager-status").textContent = total ? t("{from}–{to} de {total} notas", { from, to, total }) : "";
   $("#notes-pager-prev").disabled = state.notesPage <= 0;
   $("#notes-pager-next").disabled = state.notesPage >= totalPages - 1;
 }
@@ -2603,13 +2621,13 @@ function renderNotesPager(total, totalPages) {
 function renderNotesTable(snapshot) {
   const ranged = withinRange(snapshot.notes, (note) => note.date);
   const analytics = getNotesAnalytics({ notes: ranged.kept });
-  const search = state.notesSearch.trim().toLocaleLowerCase("es");
+  const search = state.notesSearch.trim().toLocaleLowerCase(LOCALE);
   const filter = state.notesFilter;
   $("#notes-insight-filter").hidden = !filter;
-  if (filter) $("#notes-insight-filter-label").textContent = `Mostrando ${filter.label}`;
+  if (filter) $("#notes-insight-filter-label").textContent = t("Mostrando {label}", { label: filter.label });
   const notes = analytics.ranked
     .filter((note) => !filter || filter.ids.has(note.id))
-    .filter((note) => !search || String(note.body || "").toLocaleLowerCase("es").includes(search));
+    .filter((note) => !search || String(note.body || "").toLocaleLowerCase(LOCALE).includes(search));
   // Órdenes con valores nulos al final: una nota sin detalle no puede competir
   // en conversión ni en altas como si tuviera un 0 medido.
   const dateDesc = (a, b) => parseDay(b.date || 0) - parseDay(a.date || 0);
@@ -2648,7 +2666,7 @@ function renderNotesTable(snapshot) {
   body.replaceChildren();
   if (!notes.length) {
     const row = document.createElement("tr"); const cell = document.createElement("td");
-    cell.colSpan = 11; cell.textContent = search ? "Ninguna nota coincide con la búsqueda." : `No publicaste notas en ${rangeLabel()}. Las altas atribuidas pueden venir de notas anteriores: prueba con un rango más amplio.`;
+    cell.colSpan = 11; cell.textContent = search ? t("Ninguna nota coincide con la búsqueda.") : t("No publicaste notas en {range}. Las altas atribuidas pueden venir de notas anteriores: prueba con un rango más amplio.", { range: rangeLabel() });
     row.append(cell); body.append(row);
     renderNotesPager(0, 0);
     return;
@@ -2663,7 +2681,7 @@ function renderNotesTable(snapshot) {
     const row = document.createElement("tr");
     const title = document.createElement("td");
     const titleNode = note.url ? document.createElement("a") : document.createElement("span");
-    titleNode.textContent = note.body || "Nota sin texto";
+    titleNode.textContent = noteBodyLabel(note.body);
     if (note.url) { titleNode.href = note.url; titleNode.target = "_blank"; titleNode.rel = "noreferrer"; }
     title.append(titleNode); row.append(title);
     const interactions = note.analytics.interactions;
@@ -2676,8 +2694,8 @@ function renderNotesTable(snapshot) {
     const engagementRatio = detailed && impressions > 0 ? (interactions.total / impressions) * 100 : null;
     const conversion = noteConversion(note);
     const noteDate = note.date
-      ? parseDay(note.date).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "2-digit" }).replace(/\s+de\s+/g, " ")
-      : "Sin fecha";
+      ? parseDay(note.date).toLocaleDateString(LOCALE, { day: "2-digit", month: "short", year: "2-digit" }).replace(/\s+de\s+/g, " ")
+      : t("Sin fecha");
     [
       { value: noteDate, raw: null, threshold: Infinity, className: "note-table-date" },
       { value: formatCompactNumber(interactions.likes), raw: interactions.likes, threshold: standout.likes },
@@ -2694,7 +2712,7 @@ function renderNotesTable(snapshot) {
       if (className) cell.className = className;
       if (Number.isFinite(raw) && raw > 0 && raw >= threshold) {
         cell.classList.add("is-standout");
-        setHint(cell, "Valor destacado dentro del periodo seleccionado");
+        setHint(cell, t("Valor destacado dentro del periodo seleccionado"));
       }
       if (value === "—" && !detailed) setHint(cell, stateCopy);
       row.append(cell);
@@ -2709,7 +2727,7 @@ function renderNotesTable(snapshot) {
       subscribers.append(free);
       if (results.freeSubscribers > 0 && results.freeSubscribers >= standout.subscribers) {
         subscribers.classList.add("is-standout");
-        setHint(subscribers, "Valor destacado dentro del periodo seleccionado");
+        setHint(subscribers, t("Valor destacado dentro del periodo seleccionado"));
       }
       if (state.sensitive.paid && results.paidSubscribers) {
         const paid = document.createElement("span");
@@ -2769,9 +2787,9 @@ function renderDashboard() {
   // El análisis de contenido lo calcula solo la vista Notas, con su rango.
   // Calcularlo aquí para todas las vistas era trabajo doble sin consumidor.
   $("#source-name").textContent = snapshot.publication;
-  $("#topbar-publication").textContent = snapshot.publication || "Tu newsletter";
+  $("#topbar-publication").textContent = snapshot.publication || t("Tu newsletter");
   const version = chrome.runtime.getManifest?.().version;
-  $("#last-updated").textContent = `${version ? `PlotStack v${version} · ` : ""}Sincronizado ${new Date(snapshot.capturedAt).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" })}`;
+  $("#last-updated").textContent = `${version ? `PlotStack v${version} · ` : ""}${t("Sincronizado {date}", { date: new Date(snapshot.capturedAt).toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "short" }) })}`;
   (VIEW_RENDERERS[state.view] || VIEW_RENDERERS.resumen)(snapshot);
   applyPrivacy();
 }
@@ -2786,10 +2804,10 @@ function renderDashboard() {
 // navegación está delegada en el documento.
 // El texto llega escrito desde `insights.js`; aquí solo se compone el DOM.
 // Los mismos nombres que la barra lateral: "Ver en Artículos" lleva a Artículos.
-const INSIGHT_GROUP_LABELS = { audiencia: "Audiencia", crecimiento: "Cómo creces", notas: "Notas", publicaciones: "Artículos" };
+const INSIGHT_GROUP_LABELS = { audiencia: t("Audiencia"), crecimiento: t("Cómo creces"), notas: t("Notas"), publicaciones: t("Artículos") };
 const dayMonth = (value) => {
   const date = parseDay(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "";
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) : "";
 };
 
 // Cada hallazgo lleva el tono de su métrica (Un color, un significado): notas
@@ -2811,7 +2829,7 @@ function findingLink(insight) {
   // Desde su propia vista el enlace no cambia de vista: lleva al panel.
   const here = insight.target.view === state.view;
   const text = document.createElement("span");
-  text.textContent = here ? "Ver detalle" : `Ver en ${INSIGHT_GROUP_LABELS[insight.target.view] || "detalle"}`;
+  text.textContent = here ? t("Ver detalle") : t("Ver en {view}", { view: INSIGHT_GROUP_LABELS[insight.target.view] || t("detalle") });
   const icon = document.createElementNS(SVG_NS, "svg");
   icon.setAttribute("aria-hidden", "true");
   const use = document.createElementNS(SVG_NS, "use");
@@ -2849,7 +2867,9 @@ function drawFindingStrip(strip) {
   });
   const highlighted = strip.points.filter((point) => point.highlight).length;
   box.setAttribute("role", "img");
-  box.setAttribute("aria-label", `${strip.points.length} piezas según ${strip.unit}; ${highlighted} resaltadas${strip.band ? `; lo típico va de ${decimal(strip.band[0])} a ${decimal(strip.band[1])}` : ""}.`);
+  box.setAttribute("aria-label", strip.band
+    ? t("{count} piezas según {unit}; {highlighted} resaltadas; lo típico va de {from} a {to}.", { count: strip.points.length, unit: strip.unit, highlighted, from: decimal(strip.band[0]), to: decimal(strip.band[1]) })
+    : t("{count} piezas según {unit}; {highlighted} resaltadas.", { count: strip.points.length, unit: strip.unit, highlighted }));
   return box;
 }
 
@@ -2879,7 +2899,7 @@ function renderFinding(insight) {
     figure.append(drawFindingStrip(insight.strip));
     if (insight.strip.band) {
       const caption = document.createElement("figcaption");
-      caption.textContent = "Franja gris: la mitad de tus piezas recientes.";
+      caption.textContent = t("Franja gris: la mitad de tus piezas recientes.");
       figure.append(caption);
     }
     body.append(figure);
@@ -2927,7 +2947,7 @@ const panelFinding = (id, text, sample, series) => ({ id, text, sample, series, 
 function renderInsights(snapshot, analytics) {
   const result = getInsights({ snapshot, analytics, days: state.days, timeZoneOffsetMinutes: timezoneOffset() });
   state.insightTargets = new Map();
-  $("#insights-period").textContent = state.days === ALL_TIME ? "Todo el histórico" : `Últimos ${state.days} días`;
+  $("#insights-period").textContent = state.days === ALL_TIME ? t("Todo el histórico") : t("Últimos {days} días", { days: state.days });
 
   const groups = $("#insights-groups");
   groups.replaceChildren();
@@ -2942,7 +2962,7 @@ function renderInsights(snapshot, analytics) {
     section.append(heading, list);
     groups.append(section);
   });
-  if (!result.total) emptyMessage(groups, `Nada destaca todavía en ${rangeLabel()}. Prueba con un rango más amplio.`, "coverage-empty");
+  if (!result.total) emptyMessage(groups, t("Nada destaca todavía en {range}. Prueba con un rango más amplio.", { range: rangeLabel() }), "coverage-empty");
 
   // El silencio también es un resultado: se dice qué se evaluó y qué faltó.
   const silent = $("#insights-silent");
@@ -2960,7 +2980,7 @@ function navigateToInsight(id) {
   const target = state.insightTargets.get(id);
   if (!target) return;
   if (target.noteIds?.length) {
-    state.notesFilter = { ids: new Set(target.noteIds), label: target.label || "las notas del hallazgo" };
+    state.notesFilter = { ids: new Set(target.noteIds), label: target.label || t("las notas del hallazgo") };
     state.notesSearch = "";
     $("#notes-search").value = "";
     state.notesPage = 0;
@@ -3009,14 +3029,14 @@ function cancelCardCapture(announce = false) {
   if (!state.captureCardDestination) return;
   state.captureCardDestination = null;
   document.documentElement.classList.remove("is-selecting-capture-card");
-  if (announce) showToast("Selección de tarjeta cancelada.");
+  if (announce) showToast(t("Selección de tarjeta cancelada."));
 }
 
 export function beginCardCapture(destination) {
   state.captureCardDestination = destination;
   closeCaptureMenu();
   document.documentElement.classList.add("is-selecting-capture-card");
-  showToast("Elige una tarjeta. Pulsa Escape para cancelar.");
+  showToast(t("Elige una tarjeta. Pulsa Escape para cancelar."));
 }
 
 export async function runCapture({ target, destination, label = "", outputWidth, layoutWidth }) {
@@ -3035,10 +3055,10 @@ export async function runCapture({ target, destination, label = "", outputWidth,
     if (destination === "copy") await copyPngToClipboard(blob);
     else await downloadPng(blob, filename);
     showToast(destination === "copy"
-      ? "Captura copiada al portapapeles sin datos sensibles."
-      : "Captura guardada sin datos sensibles.");
+      ? t("Captura copiada al portapapeles sin datos sensibles.")
+      : t("Captura guardada sin datos sensibles."));
   } catch (error) {
-    showToast(error.message || "No se pudo completar la captura.");
+    showToast(error.message || t("No se pudo completar la captura."));
   } finally {
     state.capturing = false;
     button.disabled = false;
@@ -3060,9 +3080,9 @@ async function sync() {
     state.connection = response.connection;
     state.analytics = response.analytics || null;
     renderDashboard();
-    if (!response.detailPending) showToast("Datos actualizados desde Substack.");
+    if (!response.detailPending) showToast(t("Datos actualizados desde Substack."));
   } catch (error) {
-    showToast(error.message || "No se pudo sincronizar.");
+    showToast(error.message || t("No se pudo sincronizar."));
     button.disabled = false;
     button.classList.remove("is-loading");
     return;
@@ -3100,7 +3120,7 @@ function progressStalled(progress) {
   return Date.now() - beat > PROGRESS_STALE_MS;
 }
 
-const PROGRESS_STALLED_COPY = "La sincronización se interrumpió. Vuelve a sincronizar.";
+const PROGRESS_STALLED_COPY = t("La sincronización se interrumpió. Vuelve a sincronizar.");
 
 // Estado visible de la sincronización. Sin esto, una primera carga con cientos
 // de notas dejaba el icono girando sin decir en qué iba ni cuánto quedaba.
@@ -3147,8 +3167,8 @@ function onStorageChanged(changes, area) {
     const anterior = state.progress?.phase;
     state.progress = changes[PROGRESS_KEY].newValue || null;
     renderProgress();
-    if (anterior === "detail" && state.progress?.phase === "done") showToast("Datos actualizados desde Substack.");
-    if (state.progress?.phase === "error" && anterior) showToast(state.progress.error || "La sincronización no terminó.");
+    if (anterior === "detail" && state.progress?.phase === "done") showToast(t("Datos actualizados desde Substack."));
+    if (state.progress?.phase === "error" && anterior) showToast(state.progress.error || t("La sincronización no terminó."));
   }
   if (repintar && state.snapshot) renderDashboard();
 }
@@ -3167,17 +3187,17 @@ function downloadCsv(rows, filename) {
 // publicaciones en el resto.
 function exportCsv() {
   if (state.view === "notas") return exportNotesCsv();
-  if (!state.snapshot?.campaigns.length) return showToast("No hay artículos para exportar.");
+  if (!state.snapshot?.campaigns.length) return showToast(t("No hay artículos para exportar."));
   // Mismas columnas que la tabla mas las que tienen dato aunque no se muestren.
   // Fuera downloads/video/estimatedValue/subscribes: siempre cero en la API.
   const CSV_COLUMNS = [
-    ["Artículo", "title"], ["Slug", "slug"], ["Fecha", "date"], ["Tipo", "type"],
-    ["Enviados", "sent"], ["Entregados", "delivered"], ["Aperturas", "opens"],
-    ["Abrieron", "opened"], ["Open rate", "openRate"], ["Clics", "clicks"],
+    [t("Artículo"), "title"], ["Slug", "slug"], [t("Fecha"), "date"], [t("Tipo"), "type"],
+    [t("Enviados"), "sent"], [t("Entregados"), "delivered"], [t("Aperturas"), "opens"],
+    [t("Abrieron"), "opened"], ["Open rate", "openRate"], [t("Clics"), "clicks"],
     ["Clickers", "clicked"], ["CTR", "clickRate"], ["CTOR", "ctor"],
     ["Engagement", "engagementRate"],
-    ["Vistas", "views"], ["Reacciones", "reactions"], ["Comentarios", "comments"],
-    ["Shares", "shares"], ["Altas", "signups"], ["Altas D1", "signupsWithin1Day"],
+    [t("Vistas"), "views"], [t("Reacciones"), "reactions"], [t("Comentarios"), "comments"],
+    ["Shares", "shares"], [t("Altas"), "signups"], [t("Altas D1"), "signupsWithin1Day"],
   ];
   const campaigns = withCtor(state.snapshot.campaigns);
   const rows = [CSV_COLUMNS.map(([label]) => label), ...campaigns.map((item) => CSV_COLUMNS.map(([, key]) => item[key]))];
@@ -3187,8 +3207,8 @@ function exportCsv() {
 // Ausencia = celda vacía, nunca un 0: una nota sin detalle no midió nada.
 function exportNotesCsv() {
   const notes = state.snapshot.notes;
-  if (!notes.length) return showToast("No hay notas para exportar.");
-  const header = ["Nota", "Fecha", "Likes", "Comentarios", "Restacks", "Interacciones", "Impresiones", "Ratio interacción (%)", "Altas gratuitas", "Estado detalle"];
+  if (!notes.length) return showToast(t("No hay notas para exportar."));
+  const header = [t("Nota"), t("Fecha"), "Likes", t("Comentarios"), "Restacks", t("Interacciones"), t("Impresiones"), t("Ratio interacción (%)"), t("Altas gratuitas"), t("Estado detalle")];
   const rows = [header, ...notes.map((note) => {
     const detailed = Boolean(note.stats?.available);
     const interactions = detailed
@@ -3199,7 +3219,7 @@ function exportNotesCsv() {
       ? Math.round((note.stats.interactions.total / note.stats.reach.impressions) * 10000) / 100
       : "";
     return [
-      note.body,
+      noteBodyLabel(note.body),
       note.date ? String(note.date).slice(0, 10) : "",
       detailed ? note.stats.interactions.likes : note.reactions,
       detailed ? note.stats.interactions.replies : note.replies,
@@ -3215,7 +3235,7 @@ function exportNotesCsv() {
 }
 
 async function disconnect() {
-  if (!confirm("¿Desconectar esta publicación y borrar sus métricas guardadas en Chrome?")) return;
+  if (!confirm(t("¿Desconectar esta publicación y borrar sus métricas guardadas en Chrome?"))) return;
   await sendMessage("PLOTSTACK_DISCONNECT");
   state.snapshot = null;
   state.connection = null;
@@ -3246,7 +3266,7 @@ function bindEvents() {
   $("#login-button").addEventListener("click", async () => {
     await sendMessage("PLOTSTACK_OPEN_LOGIN");
     $("#connect-button").hidden = false;
-    setConnectionStatus("Inicia sesión en la pestaña nueva. Al volver, pulsa Volver a detectar.");
+    setConnectionStatus(t("Inicia sesión en la pestaña nueva. Al volver, pulsa Volver a detectar."));
   });
   $("#sync-button").addEventListener("click", sync);
   $("#disconnect-button").addEventListener("click", disconnect);
@@ -3350,6 +3370,9 @@ function bindEvents() {
 }
 
 async function initialize() {
+  // Antes de cualquier render y de `initializeHints`, que convierte los `title`
+  // del HTML en hints: tienen que llegar ya traducidos.
+  translateDocument();
   const manifestVersion = chrome.runtime.getManifest?.().version;
   if (manifestVersion) $("#app-version").textContent = `v${manifestVersion}`;
   state.sensitive = readSensitivePreferences(localStorage);

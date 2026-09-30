@@ -1,3 +1,5 @@
+import { t, LANG } from "../src/shared/i18n.js";
+
 const XHTML_NS = "http://www.w3.org/1999/xhtml";
 
 // Una imagen SVG no carga recursos externos: sin incrustarla, la fuente propia
@@ -64,18 +66,18 @@ function loadSvg(svg) {
     // Un blob: con <foreignObject> marca el canvas como no exportable en
     // Chrome. Una data URL autocontenida conserva el origen limpio.
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Chrome no pudo dibujar la vista para la captura."));
+    image.onerror = () => reject(new Error(t("Chrome no pudo dibujar la vista para la captura.")));
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
 }
 
 const canvasBlob = (canvas) => new Promise((resolve, reject) => canvas.toBlob(
-  (blob) => blob ? resolve(blob) : reject(new Error("No se pudo generar el archivo PNG.")),
+  (blob) => blob ? resolve(blob) : reject(new Error(t("No se pudo generar el archivo PNG."))),
   "image/png",
 ));
 
 export function createPrivateCaptureClone(element) {
-  if (!element) throw new Error("No se encontró el contenido para capturar.");
+  if (!element) throw new Error(t("No se encontró el contenido para capturar."));
   const clone = element.cloneNode(true);
   if (clone.matches("[data-sensitive]")) clone.hidden = true;
   clone.querySelectorAll("[data-sensitive]").forEach((node) => { node.hidden = true; });
@@ -91,7 +93,7 @@ export async function copyPngToClipboard(blob, {
   ClipboardItemClass = globalThis.ClipboardItem,
 } = {}) {
   if (!clipboard?.write || !ClipboardItemClass) {
-    throw new Error("El portapapeles de imágenes no está disponible en este navegador.");
+    throw new Error(t("El portapapeles de imágenes no está disponible en este navegador."));
   }
   await clipboard.write([new ClipboardItemClass({ "image/png": blob })]);
 }
@@ -132,7 +134,7 @@ export const captureFilename = (publication, view, day, cardLabel = "") =>
 // `layoutWidth` compone el clon a ese ancho CSS antes de escalar: un formato
 // cerrado sale idéntico desde un móvil o desde un escritorio.
 export async function captureElementPng(element, { outputWidth, layoutWidth } = {}) {
-  if (!element) throw new Error("No se encontró la vista para capturar.");
+  if (!element) throw new Error(t("No se encontró la vista para capturar."));
   await document.fonts?.ready;
   const box = element.getBoundingClientRect();
   const width = Math.ceil(layoutWidth || box.width);
@@ -141,11 +143,11 @@ export async function captureElementPng(element, { outputWidth, layoutWidth } = 
   const height = outputWidth
     ? Math.round((box.height / box.width) * width)
     : Math.ceil(element.scrollHeight);
-  if (!width || !height) throw new Error("La vista no tiene contenido visible.");
+  if (!width || !height) throw new Error(t("La vista no tiene contenido visible."));
 
   const preferred = outputWidth ? outputWidth / width : Math.min(window.devicePixelRatio || 1, 2);
   const scale = Math.min(preferred, 32767 / width, 32767 / height);
-  if (scale < 0.35) throw new Error("Esta vista es demasiado larga para un solo PNG.");
+  if (scale < 0.35) throw new Error(t("Esta vista es demasiado larga para un solo PNG."));
 
   const clone = createPrivateCaptureClone(element);
   clone.style.width = `${width}px`;
@@ -156,7 +158,7 @@ export async function captureElementPng(element, { outputWidth, layoutWidth } = 
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
       <foreignObject width="100%" height="100%">
-        <html xmlns="${XHTML_NS}" lang="es" class="is-capturing">
+        <html xmlns="${XHTML_NS}" lang="${LANG}" class="is-capturing">
           <head><meta charset="UTF-8"/><style>${styles}</style></head>
           <body>${markup}</body>
         </html>
