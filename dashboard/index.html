@@ -138,6 +138,14 @@
 
         <div class="content" id="overview">
 
+          <div class="reauth-notice" id="reauth-notice" role="alert" hidden>
+            <div>
+              <strong>Substack pide que vuelvas a iniciar sesión</strong>
+              <p>Por seguridad, no entrega tu lista de suscriptores con una sesión antigua, así que Suscriptores, el núcleo fiel y la actividad por mes no se actualizan. Cierra sesión en Substack, entra de nuevo y sincroniza.</p>
+            </div>
+            <a class="reauth-button" href="https://substack.com/" target="_blank" rel="noopener">Abrir Substack</a>
+          </div>
+
           <div class="view" data-view="resumen">
             <section class="growth-brief reveal" aria-labelledby="growth-brief-title">
               <div class="brief-copy">
@@ -576,75 +584,100 @@
               <div class="postal-intro">
                 <h2 id="postal-title">Postal</h2>
                 <p class="panel-copy">Una imagen para compartir con el periodo elegido arriba. Nunca incluye pago ni ingresos.</p>
-                <div class="postal-actions">
-                  <button class="action-button" id="postal-download" type="button">Descargar imagen</button>
-                  <button class="icon-button postal-copy" id="postal-copy" type="button" aria-label="Copiar imagen al portapapeles" title="Copiar imagen">
-                    <svg aria-hidden="true"><use href="#icon-copy"></use></svg>
-                  </button>
-                </div>
-                <p class="postal-size" id="postal-size">1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X.</p>
 
                 <div class="postal-config" aria-label="Personaliza la postal">
                   <div class="postal-option">
-                    <span class="field-label" id="postal-format-label">Formato</span>
-                    <div class="postal-segment" role="group" aria-labelledby="postal-format-label">
-                      <button type="button" data-postal-format="portrait" aria-pressed="true">Vertical</button>
-                      <button type="button" data-postal-format="square" aria-pressed="false">Cuadrado</button>
+                    <span class="field-label" id="postal-story-label">Qué cuenta</span>
+                    <div class="postal-stories" role="group" aria-labelledby="postal-story-label">
+                      <button type="button" data-postal-story="period" aria-pressed="true"><b>Mi periodo</b><span>Las cifras del rango elegido</span><i class="postal-suggested" hidden>Sugerida</i></button>
+                      <button type="button" data-postal-story="milestone" aria-pressed="false"><b>Hito alcanzado</b><span>La última cifra redonda que superaste</span><i class="postal-suggested" hidden>Sugerida</i></button>
+                      <button type="button" data-postal-story="week" aria-pressed="false"><b>Mejor semana</b><span>Tu récord de altas en siete días</span><i class="postal-suggested" hidden>Sugerida</i></button>
+                    </div>
+                    <p class="postal-hint" id="postal-story-hint" hidden></p>
+                  </div>
+                  <div class="postal-option">
+                    <span class="field-label" id="postal-layout-label">Diseño</span>
+                    <div class="postal-layouts" role="group" aria-labelledby="postal-layout-label">
+                      <button type="button" data-postal-layout="classic" aria-pressed="true"><span class="postal-thumb" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Clásica</span></button>
+                      <button type="button" data-postal-layout="number" aria-pressed="false"><span class="postal-thumb" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Cifra</span></button>
+                      <button type="button" data-postal-layout="chart" aria-pressed="false"><span class="postal-thumb" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Curva</span></button>
+                      <button type="button" data-postal-layout="mosaic" aria-pressed="false"><span class="postal-thumb" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Mosaico</span></button>
+                      <button type="button" data-postal-layout="split" aria-pressed="false"><span class="postal-thumb" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Columnas</span></button>
                     </div>
                   </div>
                   <div class="postal-option">
-                    <span class="field-label" id="postal-theme-label">Color</span>
+                    <label class="field-label" for="postal-line-input">Tu frase</label>
+                    <input class="postal-line-input" id="postal-line-input" type="text" maxlength="80" autocomplete="off" spellcheck="true" />
+                    <div class="postal-line-meta">
+                      <span id="postal-line-count">0/80</span>
+                      <button type="button" class="postal-line-reset" id="postal-line-reset" hidden>Usar la sugerida</button>
+                    </div>
+                  </div>
+                  <div class="postal-option">
+                    <span class="field-label" id="postal-format-label">Formato</span>
+                    <div class="postal-segment" role="group" aria-labelledby="postal-format-label">
+                      <button type="button" data-postal-format="portrait" aria-pressed="true"><span class="postal-format-icon" aria-hidden="true"></span>Vertical</button>
+                      <button type="button" data-postal-format="square" aria-pressed="false"><span class="postal-format-icon" aria-hidden="true"></span>Cuadrado</button>
+                      <button type="button" data-postal-format="landscape" aria-pressed="false"><span class="postal-format-icon" aria-hidden="true"></span>Horizontal</button>
+                    </div>
+                  </div>
+                  <div class="postal-option">
+                    <span class="field-label" id="postal-theme-label">Color <span class="postal-option-value" id="postal-theme-name"></span></span>
                     <div class="postal-swatches" role="group" aria-labelledby="postal-theme-label">
                       <button type="button" class="is-ink" data-postal-theme="ink" aria-pressed="true" aria-label="Tinta" title="Tinta"></button>
                       <button type="button" class="is-light" data-postal-theme="light" aria-pressed="false" aria-label="Claro" title="Claro"></button>
                       <button type="button" class="is-indigo" data-postal-theme="indigo" aria-pressed="false" aria-label="Índigo" title="Índigo"></button>
+                      <button type="button" class="is-brand" data-postal-theme="brand" aria-pressed="false" aria-label="Tu marca" title="Tu marca: el color de tu logo" hidden></button>
                     </div>
-                  </div>
-                  <div class="postal-option">
-                    <span class="field-label">Mostrar</span>
-                    <label class="postal-check"><input type="checkbox" data-postal-show="chart" checked /> Gráfico de crecimiento</label>
-                    <label class="postal-check"><input type="checkbox" data-postal-show="tiles" checked /> Cifras del periodo</label>
-                    <label class="postal-check"><input type="checkbox" data-postal-show="record" checked /> Mejor semana</label>
-                    <label class="postal-check"><input type="checkbox" data-postal-show="milestone" checked /> Próximo hito</label>
-                    <label class="postal-check"><input type="checkbox" data-postal-show="author" checked /> Autor</label>
                   </div>
                 </div>
               </div>
 
-              <article class="postal" id="postal-card" aria-label="Postal de tu newsletter">
-                <header class="postal-head">
-                  <span class="postal-logo" aria-hidden="true"><b id="postal-logo-initial">P</b><img id="postal-logo" alt="" hidden /></span>
-                  <div>
-                    <p class="postal-period" id="postal-period">—</p>
-                    <h3 class="postal-name" id="postal-name">Tu newsletter</h3>
+              <div class="postal-preview">
+                <article class="postal" id="postal-card" aria-label="Postal de tu newsletter">
+                  <header class="postal-head">
+                    <span class="postal-logo" aria-hidden="true"><b id="postal-logo-initial">P</b><img id="postal-logo" alt="" hidden /></span>
+                    <div>
+                      <p class="postal-period" id="postal-period">—</p>
+                      <h3 class="postal-name" id="postal-name">Tu newsletter</h3>
                   </div>
-                </header>
-                <div class="postal-hero">
-                  <strong id="postal-subscribers">—</strong>
-                  <span>suscriptores</span>
-                  <p id="postal-growth">—</p>
-                </div>
-                <figure class="postal-chart" id="postal-chart-wrap" hidden>
+                  </header>
+                  <div class="postal-hero">
+                    <strong id="postal-subscribers">—</strong>
+                    <span id="postal-hero-label">suscriptores</span>
+                    <p id="postal-growth">—</p>
+                  </div>
+                  <p class="postal-line" id="postal-line" hidden></p>
+                  <figure class="postal-chart" id="postal-chart-wrap" hidden>
                   <svg id="postal-chart" viewBox="0 0 300 100" preserveAspectRatio="none" role="img" aria-label="Crecimiento de suscriptores en el periodo"></svg>
-                  <figcaption class="postal-chart-labels">
-                    <span id="postal-chart-start">—</span>
-                    <span id="postal-chart-end">—</span>
-                  </figcaption>
-                </figure>
-                <div class="postal-tiles" id="postal-tiles"></div>
-                <p class="postal-record" id="postal-record" hidden></p>
-                <div class="postal-milestone" id="postal-milestone" hidden>
-                  <div><span>Próximo hito</span><strong id="postal-milestone-target">—</strong></div>
-                  <div class="postal-track" aria-hidden="true"><i id="postal-milestone-progress"></i></div>
+                    <figcaption class="postal-chart-labels">
+                      <span id="postal-chart-start">—</span>
+                      <span id="postal-chart-end">—</span>
+                    </figcaption>
+                  </figure>
+                  <div class="postal-tiles" id="postal-tiles"></div>
+                  <div class="postal-milestone" id="postal-milestone" hidden>
+                    <div><span>Próximo hito</span><strong id="postal-milestone-target">—</strong></div>
+                    <div class="postal-track" aria-hidden="true"><i id="postal-milestone-progress"></i></div>
+                  </div>
+                  <footer class="postal-foot">
+                    <span class="postal-author">
+                      <span class="postal-avatar" aria-hidden="true"><b id="postal-avatar-initial">·</b><img id="postal-avatar" alt="" hidden /></span>
+                      <span id="postal-author">—</span>
+                    </span>
+                    <span class="postal-credit">Hecho con PlotStack</span>
+                  </footer>
+                </article>
+                <div class="postal-output">
+                  <div class="postal-actions">
+                    <button class="action-button" id="postal-download" type="button">Descargar imagen</button>
+                    <button class="icon-button postal-copy" id="postal-copy" type="button" aria-label="Copiar imagen al portapapeles" title="Copiar imagen">
+                      <svg aria-hidden="true"><use href="#icon-copy"></use></svg>
+                    </button>
+                  </div>
+                  <p class="postal-size" id="postal-size">1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X.</p>
                 </div>
-                <footer class="postal-foot">
-                  <span class="postal-author">
-                    <span class="postal-avatar" aria-hidden="true"><b id="postal-avatar-initial">·</b><img id="postal-avatar" alt="" hidden /></span>
-                    <span id="postal-author">—</span>
-                  </span>
-                  <span class="postal-credit">Hecho con PlotStack</span>
-                </footer>
-              </article>
+              </div>
             </section>
           </div>
 

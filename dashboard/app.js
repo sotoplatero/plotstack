@@ -932,7 +932,9 @@ function renderAudience(snapshot, analytics) {
   const composition = timeline?.composition || {};
   const metrics = snapshot.metrics || {};
   const cards = [
-    [t("Suscriptores"), audience?.total || timeline?.total || 0, ""],
+    // Sin la lista de suscriptores (Substack puede pedir volver a iniciar
+    // sesión), el total del resumen sigue siendo la cifra de hoy.
+    [t("Suscriptores"), audience?.total || timeline?.total || metrics.subscribers || 0, ""],
     [t("Seguidores"), audience?.followers?.total || metrics.followers || 0, ""],
     [t("Lectores en la app"), metrics.appSubscribers || 0, ""],
     [t("Con email"), audience?.emailable || 0, ""],
@@ -1828,24 +1830,56 @@ function renderCohortActivity(analytics) {
 // Una tarjeta 4:5 para compartir por captura. Solo cifras públicas de audiencia
 // y lectura: nunca pago ni ingresos, aunque el usuario los tenga visibles. Cada
 // cifra sin base se omite: una postal no muestra "—".
-const POSTAL_WIDTH = 1080;
 
 // Configuración de la postal: preferencia del usuario en este navegador, no un
 // dato de la newsletter. `localStorage` puede fallar (ventana privada, datos
 // bloqueados): entonces se usa la de fábrica y la postal sigue funcionando.
 const POSTAL_KEY = "plotstack.postal";
-const POSTAL_FORMATS = { portrait: { ratio: 5 / 4, copy: t("1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X.") }, square: { ratio: 1, copy: t("1080 × 1080 px, cuadrado.") } };
-const POSTAL_THEMES = ["ink", "light", "indigo"];
-const POSTAL_SECTIONS = ["chart", "tiles", "record", "milestone", "author"];
-const POSTAL_DEFAULTS = { format: "portrait", theme: "ink", show: { chart: true, tiles: true, record: true, milestone: true, author: true } };
+// Cada formato fija el ancho del PNG y el ancho CSS al que se compone el clon
+// (la mitad): la imagen sale idéntica desde cualquier pantalla. El horizontal
+// es el que Substack recomienda para la vista previa de un post (14:10).
+const POSTAL_FORMATS = {
+  portrait: { width: 1080, copy: t("1080 × 1350 px, el formato vertical de Instagram, LinkedIn y X.") },
+  square: { width: 1080, copy: t("1080 × 1080 px, cuadrado.") },
+  landscape: { width: 1456, copy: t("1456 × 1048 px, horizontal: el de la vista previa de un post en Substack.") },
+};
+const POSTAL_THEMES = ["ink", "light", "indigo", "brand"];
+// Qué cuenta la postal. Cada historia trae su cifra protagonista, sus cifras
+// acompañantes y su marca sobre la curva; no hay casillas para quitar piezas:
+// una historia solo muestra cifras de lo que cuenta. Las tres viven de la curva
+// de suscriptores, así que cualquier historia cabe en cualquier diseño. Una
+// historia sin datos en el rango no se puede elegir, y si era la guardada se
+// pinta "Mi periodo" sin perder la elección.
+const POSTAL_STORIES = ["period", "milestone", "week"];
+const POSTAL_STORY_NAMES = { period: t("Mi periodo"), milestone: t("Hito alcanzado"), week: t("Mejor semana") };
+// Frase propia: hasta 80 caracteres escritos por el autor. Sin escribir nada
+// (`line: null`) va la sugerida de la historia, sin cifras: la tarjeta ya las
+// dice y una frase con números las repetiría. Vacía a propósito, no hay frase.
+// Cifras acompañantes: cada historia ordena una reserva por importancia y se
+// pintan las seis primeras con valor. Cada diseño enseña las que caben en su
+// composición (el CSS oculta el resto): mosaico 6, clásica y columnas 4, curva
+// 3, cifra ninguna. Por eso el orden importa: lo primero es lo que más cuenta.
+const POSTAL_TILES = 6;
+const POSTAL_LINE_MAX = 80;
+const POSTAL_LINES = {
+  period: t("Gracias por leer, responder y compartir."),
+  milestone: t("Gracias a cada persona que se ha sumado por el camino."),
+  week: t("Bienvenida a quienes llegaron esa semana."),
+};
+// Diseños, a la manera de las plantillas de imagen OG: el mismo contenido en
+// otra composición, solo por CSS (`data-layout`).
+const POSTAL_LAYOUTS = ["classic", "number", "chart", "mosaic", "split"];
+const POSTAL_DEFAULTS = { story: "period", layout: "classic", line: null, format: "portrait", theme: "ink" };
 
 function readPostalConfig() {
   try {
     const saved = JSON.parse(localStorage.getItem(POSTAL_KEY) || "{}");
     return {
+      story: POSTAL_STORIES.includes(saved.story) ? saved.story : POSTAL_DEFAULTS.story,
+      layout: POSTAL_LAYOUTS.includes(saved.layout) ? saved.layout : POSTAL_DEFAULTS.layout,
+      line: typeof saved.line === "string" ? saved.line.slice(0, POSTAL_LINE_MAX) : null,
       format: POSTAL_FORMATS[saved.format] ? saved.format : POSTAL_DEFAULTS.format,
       theme: POSTAL_THEMES.includes(saved.theme) ? saved.theme : POSTAL_DEFAULTS.theme,
-      show: Object.fromEntries(POSTAL_SECTIONS.map((key) => [key, typeof saved.show?.[key] === "boolean" ? saved.show[key] : true])),
     };
   } catch {
     return structuredClone(POSTAL_DEFAULTS);
@@ -1861,20 +1895,70 @@ function savePostalConfig() {
 function applyPostalConfig() {
   const config = state.postal || (state.postal = readPostalConfig());
   const card = $("#postal-card");
+  const story = state.postalStory || config.story;
+  // "Tu marca" sin color medido (logo aún cargando, gris o ausente) se pinta
+  // en tinta, sin perder la elección guardada.
+  const theme = config.theme === "brand" && !state.postalBrand ? "ink" : config.theme;
+  const layout = config.layout;
+  card.dataset.story = story;
+  card.dataset.layout = layout;
   card.dataset.format = config.format;
-  card.dataset.theme = config.theme;
+  card.dataset.theme = theme;
+  const brandSwatch = $('[data-postal-theme="brand"]');
+  brandSwatch.hidden = !state.postalBrand;
+  if (state.postalBrand) {
+    brandSwatch.style.background = state.postalBrand;
+    card.style.setProperty?.("--postal-brand", state.postalBrand);
+  }
   $("#postal-size").textContent = POSTAL_FORMATS[config.format].copy;
+  $$("[data-postal-story]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.postalStory === story)));
+  $$("[data-postal-layout]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.postalLayout === layout)));
   $$("[data-postal-format]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.postalFormat === config.format)));
-  $$("[data-postal-theme]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.postalTheme === config.theme)));
-  $$("[data-postal-show]").forEach((input) => { input.checked = config.show[input.dataset.postalShow]; });
-  card.classList.toggle("is-without-chart", !config.show.chart);
-  card.classList.toggle("is-without-tiles", !config.show.tiles);
-  card.classList.toggle("is-without-record", !config.show.record);
-  card.classList.toggle("is-without-milestone", !config.show.milestone);
-  card.classList.toggle("is-without-author", !config.show.author);
+  $$("[data-postal-theme]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.postalTheme === theme)));
+  // El nombre del color elegido junto a su etiqueta: las muestras solo lo dicen
+  // con el anillo. Y las miniaturas de diseño se pintan en ese color, para que
+  // el selector enseñe lo que va a salir.
+  $("#postal-theme-name").textContent = $(`[data-postal-theme="${theme}"]`).getAttribute("aria-label") || "";
+  const picker = $(".postal-layouts");
+  picker.dataset.theme = theme;
+  if (state.postalBrand) picker.style.setProperty?.("--postal-brand", state.postalBrand);
+}
+
+// La frase se repinta sola al teclear: no hace falta recalcular la postal. El
+// campo no se reescribe mientras tiene el foco, o el cursor saltaría al final.
+function renderPostalLine() {
+  const suggestion = POSTAL_LINES[state.postalStory || state.postal.story] || POSTAL_LINES.period;
+  const value = state.postal.line ?? suggestion;
+  const input = $("#postal-line-input");
+  if (document.activeElement !== input) input.value = value;
+  input.setAttribute("placeholder", suggestion);
+  $("#postal-line-count").textContent = `${value.length}/${POSTAL_LINE_MAX}`;
+  $("#postal-line-reset").hidden = state.postal.line === null;
+  const line = $("#postal-line");
+  line.textContent = value.trim();
+  line.hidden = !value.trim();
 }
 
 function bindPostalConfig() {
+  $$("[data-postal-story]").forEach((button) => button.addEventListener("click", () => {
+    if (button.disabled) return;
+    state.postal.story = button.dataset.postalStory;
+    savePostalConfig();
+    if (state.snapshot) renderPostal(state.snapshot, state.analytics);
+    else applyPostalConfig();
+  }));
+  $("#postal-line-input").addEventListener("input", (event) => {
+    state.postal.line = String(event.target?.value ?? $("#postal-line-input").value).slice(0, POSTAL_LINE_MAX);
+    savePostalConfig(); renderPostalLine();
+  });
+  $("#postal-line-reset").addEventListener("click", () => {
+    state.postal.line = null;
+    savePostalConfig(); renderPostalLine();
+  });
+  $$("[data-postal-layout]").forEach((button) => button.addEventListener("click", () => {
+    state.postal.layout = button.dataset.postalLayout;
+    savePostalConfig(); applyPostalConfig();
+  }));
   $$("[data-postal-format]").forEach((button) => button.addEventListener("click", () => {
     state.postal.format = button.dataset.postalFormat;
     savePostalConfig(); applyPostalConfig();
@@ -1883,10 +1967,57 @@ function bindPostalConfig() {
     state.postal.theme = button.dataset.postalTheme;
     savePostalConfig(); applyPostalConfig();
   }));
-  $$("[data-postal-show]").forEach((input) => input.addEventListener("change", (event) => {
-    state.postal.show[input.dataset.postalShow] = Boolean(event.target?.checked ?? input.checked);
-    savePostalConfig(); applyPostalConfig();
-  }));
+}
+
+// Color de marca: el tono dominante del logo, medido en este navegador y nunca
+// guardado. Se oscurece, sin cambiar de tono, hasta que el blanco se lea encima
+// (contraste WCAG >= 4,5): un amarillo de marca acaba en ocre antes que dejar
+// cifras ilegibles. Un logo gris o en blanco y negro no da color y la muestra
+// no aparece. El CDN de Substack sirve el logo con CORS, así que el lienzo se
+// puede leer; si no, `getImageData` lanza y no hay color.
+const channelLuminance = (value) => {
+  const c = value / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const luminanceOf = ([r, g, b]) => 0.2126 * channelLuminance(r) + 0.7152 * channelLuminance(g) + 0.0722 * channelLuminance(b);
+
+function readableOnWhite(rgb) {
+  let color = rgb;
+  for (let step = 0; step < 40 && 1.05 / (luminanceOf(color) + 0.05) < 4.5; step += 1) color = color.map((value) => value * 0.92);
+  return `#${color.map((value) => Math.round(value).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function brandColorFrom(img) {
+  try {
+    const size = 32;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(img, 0, 0, size, size);
+    const { data } = context.getImageData(0, 0, size, size);
+    const buckets = new Map();
+    for (let index = 0; index < data.length; index += 4) {
+      const [r, g, b, alpha] = [data[index], data[index + 1], data[index + 2], data[index + 3]];
+      if (alpha < 128) continue;
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const light = (max + min) / 510;
+      const saturation = max === min ? 0 : (max - min) / (255 - Math.abs(max + min - 255));
+      // Fondos blancos, negros y grises no son la marca.
+      if (saturation < 0.25 || light < 0.12 || light > 0.9) continue;
+      const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
+      const bucket = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+      bucket.n += 1; bucket.r += r; bucket.g += g; bucket.b += b;
+      buckets.set(key, bucket);
+    }
+    const best = [...buckets.values()].sort((x, y) => y.n - x.n)[0];
+    // Unos pocos píxeles de color en un logo gris no son una marca.
+    if (!best || best.n < size * size * 0.04) return null;
+    return readableOnWhite([best.r / best.n, best.g / best.n, best.b / best.n]);
+  } catch {
+    return null;
+  }
 }
 
 // Las imágenes de Substack pasan por su propio CDN de imagen, que las entrega
@@ -1903,7 +2034,9 @@ const substackImage = (url, size = 192) => {
 // reparte por fecha (proporcional al tiempo, como todos los gráficos) y la
 // escala no se esconde: el valor inicial y el final van escritos en los
 // extremos, así un tramo de 2,4 a 2,8 mil no parece haberse multiplicado.
-function renderPostalChart(series) {
+// Cada historia marca su momento: el hito, una línea a su altura; la mejor
+// semana, una franja sobre sus siete días. Fuera del tramo dibujado, no se marca.
+function renderPostalChart(series, mark = null) {
   const wrap = $("#postal-chart-wrap");
   const svg = $("#postal-chart");
   const points = series
@@ -1931,79 +2064,239 @@ function renderPostalChart(series) {
   const stroke = document.createElementNS(ns, "path");
   stroke.setAttribute("class", "postal-chart-line");
   stroke.setAttribute("d", line);
-  svg.append(area, stroke);
+  const marks = [];
+  if (mark?.value > min && mark.value <= max) {
+    const y = (94 - ((mark.value - min) / spanValue) * 88).toFixed(1);
+    const rule = document.createElementNS(ns, "path");
+    rule.setAttribute("class", "postal-chart-mark");
+    rule.setAttribute("d", `M0,${y} L300,${y}`);
+    marks.push(rule);
+  }
+  if (mark?.from) {
+    const x = (day) => clamp(((parseDay(day).getTime() - first.time) / spanTime) * 300, 0, 300);
+    const [from, to] = [x(mark.from), x(mark.to)];
+    if (to > from) {
+      const band = document.createElementNS(ns, "rect");
+      band.setAttribute("class", "postal-chart-band");
+      band.setAttribute("x", from.toFixed(1));
+      band.setAttribute("y", "0");
+      band.setAttribute("width", (to - from).toFixed(1));
+      band.setAttribute("height", "100");
+      marks.push(band);
+    }
+  }
+  svg.append(...marks, area, stroke);
   svg.setAttribute("aria-label", t("Suscriptores: de {from} el {fromDate} a {to} el {toDate}.", { from: formatCompactNumber(first.value), fromDate: shortDate(first.date), to: formatCompactNumber(last.value), toDate: shortDate(last.date) }));
   $("#postal-chart-start").textContent = `${formatCompactNumber(first.value)} · ${shortDate(first.date)}`;
   $("#postal-chart-end").textContent = `${formatCompactNumber(last.value)} · ${shortDate(last.date)}`;
 }
 
-function setPostalImage(img, initial, url, name) {
+function setPostalImage(img, initial, url, name, onLoad = () => {}) {
   initial.textContent = String(name || "").trim().slice(0, 1).toUpperCase() || "·";
   const src = substackImage(url);
-  if (!src) { img.hidden = true; img.removeAttribute("src"); return; }
+  if (!src) { img.hidden = true; img.removeAttribute("src"); onLoad(null); return; }
   if (img.getAttribute("src") === src) return;
-  img.onerror = () => { img.hidden = true; };
-  img.onload = () => { img.hidden = false; };
+  img.onerror = () => { img.hidden = true; onLoad(null); };
+  img.onload = () => { img.hidden = false; onLoad(img); };
   img.setAttribute("crossorigin", "anonymous");
   img.setAttribute("src", src);
 }
 
+// Fecha en la que la curva del periodo cruza un valor: el día en que se superó
+// el hito. Sin cruce dentro de la serie (ya estaba superado antes), `null`.
+function crossingDate(series, value) {
+  if (!(value > 0)) return null;
+  const points = series
+    .map((point) => ({ date: point.date, value: safeNumber(point.subscribers) }))
+    .filter((point) => point.date)
+    .sort((a, b) => parseDay(a.date) - parseDay(b.date));
+  const index = points.findIndex((point, position) => position > 0 && points[position - 1].value < value && point.value >= value);
+  return index > 0 ? points[index].date : null;
+}
+
+// `YYYY-MM-DD` del día civil, N días después de otro.
+function addDays(day, days) {
+  const date = parseDay(day);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function renderPostal(snapshot, analytics) {
-  applyPostalConfig();
   const metrics = snapshot.metrics || {};
   const derived = getDerivedMetrics(snapshot, state.days);
+  const records = getRecords({ snapshot, subscriberDaily: subscriberDailyOf(analytics).rows, days: state.days });
+  const projection = getMilestoneProjection({ current: metrics.subscribers, growthDaily: analytics?.growth?.subscribers?.free?.daily || [] });
+  const series = subscriberSeries(snapshot, analytics);
+  const crossed = crossingDate(series, projection.previous);
+
+  // Historia: la elegida si tiene datos en este rango; si no, "Mi periodo". Se
+  // sugiere "Hito" solo cuando el hito se cruzó dentro del periodo elegido.
+  const config = state.postal || (state.postal = readPostalConfig());
+  const available = { period: true, milestone: projection.previous > 0, week: Boolean(records.bestWeek) };
+  const story = available[config.story] ? config.story : "period";
+  const suggested = crossed ? "milestone" : null;
+  state.postalStory = story;
+  applyPostalConfig();
+  $$("[data-postal-story]").forEach((button) => {
+    const key = button.dataset.postalStory;
+    button.disabled = !available[key];
+    button.setAttribute("title", available[key] ? "" : t("Sin datos en este periodo"));
+    button.querySelector(".postal-suggested").hidden = key !== suggested || key === story;
+  });
+  const hint = $("#postal-story-hint");
+  hint.textContent = story === config.story ? "" : t("«{story}» no tiene datos en este periodo: se muestra «{fallback}».", { story: POSTAL_STORY_NAMES[config.story], fallback: POSTAL_STORY_NAMES.period });
+  hint.hidden = story === config.story;
+
   const period = state.days === ALL_TIME ? t("Desde el principio") : t("Últimos {days} días", { days: state.days });
-  $("#postal-period").textContent = `${period} · ${new Date().toLocaleDateString(LOCALE, { day: "numeric", month: "long", year: "numeric" })}`;
+  // Fecha corta ("11 oct 2026"): cabe en una línea en los tres formatos.
+  $("#postal-period").textContent = `${period} · ${new Date().toLocaleDateString(LOCALE, { day: "numeric", month: "short", year: "numeric" })}`;
   $("#postal-name").textContent = snapshot.publication || t("Tu newsletter");
   const publication = state.connection?.publication || {};
-  setPostalImage($("#postal-logo"), $("#postal-logo-initial"), publication.logoUrl, snapshot.publication || publication.name);
+  setPostalImage($("#postal-logo"), $("#postal-logo-initial"), publication.logoUrl, snapshot.publication || publication.name, (img) => {
+    const brand = img ? brandColorFrom(img) : null;
+    if (brand === (state.postalBrand ?? null)) return;
+    state.postalBrand = brand;
+    applyPostalConfig();
+  });
   setPostalImage($("#postal-avatar"), $("#postal-avatar-initial"), publication.authorPhotoUrl, publication.authorName);
   $("#postal-author").textContent = publication.authorName ? t("Por {name}", { name: publication.authorName }) : "";
   $(".postal-author").hidden = !publication.authorName;
-  $("#postal-subscribers").textContent = formatCompactNumber(metrics.subscribers);
 
+  // Cifras comunes del periodo. Cada historia ordena su propia reserva de
+  // candidatas por importancia y la postal toma las POSTAL_TILES primeras con
+  // valor: siempre cuatro si hay datos, así el mosaico no queda con huecos y
+  // una cifra sin base cede su sitio a la siguiente en vez de dejar un "—".
+  // Un cero no se pinta: en una pieza para compartir no cuenta nada.
+  const daily = fillDailyGaps(windowedSubscriberDaily(analytics), (date) => ({ date, signups: 0 }));
+  const gained = daily.reduce((sum, point) => sum + safeNumber(point.signups), 0);
+  const plus = (value) => (value > 0 ? `+${formatCompactNumber(value)}` : null);
+  const count = (value) => (value > 0 ? formatCompactNumber(value) : null);
   const growth = derived.subscriberGrowth;
-  const versus = comparisonCopy(derived.comparison).versus;
-  $("#postal-growth").textContent = growth === null
-    ? ""
+  // Como en el titular: desde GROWTH_AS_MULTIPLE se dice "×N", no "+2740%".
+  const growthCopy = growth === null
+    ? null
     : growth >= GROWTH_AS_MULTIPLE
-    ? t("Multiplicado por {times} {versus}", { times: decimal(metrics.subscribers / derived.comparison.subscribers), versus }).trim()
-    : `${growth > 0 ? "+" : ""}${formatPercent(growth)} ${versus}`.trim();
-  $("#postal-growth").hidden = growth === null;
+    ? `${decimal(metrics.subscribers / derived.comparison.subscribers)}×`
+    : `${growth > 0 ? "+" : ""}${formatPercent(growth, 0)}`;
+  const postsInRange = withinRange(snapshot.campaigns.filter((row) => row.date), (row) => row.date).kept.length;
+  const notesInRange = withinRange((snapshot.notes || []).filter((row) => row.date), (row) => row.date).kept.length;
+  const newReaders = ["subs", t("Nuevos lectores"), plus(gained)];
+  const followers = ["subs", t("Seguidores"), count(metrics.followers)];
+  const streak = ["click", t("Semanas de racha"), count(records.streak.current)];
 
-  renderPostalChart(subscriberSeries(snapshot, analytics));
+  let hero;
+  let tiles;
+  let mark = null;
+  if (story === "milestone") {
+    // Dónde estoy y qué viene: el hito superado, lo que falta para el próximo
+    // y el ritmo neto de los últimos 30 días (el mismo que usa la proyección).
+    const rate30 = projection.estimates.find((row) => row.windowDays === 30)?.rate;
+    const daysSince = crossed ? Math.max(0, Math.round((Date.now() - parseDay(crossed).getTime()) / 86400000)) : null;
+    hero = [
+      new Intl.NumberFormat(LOCALE).format(projection.previous),
+      t("suscriptores"),
+      crossed
+        ? t("Superado el {date} · hoy, {count}", { date: shortDate(crossed), count: formatCompactNumber(metrics.subscribers) })
+        : t("Hoy, {count}", { count: formatCompactNumber(metrics.subscribers) }),
+    ];
+    tiles = [
+      ["click", t("Faltan para {target}", { target: formatCompactNumber(projection.target) }), count(projection.remaining)],
+      ["notes", t("Altas netas por semana"), rate30 > 0 ? plus(Math.round(rate30 * 7)) : null],
+      newReaders,
+      ["open", t("Crecimiento en el periodo"), growth > 0 ? growthCopy : null],
+      ["click", t("Días desde el hito"), daysSince > 0 ? String(daysSince) : null],
+      followers,
+      streak,
+    ];
+    mark = { value: projection.previous };
+  } else if (story === "week") {
+    // El récord y su porqué: cuánto supera a la semana media, qué parte del
+    // periodo concentra, su mejor día y qué se publicó esa semana.
+    const week = records.bestWeek;
+    const weekEnd = addDays(week.weekStart, 7);
+    const inWeek = (row) => {
+      const day = String(row.date || "").slice(0, 10);
+      return day >= week.weekStart && day < weekEnd;
+    };
+    const weeks = daily.length / 7;
+    const average = weeks >= 2 ? gained / weeks : null;
+    const multiple = average > 0 ? week.signups / average : null;
+    // En puntos porcentuales, como el resto de tasas que recibe formatPercent.
+    const share = gained > 0 && week.signups < gained ? (week.signups / gained) * 100 : null;
+    const bestDay = Math.max(0, ...daily.filter(inWeek).map((point) => safeNumber(point.signups)));
+    const posts = snapshot.campaigns.filter(inWeek).length;
+    const weekNotes = (snapshot.notes || []).filter(inWeek);
+    const notes = weekNotes.length;
+    // Interacciones públicas (me gusta + respuestas + restacks), las mismas que
+    // usa Hallazgos para cubrir todas las notas.
+    const interactions = weekNotes.reduce((sum, note) => sum + safeNumber(note.reactions) + safeNumber(note.replies) + safeNumber(note.restacks), 0);
+    hero = [
+      `+${formatCompactNumber(week.signups)}`,
+      t("altas en una semana"),
+      t("La semana del {date}, la mejor del periodo", { date: shortDate(week.weekStart) }),
+    ];
+    tiles = [
+      ["click", t("Tu semana media"), multiple >= 1.1 ? `${decimal(multiple)}×` : null],
+      ["subs", t("De las altas del periodo"), share >= 1 ? formatPercent(share, 0) : null],
+      ["subs", t("Su mejor día"), plus(bestDay)],
+      ["open", tn(posts, "Artículo esa semana", "Artículos esa semana"), count(posts)],
+      ["notes", tn(notes, "Nota esa semana", "Notas esa semana"), count(notes)],
+      ["notes", t("Interacciones en notas esa semana"), count(interactions)],
+      newReaders,
+    ];
+    mark = { from: week.weekStart, to: weekEnd };
+  } else {
+    const versus = comparisonCopy(derived.comparison).versus;
+    const openRate = getRateWindows(snapshot, state.days).current.openRate;
+    const loyal = getLoyalCore(analytics?.audience?.timeline, analytics?.audience?.loyaltyHistory || [], state.days);
+    hero = [
+      formatCompactNumber(metrics.subscribers),
+      t("suscriptores"),
+      growth === null
+        ? ""
+        : growth >= GROWTH_AS_MULTIPLE
+        ? t("Multiplicado por {times} {versus}", { times: decimal(metrics.subscribers / derived.comparison.subscribers), versus }).trim()
+        : `${growth > 0 ? "+" : ""}${formatPercent(growth)} ${versus}`.trim(),
+    ];
+    tiles = [
+      newReaders,
+      ["open", t("Abren tus correos"), openRate === null ? null : formatPercent(openRate, 0)],
+      ["notes", t("De tu lista es núcleo fiel"), loyal.coreShare === null ? null : formatPercent(loyal.coreShare, 0)],
+      streak,
+      followers,
+      ["open", tn(postsInRange, "Artículo publicado", "Artículos publicados"), count(postsInRange)],
+      ["notes", tn(notesInRange, "Nota publicada", "Notas publicadas"), count(notesInRange)],
+    ];
+  }
 
-  const gained = fillDailyGaps(windowedSubscriberDaily(analytics), (date) => ({ date, signups: 0 }))
-    .reduce((sum, point) => sum + safeNumber(point.signups), 0);
-  const openRate = getRateWindows(snapshot, state.days).current.openRate;
-  const loyal = getLoyalCore(analytics?.audience?.timeline, analytics?.audience?.loyaltyHistory || [], state.days);
-  const records = getRecords({ snapshot, subscriberDaily: subscriberDailyOf(analytics).rows, days: state.days });
-  const streak = records.streak.current;
-  const tiles = [
-    ["subs", t("Nuevos lectores"), gained > 0 ? `+${formatCompactNumber(gained)}` : null],
-    ["open", t("Abren tus correos"), openRate === null ? null : formatPercent(openRate, 0)],
-    ["notes", t("De tu lista es núcleo fiel"), loyal.coreShare === null ? null : formatPercent(loyal.coreShare, 0)],
-    ["click", t("Semanas de racha"), streak > 0 ? String(streak) : null],
-  ].filter(([, , value]) => value);
-  $("#postal-tiles").replaceChildren(...tiles.map(([tone, label, value]) => {
+  const [figure, label, line] = hero;
+  $("#postal-subscribers").textContent = figure;
+  // Los diseños que agrandan la cifra necesitan saber cuánto ocupa: "124" y
+  // "+1,3 mil" no caben al mismo cuerpo.
+  $("#postal-card").dataset.figure = figure.length > 6 ? "long" : figure.length > 4 ? "medium" : "short";
+  $("#postal-hero-label").textContent = label;
+  $("#postal-growth").textContent = line;
+  $("#postal-growth").hidden = !line;
+
+  renderPostalChart(series, mark);
+
+  $("#postal-tiles").replaceChildren(...tiles.filter(([, , value]) => value).slice(0, POSTAL_TILES).map(([tone, name, value]) => {
     const tile = document.createElement("div");
     tile.className = `postal-tile is-${tone}`;
-    const figure = document.createElement("strong"); figure.textContent = value;
-    const name = document.createElement("span"); name.textContent = label;
-    tile.append(figure, name);
+    const strong = document.createElement("strong"); strong.textContent = value;
+    const span = document.createElement("span"); span.textContent = name;
+    tile.append(strong, span);
     return tile;
   }));
+  // El mosaico compone su bento según cuántas cifras hay: sin huecos con 3 o 5.
+  $("#postal-card").dataset.tiles = String($("#postal-tiles").children.length);
 
-  const record = $("#postal-record");
-  record.textContent = records.bestWeek
-    ? t("Mejor semana: {count} altas, la del {date}.", { count: formatCompactNumber(records.bestWeek.signups), date: shortDate(records.bestWeek.weekStart) })
-    : "";
-  record.hidden = !records.bestWeek;
-
-  const projection = getMilestoneProjection({ current: metrics.subscribers, growthDaily: analytics?.growth?.subscribers?.free?.daily || [] });
+  // La barra del próximo hito es de la historia del hito; el CSS la oculta en las demás.
   $("#postal-milestone").hidden = !metrics.subscribers;
   $("#postal-milestone-target").textContent = t("{count} suscriptores", { count: formatCompactNumber(projection.target) });
   $("#postal-milestone-progress").style.width = `${clamp((projection.progress ?? 0) * 100, 2, 100)}%`;
+
+  renderPostalLine();
 }
 
 // Churn de pago: la fuente `paidSubscriberGrowth` se sincronizaba y no tenía
@@ -2128,7 +2421,8 @@ function renderCoverage(analytics, snapshot) {
   coverage.forEach((source) => {
     list.append(coverageRow({
       label: source.label,
-      meta: source.status === "ready" ? t("{count} registros", { count: formatCompactNumber(source.records || 0) }) : "",
+      // El motivo de un fallo se lee en la fila, no solo al pasar el ratón.
+      meta: source.status === "ready" ? t("{count} registros", { count: formatCompactNumber(source.records || 0) }) : source.error || "",
       status: source.status,
       statusCopy: source.status === "ready" ? t("Disponible") : t("No disponible"),
       title: source.error || "",
@@ -2158,6 +2452,9 @@ const POST_COLUMNS = [
   { key: "reactions", label: t("Reacciones"), short: t("REA"), type: "number", hint: t("Me gusta") },
   { key: "comments", label: t("Comentarios"), short: t("COM"), type: "number", hint: t("Comentarios") },
   { key: "shares", label: "Shares", short: "SHR", type: "number", hint: t("Veces compartida") },
+  // Altas totales que Substack atribuye al artículo (`signups`, acumulado);
+  // Altas D1 es solo su primer día. Misma abreviatura que la tabla de Notas.
+  { key: "signups", label: t("Altas"), short: t("ALT"), type: "number", hint: t("Nuevos suscriptores atribuidos") },
   { key: "signupsWithin1Day", label: t("Altas D1"), short: t("A/D1"), type: "number", hint: t("Nuevos suscriptores durante el primer día") },
 ];
 
@@ -2790,6 +3087,10 @@ function renderDashboard() {
   $("#topbar-publication").textContent = snapshot.publication || t("Tu newsletter");
   const version = chrome.runtime.getManifest?.().version;
   $("#last-updated").textContent = `${version ? `PlotStack v${version} · ` : ""}${t("Sincronizado {date}", { date: new Date(snapshot.capturedAt).toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "short" }) })}`;
+  // Visible en todas las vistas: sin la lista de suscriptores, varias cifras se
+  // quedan quietas y Estado de datos no es donde nadie mira primero. Se va sola
+  // en cuanto una sincronización vuelve a traerla.
+  $("#reauth-notice").hidden = !(state.analytics?.coverage || []).some((source) => source.reason === "reauth");
   (VIEW_RENDERERS[state.view] || VIEW_RENDERERS.resumen)(snapshot);
   applyPrivacy();
 }
@@ -3248,8 +3549,12 @@ function bindEvents() {
   // La postal se captura sola, a 1080 px, con la misma tubería que la cámara.
   state.postal = readPostalConfig();
   bindPostalConfig();
-  $("#postal-download").addEventListener("click", () => runCapture({ target: $("#postal-card"), destination: "download", label: "postal", outputWidth: POSTAL_WIDTH, layoutWidth: POSTAL_WIDTH / 2 }));
-  $("#postal-copy").addEventListener("click", () => runCapture({ target: $("#postal-card"), destination: "copy", label: "postal", outputWidth: POSTAL_WIDTH, layoutWidth: POSTAL_WIDTH / 2 }));
+  const capturePostal = (destination) => {
+    const { width } = POSTAL_FORMATS[state.postal.format];
+    return runCapture({ target: $("#postal-card"), destination, label: "postal", outputWidth: width, layoutWidth: width / 2 });
+  };
+  $("#postal-download").addEventListener("click", () => capturePostal("download"));
+  $("#postal-copy").addEventListener("click", () => capturePostal("copy"));
   // Delegación en el documento: los hallazgos se repintan con cada rango y
   // pueden vivir en cualquier vista; ningún nodo repintado lleva listener.
   document.addEventListener("click", (event) => {

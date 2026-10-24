@@ -264,6 +264,9 @@ th[data-sort]:hover { color: var(--paper); }
 /* ── Cobertura ──────────────────────────────────────────────────────────── */
 .coverage-item { grid-template-columns: minmax(0, 1fr) auto auto; }
 .coverage-records { color: var(--muted); font-size: 10px; }
+/* El motivo de una fuente no disponible va en su propia línea, bajo el nombre. */
+.coverage-item.is-unavailable { flex-wrap: wrap; }
+.coverage-item.is-unavailable .coverage-records { order: 3; flex-basis: 100%; font-size: 12px; line-height: 1.4; }
 
 /* Datos sensibles: se revelan solo por decisión explícita. */
 .privacy-control { position: relative; }
@@ -1022,7 +1025,6 @@ html.is-capturing .postal { border-radius: 0; }
 .postal-tile.is-notes { --tone: #6ee48a; }
 .postal-tile.is-click { --tone: #66b3ff; }
 
-.postal-record { margin: 0; font: 600 3.4cqi/1.35 var(--sans); color: rgba(255, 255, 255, .8); }
 .postal-milestone { display: grid; gap: 1.8cqi; }
 .postal-milestone > div:first-child { display: flex; justify-content: space-between; align-items: baseline; gap: 3cqi; }
 .postal-milestone span { font: 600 3.1cqi var(--sans); color: rgba(255, 255, 255, .6); }
@@ -1079,18 +1081,7 @@ html.is-capturing .postal { border-radius: 0; }
 .postal-swatches .is-ink { background: #1c1c1e; }
 .postal-swatches .is-light { background: #f2f2f7; }
 .postal-swatches .is-indigo { background: #5856d6; }
-.postal-check { display: flex; align-items: center; gap: 8px; font: 500 13px var(--sans); cursor: pointer; }
-.postal-check input { width: 16px; height: 16px; accent-color: var(--paper); }
 
-/* Secciones que la autora decide no mostrar. */
-.postal.is-without-tiles .postal-tiles,
-.postal.is-without-record .postal-record,
-.postal.is-without-milestone .postal-milestone,
-.postal.is-without-author .postal-author { display: none; }
-/* Sin cifras, el bloque que empuja hacia abajo desaparece: lo hace el siguiente. */
-.postal.is-without-tiles .postal-record { margin-top: auto; }
-.postal.is-without-tiles.is-without-record .postal-milestone { margin-top: auto; }
-.postal.is-without-tiles.is-without-record.is-without-milestone .postal-foot { margin-top: auto; }
 
 /* Cuadrado: la misma composición, un escalón más compacta. */
 .postal[data-format="square"] { aspect-ratio: 1; gap: 1.8cqi; padding: 5.5%; }
@@ -1103,7 +1094,6 @@ html.is-capturing .postal { border-radius: 0; }
 .postal[data-format="square"] .postal-tile { padding: 2.4cqi 2.6cqi; }
 .postal[data-format="square"] .postal-tile strong { font-size: 6cqi; }
 .postal[data-format="square"] .postal-tile span { font-size: 2.5cqi; }
-.postal[data-format="square"] .postal-record { font-size: 2.9cqi; }
 
 /* Claro: gris agrupado del dashboard, tonos de métrica en su variante de texto. */
 .postal[data-theme="light"] { background: #f2f2f7; color: #1c1c1e; }
@@ -1115,7 +1105,7 @@ html.is-capturing .postal { border-radius: 0; }
 .postal[data-theme="light"] .postal-tile.is-open { --tone: var(--c-open-text); }
 .postal[data-theme="light"] .postal-tile.is-notes { --tone: var(--c-notes-text); }
 .postal[data-theme="light"] .postal-tile.is-click { --tone: var(--c-click-text); }
-.postal[data-theme="light"] .postal-record, .postal[data-theme="light"] .postal-author { color: #1c1c1e; }
+.postal[data-theme="light"] .postal-author { color: #1c1c1e; }
 .postal[data-theme="light"] .postal-credit { color: #8e8e93; }
 .postal[data-theme="light"] .postal-track { background: #e5e5ea; }
 .postal[data-theme="light"] .postal-track i { background: var(--c-subs); }
@@ -1124,16 +1114,12 @@ html.is-capturing .postal { border-radius: 0; }
 
 /* Índigo: el color de suscriptores en todo el fondo; las cifras en blanco. */
 .postal[data-theme="indigo"] { background: #5856d6; }
-.postal[data-theme="indigo"] .postal-tile { background: rgba(255, 255, 255, .14); }
-.postal[data-theme="indigo"] .postal-tile strong { color: #fff; }
-.postal[data-theme="indigo"] .postal-hero p { color: #fff; }
-.postal[data-theme="indigo"] .postal-track { background: rgba(255, 255, 255, .22); }
-.postal[data-theme="indigo"] .postal-track i { background: #fff; }
+.postal:is([data-theme="indigo"], [data-theme="brand"]) .postal-tile { background: rgba(255, 255, 255, .14); }
+.postal:is([data-theme="indigo"], [data-theme="brand"]) .postal-tile strong { color: #fff; }
+.postal:is([data-theme="indigo"], [data-theme="brand"]) .postal-hero p { color: #fff; }
+.postal:is([data-theme="indigo"], [data-theme="brand"]) .postal-track { background: rgba(255, 255, 255, .22); }
+.postal:is([data-theme="indigo"], [data-theme="brand"]) .postal-track i { background: #fff; }
 .postal[data-theme="indigo"] .postal-logo { color: #5856d6; }
-/* Sin cifras, la protagonista crece hasta ocupar el hueco. */
-.postal.is-without-tiles .postal-hero strong { font-size: 27cqi; }
-.postal.is-without-tiles .postal-hero span, .postal.is-without-tiles .postal-hero p { font-size: 5.4cqi; }
-.postal[data-format="square"].is-without-tiles .postal-hero strong { font-size: 20cqi; }
 /* El espaciado vertical va en los HIJOS: `gap` en cqi sobre la propia .postal
    resolvía contra el viewport (la postal es el contenedor, no está dentro de
    uno) y a 1400 px de ventana la tarjeta desbordaba 37 px. */
@@ -1154,8 +1140,7 @@ html.is-capturing .postal { border-radius: 0; }
 .postal-chart-line { fill: none; stroke: var(--chart-line); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .postal-chart-area { fill: var(--chart-fill); stroke: none; }
 .postal-chart-labels { display: flex; justify-content: space-between; gap: 3cqi; font: 600 2.8cqi/1.2 var(--sans); color: rgba(255, 255, 255, .6); font-variant-numeric: tabular-nums; }
-.postal:not(.is-without-chart) > .postal-tiles { margin-top: 2.2cqi; }
-.postal.is-without-chart .postal-chart { display: none; }
+.postal > .postal-chart + .postal-tiles { margin-top: 2.2cqi; }
 
 /* Cuatro cifras en una fila, en los dos formatos. Flex, no columnas iguales:
    una cifra larga ("+1,3 mil") se salía de su casilla. Cada casilla reparte el
@@ -1167,8 +1152,8 @@ html.is-capturing .postal { border-radius: 0; }
 
 .postal[data-theme="light"] .postal-chart { --chart-line: var(--c-subs); --chart-fill: rgba(88, 86, 214, .14); }
 .postal[data-theme="light"] .postal-chart-labels { color: #6c6c70; }
-.postal[data-theme="indigo"] .postal-chart { --chart-line: #fff; --chart-fill: rgba(255, 255, 255, .18); }
-.postal[data-theme="indigo"] .postal-chart-labels { color: rgba(255, 255, 255, .7); }
+.postal:is([data-theme="indigo"], [data-theme="brand"]) .postal-chart { --chart-line: #fff; --chart-fill: rgba(255, 255, 255, .18); }
+.postal:is([data-theme="indigo"], [data-theme="brand"]) .postal-chart-labels { color: rgba(255, 255, 255, .7); }
 /* Cuadrado con gráfico: un escalón más compacto para que quepa el autor. */
 .postal[data-format="square"] .postal-hero strong { font-size: 11cqi; }
 .postal[data-format="square"] .postal-hero span, .postal[data-format="square"] .postal-hero p { font-size: 3.2cqi; }
@@ -1176,6 +1161,262 @@ html.is-capturing .postal { border-radius: 0; }
 .postal[data-format="square"] .postal-chart { min-height: 8cqi; gap: .8cqi; }
 .postal[data-format="square"] .postal-chart-labels { font-size: 2.4cqi; }
 .postal[data-format="square"] .postal-milestone { gap: 1.2cqi; }
+
+/* ── Historias, frase propia y color de marca ──────────────────────────── */
+/* Qué cuenta la postal: cuatro tarjetas en rejilla, no un segmentado, porque
+   cada una necesita su línea de explicación. */
+.postal-stories { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.postal-stories button { position: relative; display: grid; gap: 3px; align-content: start; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--paper); cursor: pointer; }
+.postal-stories b { font: 650 13px/1.2 var(--sans); }
+.postal-stories span { font: 500 12px/1.35 var(--sans); color: var(--muted); }
+.postal-stories button[aria-pressed="true"] { border-color: var(--paper); box-shadow: inset 0 0 0 1px var(--paper); }
+.postal-stories button:disabled { opacity: .45; cursor: not-allowed; }
+.postal-suggested { justify-self: start; margin-top: 3px; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--c-notes) 16%, transparent); color: var(--c-notes-text); font: 650 10px/1.4 var(--sans); font-style: normal; }
+.postal-suggested[hidden] { display: none; }
+.postal-hint { margin: 0; font: 500 12px/1.4 var(--sans); color: var(--muted); }
+
+.postal-line-input { width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2, transparent); color: var(--paper); font: 500 14px var(--sans); }
+.postal-line-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.postal-line-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; font: 500 11.5px var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+.postal-line-reset { border: 0; padding: 0; background: none; color: var(--accent); font: 600 12px var(--sans); cursor: pointer; }
+.postal-line-reset[hidden] { display: none; }
+
+.postal-swatches .is-brand[hidden] { display: none; }
+
+/* En la tarjeta: la frase del autor bajo la cifra protagonista. */
+.postal > .postal-line { margin-top: 3cqi; }
+.postal-line { margin: 0; font: 600 4.4cqi/1.3 var(--display); letter-spacing: -.01em; color: rgba(255, 255, 255, .92); overflow-wrap: anywhere; }
+.postal[data-format="square"] .postal-line { font-size: 3.6cqi; }
+
+
+/* Tu marca: el color del logo, ya oscurecido para que el blanco se lea. */
+.postal[data-theme="brand"] { background: var(--postal-brand, #1c1c1e); }
+.postal[data-theme="brand"] .postal-logo { color: var(--postal-brand, #1c1c1e); }
+
+.postal[data-theme="light"] .postal-line { color: #1c1c1e; }
+
+/* La barra del próximo hito pertenece a la historia del hito. */
+.postal:not([data-story="milestone"]) .postal-milestone { display: none; }
+/* Marca de la historia sobre la curva: el hito, una línea discontinua a su
+   altura; la mejor semana, una franja. */
+.postal-chart-mark { fill: none; stroke: var(--chart-line); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .85; vector-effect: non-scaling-stroke; }
+.postal-chart-band { fill: var(--chart-line); opacity: .2; }
+
+/* Descargar y copiar, debajo de la imagen que producen. */
+.postal-preview { display: grid; gap: 14px; min-width: 0; max-width: 540px; }
+.postal-output { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+
+/* ── Pulido del editor de la postal ─────────────────────────────────── */
+/* Estados de puntero en todas las piezas elegibles: un velo de tinta y el
+   borde un tono más hondo; la elegida no cambia al pasar por encima. */
+.postal-stories button, .postal-layouts button { transition: border-color .15s ease-out, background-color .15s ease-out, box-shadow .15s ease-out; }
+.postal-stories button:not(:disabled):not([aria-pressed="true"]):hover,
+.postal-layouts button:not([aria-pressed="true"]):hover { border-color: rgba(60, 60, 67, .3); background: color-mix(in srgb, var(--paper) 4%, transparent); }
+.postal-swatches button { transition: box-shadow .15s ease-out; }
+.postal-swatches button:not([aria-pressed="true"]):hover { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 2px var(--panel), 0 0 0 4px rgba(60, 60, 67, .22); }
+.postal-segment button:not([aria-pressed="true"]):hover { background: color-mix(in srgb, var(--paper) 6%, transparent); }
+
+/* Icono de cada formato: un rectángulo con su proporción, en el color del
+   texto del botón (blanco en el elegido). */
+.postal-segment button { display: inline-flex; align-items: center; gap: 7px; }
+.postal-format-icon { flex: 0 0 auto; box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 2.5px; }
+[data-postal-format="portrait"] .postal-format-icon { width: 10px; height: 12.5px; }
+[data-postal-format="square"] .postal-format-icon { width: 12px; height: 12px; }
+[data-postal-format="landscape"] .postal-format-icon { width: 14px; height: 10px; }
+
+/* El valor elegido junto a su etiqueta ("Color · Índigo"). */
+.postal-option-value { color: var(--paper); font-weight: 600; }
+.postal-option-value:not(:empty)::before { content: "· "; color: var(--muted); }
+
+/* Las miniaturas de diseño en el color elegido. */
+.postal-layouts[data-theme="light"] .postal-thumb { background: #e5e5ea; }
+.postal-layouts[data-theme="light"] .postal-thumb i:nth-child(1),
+.postal-layouts[data-theme="light"] .postal-thumb i:nth-child(3) { background: rgba(28, 28, 30, .75); }
+.postal-layouts[data-theme="light"] .postal-thumb i:nth-child(4) { background: rgba(28, 28, 30, .3); }
+.postal-layouts[data-theme="light"] .postal-thumb i:nth-child(2) { background: rgba(88, 86, 214, .55); }
+.postal-layouts[data-theme="indigo"] .postal-thumb { background: #5856d6; }
+.postal-layouts[data-theme="brand"] .postal-thumb { background: var(--postal-brand, #1c1c1e); }
+.postal-layouts:is([data-theme="indigo"], [data-theme="brand"]) .postal-thumb i:nth-child(2) { background: rgba(255, 255, 255, .4); }
+.postal-thumb { transition: background-color .2s ease-out; }
+
+/* La postal clara es del mismo gris que la página: en pantalla lleva un filo
+   para verse como objeto. La captura no lo lleva. */
+html:not(.is-capturing) .postal[data-theme="light"] { box-shadow: inset 0 0 0 1px rgba(60, 60, 67, .14); }
+
+/* Título y explicación a todo el ancho; debajo, editor y postal arrancan a la
+   misma altura. `.postal-intro` se disuelve para que sus piezas sean celdas de
+   la rejilla de la página. En escritorio la postal acompaña al desplazarse. */
+.postal-stage { row-gap: 0; }
+.postal-intro { display: contents; }
+.postal-intro > h2, .postal-intro > .panel-copy { grid-column: 1 / -1; }
+.postal-intro > .panel-copy { margin-top: 10px; }
+@media (min-width: 961px) {
+  .postal-stage { grid-template-rows: auto auto 1fr; }
+  .postal-config { grid-column: 1; grid-row: 3; margin-top: var(--space-section); }
+  .postal-preview { grid-column: 2; grid-row: 3; margin-top: var(--space-section); position: sticky; top: 86px; align-self: start; }
+}
+/* Una columna: la postal va justo después del título, antes de las opciones,
+   para ver el resultado de cada cambio sin bajar al final. */
+@media (max-width: 960px) {
+  .postal-intro > h2 { order: 0; }
+  .postal-intro > .panel-copy { order: 1; }
+  .postal-preview { order: 2; margin-top: var(--space-4); }
+  .postal-config { order: 3; margin-top: var(--space-section); }
+}
+/* Las opciones nunca ensanchan el panel más que su columna. */
+.postal-config { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 560px) {
+  .postal-stories { grid-template-columns: minmax(0, 1fr); }
+  /* Tres formatos con icono no caben en cápsula a lo ancho de un móvil: tres
+     columnas iguales, icono sobre el texto. */
+  .postal-config .postal-segment { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; box-sizing: border-box; border-radius: 14px; }
+  .postal-config .postal-segment button { flex-direction: column; justify-content: center; gap: 5px; padding: 9px 4px; border-radius: 11px; }
+  /* Cinco no caben en una fila de móvil: tres arriba y dos abajo, y las dos
+     filas a todo el ancho (rejilla de 6: las tres primeras ocupan 2, las dos
+     últimas 3). */
+  .postal-config .postal-layouts { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .postal-config .postal-layouts button:nth-child(-n + 3) { grid-column: span 2; }
+  .postal-config .postal-layouts button:nth-child(n + 4) { grid-column: span 3; }
+  .postal-config { padding: 16px; }
+}
+
+/* ── Diseños de la postal ──────────────────────────────────────────────── */
+/* Plantillas a la manera de un generador de imágenes OG: mismo contenido,
+   otra composición. Solo cambian reglas bajo `data-layout`; los nodos son los
+   mismos. Recordatorio: `cqi` es el 1% del ancho de CONTENIDO de la tarjeta, y
+   los márgenes en % se miden contra ese mismo ancho; el relleno de la tarjeta
+   (6,5% vertical, 5,5% cuadrada) se mide contra el ancho total. De ahí los
+   7,47% y 6,18% para sangrar hasta el borde: 6,5/87 y 5,5/89. */
+
+/* Miniaturas del selector: un esquema de cada composición. */
+/* Cinco columnas iguales a todo el ancho del editor. */
+.postal-layouts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.postal-layouts button { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 6px; min-width: 0; padding: 10px 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--paper); font: 600 12px var(--sans); cursor: pointer; }
+.postal-layouts button[aria-pressed="true"] { border-color: var(--paper); box-shadow: inset 0 0 0 1px var(--paper); }
+.postal-layouts button:disabled { opacity: .4; cursor: not-allowed; }
+.postal-thumb { position: relative; display: block; width: min(100%, 64px); aspect-ratio: 4 / 5; border-radius: 6px; background: #1c1c1e; overflow: hidden; }
+.postal-thumb i { position: absolute; border-radius: 2px; background: rgba(255, 255, 255, .85); }
+.postal-thumb i:nth-child(1) { left: 12%; top: 12%; width: 46%; height: 14%; }
+.postal-thumb i:nth-child(2) { left: 12%; top: 38%; width: 76%; height: 22%; background: rgba(165, 164, 255, .6); }
+.postal-thumb i:nth-child(3) { left: 12%; top: 66%; width: 76%; height: 11%; background: rgba(255, 255, 255, .3); }
+.postal-thumb i:nth-child(4) { left: 12%; top: 85%; width: 34%; height: 5%; background: rgba(255, 255, 255, .4); }
+[data-postal-layout="number"] .postal-thumb i:nth-child(1) { left: 18%; top: 34%; width: 64%; height: 24%; }
+[data-postal-layout="number"] .postal-thumb i:nth-child(2) { left: 30%; top: 63%; width: 40%; height: 5%; background: rgba(255, 255, 255, .5); }
+[data-postal-layout="number"] .postal-thumb i:nth-child(3) { left: 40%; top: 9%; width: 20%; height: 14%; background: rgba(255, 255, 255, .85); }
+[data-postal-layout="number"] .postal-thumb i:nth-child(4) { left: 33%; }
+[data-postal-layout="chart"] .postal-thumb i:nth-child(2) { left: 0; top: 44%; width: 100%; height: 56%; border-radius: 0; clip-path: polygon(0 75%, 30% 55%, 60% 45%, 100% 5%, 100% 100%, 0 100%); }
+[data-postal-layout="chart"] .postal-thumb i:nth-child(3) { top: 30%; width: 44%; height: 5%; background: rgba(255, 255, 255, .5); }
+[data-postal-layout="chart"] .postal-thumb i:nth-child(4) { left: auto; right: 12%; top: 12%; width: 20%; height: 6%; }
+[data-postal-layout="mosaic"] .postal-thumb i:nth-child(1) { width: 40%; height: 9%; }
+[data-postal-layout="mosaic"] .postal-thumb i:nth-child(2) { top: 28%; width: 44%; height: 34%; background: rgba(165, 164, 255, .6); }
+[data-postal-layout="mosaic"] .postal-thumb i:nth-child(3) { left: 60%; top: 28%; width: 28%; height: 34%; background: rgba(255, 255, 255, .3); }
+[data-postal-layout="mosaic"] .postal-thumb i:nth-child(4) { top: 67%; width: 76%; height: 21%; background: rgba(255, 255, 255, .3); }
+[data-postal-layout="split"] .postal-thumb i:nth-child(1) { width: 36%; }
+[data-postal-layout="split"] .postal-thumb i:nth-child(2) { top: 40%; width: 36%; height: 34%; }
+[data-postal-layout="split"] .postal-thumb i:nth-child(3) { left: 56%; top: 12%; width: 32%; height: 34%; }
+[data-postal-layout="split"] .postal-thumb i:nth-child(4) { left: 56%; top: 52%; width: 32%; height: 34%; border-radius: 2px; background: rgba(255, 255, 255, .3); }
+
+
+/* Cuántas cifras de la reserva enseña cada diseño: la clásica y columnas, 4. */
+.postal:is([data-layout="classic"], [data-layout="split"]) .postal-tile:nth-child(n+5) { display: none; }
+
+/* Cifra: la protagonista sola y centrada, como un titular de OG. */
+.postal[data-layout="number"] :is(.postal-chart, .postal-tiles, .postal-milestone) { display: none; }
+.postal[data-layout="number"] { text-align: center; }
+.postal[data-layout="number"] .postal-head { flex-direction: column; justify-content: center; align-items: center; gap: 2.4cqi; }
+.postal[data-layout="number"] > .postal-hero { margin-top: auto; justify-items: center; }
+.postal[data-layout="number"] .postal-hero strong { font-size: 40cqi; line-height: .85; }
+.postal[data-layout="number"][data-figure="medium"] .postal-hero strong { font-size: 30cqi; }
+.postal[data-layout="number"][data-figure="long"] .postal-hero strong { font-size: 22cqi; }
+.postal[data-layout="number"] .postal-hero span { font-size: 5.6cqi; }
+.postal[data-layout="number"] .postal-hero p { font-size: 4.6cqi; }
+.postal[data-layout="number"] > .postal-foot { margin-top: auto; }
+.postal[data-layout="number"][data-format="square"] .postal-hero strong { font-size: 30cqi; }
+.postal[data-layout="number"][data-format="square"][data-figure="medium"] .postal-hero strong { font-size: 24cqi; }
+.postal[data-layout="number"][data-format="square"][data-figure="long"] .postal-hero strong { font-size: 18cqi; }
+.postal[data-layout="number"][data-format="square"] .postal-hero span { font-size: 4.4cqi; }
+
+
+/* Mosaico: un bento de verdad, no una rejilla de piezas iguales. La frase
+   va encima y debajo un bloque continuo en una rejilla de diez columnas: la
+   cifra protagonista ocupa seis y dos filas, con dos cifras apiladas a su
+   lado; debajo, filas de anchos distintos (mitad y mitad; un tercio largo y
+   dos tercios). `data-tiles` (cuántas cifras hay) elige la plantilla, así
+   que con 3 o 5 cifras la última ocupa su fila entera y no queda hueco. La
+   primera cifra lleva un velo de su color: el bloque que acompaña a la cifra.
+   `.postal-tiles` se disuelve con `display: contents` para que cada cifra
+   sea celda de la tarjeta. Un solo espaciado entre bloques, 2,8cqi: en
+   horizontal, column-gap 2,8% (se mide contra el mismo ancho); en vertical,
+   el margen de cada bloque (`gap` en cqi no sirve, ver arriba). El
+   horizontal tiene su propio bento más abajo. */
+.postal[data-layout="mosaic"] { display: grid; column-gap: 2.8%; }
+.postal[data-layout="mosaic"] :is(.postal-chart, .postal-milestone) { display: none; }
+.postal[data-layout="mosaic"] > .postal-tiles { display: contents; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+.postal[data-layout="mosaic"]:not([data-format="landscape"])[data-tiles="0"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero hero hero hero hero" "hero hero hero hero hero hero hero hero hero hero" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(2, 1fr) auto; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"])[data-tiles="1"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t1 t1 t1 t1" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(2, 1fr) auto; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"])[data-tiles="2"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t2 t2 t2 t2" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(2, 1fr) auto; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"])[data-tiles="3"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t2 t2 t2 t2" "t3 t3 t3 t3 t3 t3 t3 t3 t3 t3" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(3, 1fr) auto; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"])[data-tiles="4"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t2 t2 t2 t2" "t3 t3 t3 t3 t3 t4 t4 t4 t4 t4" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(3, 1fr) auto; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"])[data-tiles="5"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t2 t2 t2 t2" "t3 t3 t3 t3 t3 t4 t4 t4 t4 t4" "t5 t5 t5 t5 t5 t5 t5 t5 t5 t5" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(4, 1fr) auto; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"])[data-tiles="6"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t2 t2 t2 t2" "t3 t3 t3 t3 t3 t4 t4 t4 t4 t4" "t5 t5 t5 t5 t6 t6 t6 t6 t6 t6" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(4, 1fr) auto; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) > .postal-head { grid-area: head; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) > .postal-line { grid-area: line; margin-top: 2.4cqi; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) > .postal-hero { grid-area: hero; align-content: end; margin-top: 3.4cqi; padding: 4cqi 4.4cqi; border-radius: 3.6cqi; }
+.postal[data-layout="mosaic"] > .postal-hero { background: var(--hero-block, rgba(165, 164, 255, .16)); }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) > .postal-foot { grid-area: foot; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile:nth-child(1) { grid-area: t1; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile:nth-child(2) { grid-area: t2; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile:nth-child(3) { grid-area: t3; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile:nth-child(4) { grid-area: t4; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile:nth-child(5) { grid-area: t5; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile:nth-child(6) { grid-area: t6; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile { min-width: 0; margin-top: 2.8cqi; align-content: end; padding: 3cqi 3.4cqi; border-radius: 3.6cqi; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile:nth-child(1) { margin-top: 3.4cqi; background: color-mix(in srgb, var(--tone) 18%, transparent); }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile strong { font-size: 7.4cqi; }
+.postal[data-layout="mosaic"]:not([data-format="landscape"]) .postal-tile span { font-size: 2.9cqi; }
+.postal[data-layout="mosaic"] .postal-hero strong { font-size: 17cqi; }
+.postal[data-layout="mosaic"][data-figure="medium"] .postal-hero strong { font-size: 14cqi; }
+.postal[data-layout="mosaic"][data-figure="long"] .postal-hero strong { font-size: 11cqi; }
+.postal[data-layout="mosaic"] .postal-hero span { font-size: 3.6cqi; margin-top: 1cqi; }
+.postal[data-layout="mosaic"] .postal-hero p { font-size: 3.2cqi; margin-top: 1cqi; }
+.postal[data-layout="mosaic"][data-theme="light"] { --hero-block: #fff; }
+.postal[data-layout="mosaic"]:is([data-theme="indigo"], [data-theme="brand"]) { --hero-block: rgba(255, 255, 255, .16); }
+/* Cuadrado: la misma composición con cuatro cifras como mucho; seis
+   bloques no respiran en un cuadrado con frase y pie. */
+.postal[data-layout="mosaic"][data-format="square"] .postal-tile:nth-child(n + 5) { display: none; }
+.postal[data-layout="mosaic"][data-format="square"][data-tiles="5"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t2 t2 t2 t2" "t3 t3 t3 t3 t3 t4 t4 t4 t4 t4" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(3, 1fr) auto; }
+.postal[data-layout="mosaic"][data-format="square"][data-tiles="6"] { grid-template-areas: "head head head head head head head head head head" "line line line line line line line line line line" "hero hero hero hero hero hero t1 t1 t1 t1" "hero hero hero hero hero hero t2 t2 t2 t2" "t3 t3 t3 t3 t3 t4 t4 t4 t4 t4" "foot foot foot foot foot foot foot foot foot foot"; grid-template-rows: auto auto repeat(3, 1fr) auto; }
+.postal[data-layout="mosaic"][data-format="square"] > .postal-hero { margin-top: 2.8cqi; padding: 3cqi 3.6cqi; }
+.postal[data-layout="mosaic"][data-format="square"] .postal-tile { margin-top: 2.2cqi; padding: 2.4cqi 3cqi; }
+.postal[data-layout="mosaic"][data-format="square"] .postal-tile:nth-child(1) { margin-top: 2.8cqi; }
+.postal[data-layout="mosaic"][data-format="square"] .postal-tile strong { font-size: 6.2cqi; }
+.postal[data-layout="mosaic"][data-format="square"] .postal-tile span { font-size: 2.5cqi; }
+.postal[data-layout="mosaic"][data-format="square"] .postal-hero strong { font-size: 12.5cqi; }
+.postal[data-layout="mosaic"][data-format="square"][data-figure="medium"] .postal-hero strong { font-size: 10.5cqi; }
+.postal[data-layout="mosaic"][data-format="square"][data-figure="long"] .postal-hero strong { font-size: 8.5cqi; }
+
+/* Columnas: cifra y curva a la izquierda, cifras apiladas a la derecha. */
+.postal[data-layout="split"] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .82fr); grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; column-gap: 5%; }
+.postal[data-layout="split"] .postal-milestone { display: none; }
+.postal[data-layout="split"] > * { grid-column: 1; }
+.postal[data-layout="split"] > .postal-head { grid-column: 1 / -1; grid-row: 1; }
+.postal[data-layout="split"] > .postal-hero { grid-row: 2; }
+.postal[data-layout="split"] > .postal-line { grid-row: 4; }
+.postal[data-layout="split"] > .postal-chart { grid-row: 5; min-height: 0; }
+.postal[data-layout="split"] > .postal-foot { grid-column: 1 / -1; grid-row: 6; }
+.postal[data-layout="split"] > .postal-tiles { grid-column: 2; grid-row: 2 / 6; display: flex; flex-direction: column; gap: 2cqi; margin-top: 4cqi; }
+.postal[data-layout="split"] .postal-tile { flex: 1 1 0; min-width: 0; align-content: center; padding: 3cqi; }
+.postal[data-layout="split"] .postal-tile strong { font-size: 7.4cqi; }
+.postal[data-layout="split"] .postal-tile span { font-size: 2.8cqi; }
+.postal[data-layout="split"] .postal-hero strong { font-size: 20cqi; }
+.postal[data-layout="split"][data-figure="medium"] .postal-hero strong { font-size: 15cqi; }
+.postal[data-layout="split"][data-figure="long"] .postal-hero strong { font-size: 11.5cqi; }
+.postal[data-layout="split"] .postal-line { font-size: 3.8cqi; }
+.postal[data-layout="split"][data-format="square"] .postal-tile strong { font-size: 5.6cqi; }
+.postal[data-layout="split"][data-format="square"] .postal-tile { padding: 2cqi 3cqi; }
+.postal[data-layout="split"][data-format="square"] .postal-hero strong { font-size: 15cqi; }
+.postal[data-layout="split"][data-format="square"][data-figure="long"] .postal-hero strong { font-size: 9.5cqi; }
 
 /* ── Pulido ────────────────────────────────────────────────────────────── */
 /* Una insignia sin texto es una píldora gris vacía (Seguidores sin histórico). */
@@ -1267,4 +1508,258 @@ html.is-capturing .postal { border-radius: 0; }
   .finding-examples li { grid-template-columns: 7px minmax(0, 1fr); row-gap: 2px; }
   .finding-examples li span { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .finding-examples li small { grid-column: 2; }
+}
+
+/* ── Postal horizontal (1456 × 1048, la vista previa de Substack) ──────── */
+/* El tamaño que Substack recomienda para la imagen de vista previa de un
+   post: 14:10. Con menos alto que la vertical, cada diseño pasa a dos
+   columnas bajo una cabecera a todo el ancho: a la izquierda, siempre cifra,
+   frase y pie; a la derecha, lo propio del diseño. Va al final del archivo para ganar, a igual
+   especificidad, a las reglas de los diseños verticales. Relleno 5,5% del
+   ancho total; `cqi` y los % de margen se miden contra el 89% restante
+   (sangrado: 5,5/89 = 6,18%). */
+.postal[data-format="landscape"] { aspect-ratio: 1456 / 1048; padding: 5.5%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto; column-gap: 5%; }
+.postal[data-format="landscape"] > * { grid-column: 1; margin-top: 0; }
+.postal[data-format="landscape"] > .postal-head { grid-column: 1 / -1; grid-row: 1; }
+.postal[data-format="landscape"] > .postal-hero { grid-row: 2; margin-top: 3cqi; }
+.postal[data-format="landscape"] > .postal-line { grid-row: 3; margin-top: 2.4cqi; }
+.postal[data-format="landscape"] > .postal-milestone { grid-row: 4; align-self: end; margin-top: 3cqi; }
+.postal[data-format="landscape"] > .postal-foot { grid-column: 1 / -1; grid-row: 5; align-self: end; margin-top: 3cqi; }
+.postal[data-format="landscape"] > .postal-chart { grid-column: 2; grid-row: 2 / 4; min-height: 0; margin-top: 3cqi; gap: 1cqi; }
+.postal[data-format="landscape"] > .postal-tiles { display: grid; grid-column: 2; grid-row: 4 / 6; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: end; margin-top: 3cqi; gap: 1.8cqi; }
+
+/* La barra del hito se queda en los formatos altos: la cifra "Faltan
+   para…" ya dice lo mismo. */
+.postal[data-format="landscape"] .postal-milestone { display: none; }
+/* Una línea para la fecha: cada línea de más se la quitaría a la frase. */
+.postal[data-format="landscape"] .postal-period { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Escala de texto. */
+.postal[data-format="landscape"] .postal-head { gap: 3cqi; }
+.postal[data-format="landscape"] .postal-logo { width: 10cqi; height: 10cqi; border-radius: 2.4cqi; }
+.postal[data-format="landscape"] .postal-logo b { font-size: 5cqi; }
+.postal[data-format="landscape"] .postal-period { margin-bottom: .8cqi; font-size: 2.5cqi; }
+.postal[data-format="landscape"] .postal-name { font-size: 4.8cqi; }
+.postal[data-format="landscape"] .postal-hero strong { font-size: 16cqi; }
+.postal[data-format="landscape"][data-figure="medium"] .postal-hero strong { font-size: 13cqi; }
+.postal[data-format="landscape"][data-figure="long"] .postal-hero strong { font-size: 10.5cqi; }
+.postal[data-format="landscape"] .postal-hero span { margin-top: 1cqi; font-size: 3.2cqi; }
+.postal[data-format="landscape"] .postal-hero p { margin-top: 1cqi; font-size: 3cqi; }
+.postal[data-format="landscape"] .postal-line { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 3cqi; }
+.postal[data-format="landscape"] .postal-chart-labels { font-size: 2.3cqi; white-space: nowrap; }
+/* Pie, igual en todos los diseños y formatos: el autor a la izquierda y el
+   crédito a la derecha, en la misma línea, abajo. */
+.postal[data-format="landscape"] .postal-foot { flex-direction: row; align-items: center; justify-content: space-between; gap: 3cqi; }
+.postal[data-format="landscape"] .postal-tile { min-width: 0; padding: 2.2cqi 2.6cqi; border-radius: 2.4cqi; gap: .5cqi; }
+.postal[data-format="landscape"] .postal-tile strong { font-size: 5.2cqi; }
+.postal[data-format="landscape"] .postal-tile span { font-size: 2.4cqi; }
+.postal[data-format="landscape"] .postal-milestone { gap: 1.2cqi; }
+.postal[data-format="landscape"] .postal-milestone span { font-size: 2.4cqi; }
+.postal[data-format="landscape"] .postal-milestone strong { font-size: 2.8cqi; }
+.postal[data-format="landscape"] .postal-track { height: 1.4cqi; }
+.postal[data-format="landscape"] .postal-author { gap: 1.8cqi; font-size: 2.8cqi; }
+.postal[data-format="landscape"] .postal-avatar { width: 5.4cqi; height: 5.4cqi; }
+.postal[data-format="landscape"] .postal-avatar b { font-size: 2.6cqi; }
+.postal[data-format="landscape"] .postal-credit { font-size: 2.3cqi; }
+
+/* Clásica horizontal: se lee de izquierda a derecha en franjas a todo el
+   ancho, no en dos columnas. Arriba, la newsletter; en la segunda franja, la
+   cifra con su etiqueta debajo a la izquierda y, a su derecha, la variación y
+   la frase (`.postal-hero` se disuelve para que sus piezas sean celdas de la
+   tarjeta). Después la curva en panorámica, a sangre por los lados, las
+   cuatro cifras en una fila y el pie. */
+.postal[data-format="landscape"][data-layout="classic"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto auto; }
+.postal[data-format="landscape"][data-layout="classic"] > .postal-head { grid-column: 1 / -1; grid-row: 1; }
+.postal[data-format="landscape"][data-layout="classic"] > .postal-foot { grid-column: 1 / -1; grid-row: 6; margin-top: 1.8cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-avatar { width: 4.4cqi; height: 4.4cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-author { font-size: 2.4cqi; }
+.postal[data-format="landscape"][data-layout="classic"] > .postal-hero { display: contents; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-hero strong { grid-column: 1; grid-row: 2; align-self: end; margin-top: 2.4cqi; font-size: 13.5cqi; }
+.postal[data-format="landscape"][data-layout="classic"][data-figure="medium"] .postal-hero strong { font-size: 12cqi; }
+.postal[data-format="landscape"][data-layout="classic"][data-figure="long"] .postal-hero strong { font-size: 10cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-hero span { grid-column: 1; grid-row: 3; align-self: start; margin-top: .6cqi; font-size: 3.4cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-hero p { grid-column: 2; grid-row: 2; align-self: end; margin: 0 0 1.4cqi; font-size: 3.2cqi; }
+.postal[data-format="landscape"][data-layout="classic"] > .postal-line { grid-column: 2; grid-row: 3; align-self: start; margin-top: .6cqi; }
+.postal[data-format="landscape"][data-layout="classic"] > .postal-chart { grid-column: 1 / -1; grid-row: 4; margin: 2.4cqi -6.18% 0; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-chart-labels { order: -1; padding: 0 6.18cqi; }
+.postal[data-format="landscape"][data-layout="classic"] > .postal-tiles { grid-column: 1 / -1; grid-row: 5; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 2.4cqi; }
+/* Franjas compactas (cabecera, frase, cifras) para que la curva tenga alto. */
+.postal[data-format="landscape"][data-layout="classic"] .postal-logo { width: 7.5cqi; height: 7.5cqi; border-radius: 2cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-logo b { font-size: 3.8cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-name { font-size: 4.2cqi; }
+.postal[data-format="landscape"][data-layout="classic"] > .postal-line { font-size: 2.8cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-tile { padding: 1.2cqi 1.8cqi; gap: .2cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-tile strong { font-size: 4.2cqi; }
+.postal[data-format="landscape"][data-layout="classic"] .postal-tile span { font-size: 2cqi; }
+
+/* Cifra: una sola columna centrada; la cabecera, en línea. */
+.postal[data-format="landscape"][data-layout="number"] > :is(.postal-tiles, .postal-chart) { display: none; }
+.postal[data-format="landscape"][data-layout="number"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.postal[data-format="landscape"][data-layout="number"] .postal-head { flex-direction: row; }
+.postal[data-format="landscape"][data-layout="number"] > .postal-hero { grid-row: 2; align-self: center; margin-top: 2cqi; }
+.postal[data-format="landscape"][data-layout="number"] > .postal-line { grid-row: 3; }
+.postal[data-format="landscape"][data-layout="number"] > .postal-foot { grid-row: 4; }
+.postal[data-format="landscape"][data-layout="number"] .postal-hero strong { font-size: 26cqi; }
+.postal[data-format="landscape"][data-layout="number"][data-figure="medium"] .postal-hero strong { font-size: 21cqi; }
+.postal[data-format="landscape"][data-layout="number"][data-figure="long"] .postal-hero strong { font-size: 16cqi; }
+.postal[data-format="landscape"][data-layout="number"] .postal-hero span { font-size: 3.8cqi; }
+
+
+/* Mosaico horizontal: un bento continuo. Cabecera a todo el ancho, la frase
+   encima, y debajo un solo bloque: la cifra a todo
+   el alto en las dos primeras columnas y las cuatro primeras cifras en 2 × 2
+   en las dos últimas (seis en tres filas no caben: con la mitad de alto, cada
+   bloque quedaba de 12 unidades y la cifra tocaba el borde), con el mismo hueco en las dos direcciones (1,6cqi: column-gap en %
+   se mide contra el mismo ancho que los cqi; el vertical va en márgenes).
+   .postal-tiles se disuelve para que cada cifra sea celda de la tarjeta; el
+   autocolocado las mete en las celdas libres junto a la cifra. */
+.postal[data-format="landscape"][data-layout="mosaic"] { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: auto auto repeat(2, minmax(0, 1fr)) auto; column-gap: 1.6%; }
+.postal[data-format="landscape"][data-layout="mosaic"] > * { grid-column: 1 / -1; margin-top: 0; }
+.postal[data-format="landscape"][data-layout="mosaic"] > .postal-head { grid-column: 1 / -1; grid-row: 1; }
+.postal[data-format="landscape"][data-layout="mosaic"] > .postal-foot { grid-column: 1 / -1; grid-row: 5; margin-top: 2cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] > .postal-line { grid-row: 2; margin-top: 2.6cqi; font-size: 3.2cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] > .postal-hero { grid-column: 1 / 3; grid-row: 3 / 5; align-self: stretch; align-content: end; margin-top: 3cqi; padding: 3.4cqi 3.8cqi; border-radius: 2.8cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] > .postal-tiles { display: contents; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile { grid-column: auto; min-width: 0; margin-top: 1.6cqi; align-content: end; padding: 2.2cqi 2.4cqi; border-radius: 2.8cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile:nth-child(-n + 2) { margin-top: 3cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile strong { font-size: 5cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile span { font-size: 2.4cqi; }
+/* Con menos de seis cifras, las últimas se ensanchan: el bento no deja huecos. */
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile:nth-child(odd):last-child { grid-column: span 2; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile:nth-child(n + 5) { display: none; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile:first-child:nth-last-child(2),
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-tile:nth-child(2):last-child { grid-row: span 2; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-hero strong { font-size: 18cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"][data-figure="medium"] .postal-hero strong { font-size: 15cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"][data-figure="long"] .postal-hero strong { font-size: 12cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-hero span { margin-top: 1.2cqi; font-size: 3.2cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-hero p { margin-top: 1cqi; font-size: 3cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-logo { width: 7.5cqi; height: 7.5cqi; border-radius: 2cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-logo b { font-size: 3.8cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-name { font-size: 4.2cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-author { font-size: 2.6cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-avatar { width: 5cqi; height: 5cqi; }
+.postal[data-format="landscape"][data-layout="mosaic"] .postal-credit { font-size: 2.1cqi; }
+
+/* Columnas: dos columnas de igual alto que enmarcan la tarjeta. A la
+   izquierda, la cifra arriba (a la altura de la primera fila de cifras) y la
+   frase abajo, cerrando la columna a la altura de la última; a la derecha,
+   cuatro cifras en 2 × 2. La etiqueta de cada cifra reserva dos líneas para
+   que las cifras de una misma fila queden a la misma altura. La curva no cabe
+   bajo una frase de dos líneas: la llevan Clásica y Curva. */
+.postal[data-format="landscape"][data-layout="split"] { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); }
+.postal[data-format="landscape"][data-layout="split"] > .postal-chart { display: none; }
+.postal[data-format="landscape"][data-layout="split"] > .postal-hero { grid-row: 2; align-self: start; margin-top: 4.4cqi; }
+.postal[data-format="landscape"][data-layout="split"] > .postal-line { grid-row: 3 / 5; align-self: end; margin-top: 3cqi; font-size: 3.4cqi; -webkit-line-clamp: 3; }
+.postal[data-format="landscape"][data-layout="split"] > .postal-tiles { grid-row: 2 / 5; grid-auto-rows: minmax(0, 1fr); margin-top: 4.4cqi; align-self: stretch; }
+.postal[data-format="landscape"][data-layout="split"] .postal-tile { align-content: end; padding: 2.6cqi 3cqi; }
+.postal[data-format="landscape"][data-layout="split"] .postal-tile strong { font-size: 5.4cqi; }
+.postal[data-format="landscape"][data-layout="split"] .postal-tile span { min-height: 2.5em; }
+.postal[data-format="landscape"][data-layout="split"] .postal-hero strong { font-size: 17cqi; }
+.postal[data-format="landscape"][data-layout="split"][data-figure="medium"] .postal-hero strong { font-size: 13.5cqi; }
+.postal[data-format="landscape"][data-layout="split"][data-figure="long"] .postal-hero strong { font-size: 10.5cqi; }
+.postal[data-format="landscape"][data-layout="split"] .postal-hero span { margin-top: 1.4cqi; font-size: 3.4cqi; }
+.postal[data-format="landscape"][data-layout="split"] .postal-hero p { margin-top: 1.4cqi; font-size: 3.2cqi; }
+
+/* ── Curva: la curva es la postal ──────────────────────────────────────── */
+/* En cualquier formato, la curva es una panorámica a todo el ancho que se
+   queda con más de la mitad de la tarjeta, a sangre por los lados y abajo.
+   Sin franja de cifras: las cifras de la curva son su inicio y su fin, ya
+   escritos sobre ella; cualquier otra compite con ella. El pie (autor y
+   crédito) va encima de la curva, abajo, sobre su base: nada se interpone
+   entre el texto y la curva. Se quedan la cifra, su explicación y la frase, más las
+   marcas de la historia, que viven sobre la propia curva (línea del hito,
+   franja de la mejor semana). Va al final para ganar a igual especificidad.
+   Sangrado: relleno 6,5% (vertical) o 5,5% (cuadrado, horizontal) del ancho
+   total = 7,47% o 6,18% del ancho de contenido, que es contra lo que se miden
+   los márgenes en % y los cqi. */
+.postal[data-layout="chart"] { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr); }
+.postal[data-layout="chart"] > * { grid-column: 1 / -1; margin-top: 0; }
+.postal[data-layout="chart"] :is(.postal-tiles, .postal-milestone) { display: none; }
+.postal[data-layout="chart"] > .postal-head { grid-column: 1 / -1; grid-row: 1; gap: 2.8cqi; }
+.postal[data-layout="chart"] > .postal-foot { position: absolute; grid-area: auto; left: 7.47cqi; right: 7.47cqi; bottom: 7.47cqi; z-index: 1; margin: 0; flex-direction: row; align-items: center; justify-content: space-between; gap: 3cqi; }
+.postal[data-layout="chart"]:is([data-format="square"], [data-format="landscape"]) > .postal-foot { left: 6.18cqi; right: 6.18cqi; bottom: 6.18cqi; }
+.postal[data-layout="chart"] > .postal-hero { grid-row: 2; margin-top: 6cqi; }
+.postal[data-layout="chart"] > .postal-line { grid-row: 3; margin-top: 2.8cqi; }
+.postal[data-layout="chart"] > .postal-chart { grid-row: 4; min-height: 0; margin: 6cqi -7.47% -7.47%; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0; }
+/* El pie posicionado no puede tener área de rejilla (grid-area: auto): con
+   ella, sus desplazamientos se medirían desde el área y no desde la tarjeta, y
+   el margen se contaría dos veces. */
+/* Base de la curva: una franja con el mismo relleno del área, bajo el SVG,
+   donde se apoya el pie. Así el trazo nunca pasa por debajo del autor. */
+.postal[data-layout="chart"] > .postal-chart::after { content: ""; display: block; height: 15cqi; background: var(--chart-fill); }
+.postal[data-layout="chart"]:is([data-format="square"], [data-format="landscape"]) > .postal-chart::after { height: 12cqi; }
+.postal[data-layout="chart"] .postal-chart-labels { order: -1; margin-bottom: 1.6cqi; padding: 0 7.47cqi; font-size: 3cqi; }
+.postal[data-layout="chart"] .postal-chart-line { stroke-width: 4; }
+/* Cabecera compacta: logo menor. */
+.postal[data-layout="chart"] .postal-logo { width: 10cqi; height: 10cqi; border-radius: 2.6cqi; }
+.postal[data-layout="chart"] .postal-logo b { font-size: 5cqi; }
+.postal[data-layout="chart"] .postal-name { font-size: 5.4cqi; }
+.postal[data-layout="chart"] .postal-author { gap: 1.6cqi; font-size: 3cqi; }
+.postal[data-layout="chart"] .postal-avatar { width: 6cqi; height: 6cqi; }
+.postal[data-layout="chart"] .postal-avatar b { font-size: 2.8cqi; }
+.postal[data-layout="chart"] .postal-credit { font-size: 2.4cqi; }
+.postal[data-layout="chart"] .postal-hero strong { font-size: 21cqi; }
+.postal[data-layout="chart"][data-figure="medium"] .postal-hero strong { font-size: 17cqi; }
+.postal[data-layout="chart"][data-figure="long"] .postal-hero strong { font-size: 14cqi; }
+.postal[data-layout="chart"] .postal-hero span { margin-top: 1.4cqi; font-size: 4cqi; }
+.postal[data-layout="chart"] .postal-hero p { margin-top: 1.2cqi; font-size: 3.8cqi; }
+
+/* Cuadrado: el mismo orden, un escalón más compacto. */
+.postal[data-layout="chart"][data-format="square"] > .postal-hero { margin-top: 4cqi; }
+.postal[data-layout="chart"][data-format="square"] > .postal-line { margin-top: 2cqi; }
+.postal[data-layout="chart"][data-format="square"] > .postal-chart { margin: 4cqi -6.18% -6.18%; }
+.postal[data-layout="chart"][data-format="square"] .postal-chart-labels { padding: 0 6.18cqi; font-size: 2.6cqi; }
+.postal[data-layout="chart"][data-format="square"] .postal-logo { width: 8cqi; height: 8cqi; }
+.postal[data-layout="chart"][data-format="square"] .postal-name { font-size: 4.6cqi; }
+.postal[data-layout="chart"][data-format="square"] .postal-hero strong { font-size: 15cqi; }
+.postal[data-layout="chart"][data-format="square"][data-figure="medium"] .postal-hero strong { font-size: 13cqi; }
+.postal[data-layout="chart"][data-format="square"][data-figure="long"] .postal-hero strong { font-size: 10.5cqi; }
+.postal[data-layout="chart"][data-format="square"] .postal-hero span,
+.postal[data-layout="chart"][data-format="square"] .postal-hero p { margin-top: .8cqi; font-size: 3.2cqi; }
+
+/* Horizontal: franjas, no columnas. Cabecera; la cifra con su etiqueta debajo
+   y, al lado, la variación y la frase (.postal-hero se disuelve para que sus
+   piezas sean celdas); y la curva a todo el ancho, abajo, como un horizonte. */
+.postal[data-layout="chart"][data-format="landscape"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr); column-gap: 5%; }
+.postal[data-layout="chart"][data-format="landscape"] > .postal-head { grid-column: 1 / -1; grid-row: 1; }
+.postal[data-layout="chart"][data-format="landscape"] > .postal-hero { display: contents; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-hero strong { grid-column: 1; grid-row: 2; align-self: end; margin-top: 3cqi; font-size: 15cqi; }
+.postal[data-layout="chart"][data-format="landscape"][data-figure="medium"] .postal-hero strong { font-size: 12.5cqi; }
+.postal[data-layout="chart"][data-format="landscape"][data-figure="long"] .postal-hero strong { font-size: 10cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-hero span { grid-column: 1; grid-row: 3; align-self: start; margin-top: .6cqi; font-size: 3cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-hero p { grid-column: 2; grid-row: 2; align-self: end; margin: 0 0 1.2cqi; font-size: 2.8cqi; }
+.postal[data-layout="chart"][data-format="landscape"] > .postal-line { grid-column: 2; grid-row: 3; align-self: start; margin-top: .6cqi; font-size: 2.7cqi; }
+.postal[data-layout="chart"][data-format="landscape"] > .postal-chart { grid-column: 1 / -1; grid-row: 4; margin: 3.4cqi -6.18% -6.18%; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-chart-labels { padding: 0 6.18cqi; font-size: 2.4cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-logo { width: 7.5cqi; height: 7.5cqi; border-radius: 2cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-logo b { font-size: 3.8cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-name { font-size: 4.2cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-author { font-size: 2.6cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-avatar { width: 5cqi; height: 5cqi; }
+.postal[data-layout="chart"][data-format="landscape"] .postal-credit { font-size: 2.1cqi; }
+
+/* ── Pie encima de la curva ────────────────────────────────────────────── */
+/* "Por <autor>" a la izquierda y "Hecho con PlotStack" a la derecha, como en
+   todos los diseños; en Curva van encima de la curva (eje Z), sobre su base.
+   Sobre el relleno, un punto más de contraste que en el pie normal. */
+.postal[data-layout="chart"][data-theme="ink"] .postal-credit { color: rgba(255, 255, 255, .62); }
+.postal[data-layout="chart"]:is([data-theme="indigo"], [data-theme="brand"]) .postal-credit { color: rgba(255, 255, 255, .78); }
+.postal[data-layout="chart"][data-theme="light"] .postal-credit { color: #48484a; }
+
+/* ── Aviso de reautenticación ─────────────────────────────────────────── */
+/* Encima de cualquier vista mientras Substack pida volver a iniciar sesión:
+   el fallo deja cifras quietas en varias vistas, no solo en una fuente. */
+.reauth-notice { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 28px; padding: 16px 20px; border-radius: 16px; background: var(--panel); box-shadow: inset 0 0 0 1px color-mix(in srgb, #e8890c 45%, transparent); }
+.reauth-notice[hidden] { display: none; }
+.reauth-notice strong { display: flex; align-items: center; gap: 9px; font: 650 14px/1.3 var(--sans); color: var(--paper); }
+.reauth-notice strong::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #e8890c; }
+.reauth-notice p { margin: 5px 0 0 17px; max-width: 72ch; font: 400 13px/1.45 var(--sans); color: var(--muted); }
+.reauth-button { flex: none; padding: 10px 16px; border-radius: 999px; background: var(--accent); color: #fff; font: 600 13px var(--sans); text-decoration: none; }
+.reauth-button:hover { filter: brightness(1.08); }
+.reauth-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+html.is-capturing .reauth-notice { display: none !important; }
+@media (max-width: 760px) {
+  .reauth-notice { flex-direction: column; align-items: flex-start; }
+  .reauth-notice p { margin-left: 0; }
 }

@@ -17,6 +17,7 @@ export default {
   "Substack no respondió a tiempo.": "Substack did not respond in time.",
   "Tu sesión de Substack no está activa.": "Your Substack session is not active.",
   "La cuenta conectada no tiene acceso a esta publicación.": "The connected account does not have access to this publication.",
+  "Substack pide que vuelvas a iniciar sesión para leer tu lista de suscriptores. Cierra sesión en Substack, entra de nuevo y sincroniza.": "Substack asks you to sign in again to read your subscriber list. Sign out of Substack, sign back in and sync.",
   "Substack limitó temporalmente las solicitudes. Espera un momento y sincroniza de nuevo.": "Substack temporarily rate-limited requests. Wait a moment and sync again.",
   "Substack respondió con un error ({status}).": "Substack responded with an error ({status}).",
   "Creador": "Creator",

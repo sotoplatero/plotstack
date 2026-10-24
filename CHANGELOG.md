@@ -4,6 +4,39 @@ Las versiones que se han subido a la Chrome Web Store. La tienda **no permite
 bajar** un número de versión, así que cada entrada aquí corresponde a un
 `manifest.json` que ya se publicó o está listo para publicarse.
 
+## 1.5.0 — 12 de octubre de 2026
+
+### Postal
+
+- **Elige qué cuenta.** Tres historias: tu periodo, el hito que acabas de
+  cruzar o tu mejor semana. Cada una trae sus propias cifras y marca la curva
+  a su manera (el hito con una línea a su altura, la semana con una franja).
+  PlotStack sugiere el hito cuando lo cruzaste dentro del periodo.
+- **Cinco diseños.** Clásica, Cifra, Curva, Mosaico y Columnas, al estilo de
+  las imágenes de vista previa: el mismo contenido en otra composición. Cada
+  historia cabe en todos, y cada diseño enseña tantas cifras como caben.
+- **Formato horizontal.** Además de vertical y cuadrado, 1456 × 1048, el
+  tamaño que Substack usa para la vista previa de un post. No es la vertical
+  encogida: cada diseño tiene su composición horizontal.
+- **Tu frase.** Una línea de hasta 80 caracteres debajo de la cifra; si no
+  escribes nada, la historia propone una.
+- **Tu color.** Un cuarto color sacado del logo de tu newsletter, oscurecido
+  lo justo para que el texto se lea.
+- **Más ordenada.** La cabecera es solo la newsletter; el autor y «Hecho con
+  PlotStack» van siempre abajo. Descargar y copiar están bajo la tarjeta, y
+  el editor y la postal arrancan a la misma altura.
+
+### Correcciones
+
+- **Cuando Substack pide volver a iniciar sesión, PlotStack lo dice.** Para
+  leer la lista de suscriptores, Substack exige a veces una sesión reciente.
+  Antes, Estado de datos lo daba como «sin acceso a esta publicación» y solo
+  al pasar el ratón; ahora un aviso encima de cualquier vista dice qué pasa y
+  qué hacer, y desaparece en cuanto una sincronización vuelve a traer la
+  lista. En Estado de datos, el motivo de cada fuente caída se lee en su fila.
+  Mientras tanto, Suscriptores en Audiencia muestra el total del resumen en
+  lugar de quedarse a cero.
+
 ## 1.4.0 — 30 de septiembre de 2026
 
 ### Inglés

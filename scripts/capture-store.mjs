@@ -39,12 +39,15 @@ const CHROME_CANDIDATES = [
 
 // Orden de subida. El Resumen va a 30 días porque la vista previa trae base de
 // comparación para ese rango; el resto a 90, que es donde salen más hallazgos.
+// La postal va en horizontal: la vertical no cabe entera en 800 px de alto, y
+// así la captura enseña la historia del hito y el formato de Substack.
 const SHOTS = [
   { file: { es: "plotstack-resumen.png", en: "plotstack-overview.png" }, view: "resumen", days: "30" },
   { file: { es: "plotstack-hallazgos.png", en: "plotstack-findings.png" }, view: "resumen", days: "90", scrollTo: "#insights-panel" },
   { file: { es: "plotstack-crecimiento.png", en: "plotstack-growth.png" }, view: "crecimiento", days: "90" },
   { file: { es: "plotstack-notas.png", en: "plotstack-notes.png" }, view: "notas", days: "90" },
-  { file: { es: "plotstack-postal.png", en: "plotstack-postcard.png" }, view: "postal", days: "90" },
+  { file: { es: "plotstack-postal.png", en: "plotstack-postcard.png" }, view: "postal", days: "90",
+    click: ['[data-postal-story="milestone"]', '[data-postal-layout="mosaic"]', '[data-postal-format="landscape"]'] },
 ].map((shot) => ({ ...shot, file: shot.file[LANG] }));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,6 +113,7 @@ try {
       document.querySelector('[data-days="${shot.days}"]').click();
       document.querySelector('.nav-item[data-view="${shot.view}"]').click();
       await new Promise((resolve) => setTimeout(resolve, 700));
+      for (const selector of ${JSON.stringify(shot.click ?? [])}) document.querySelector(selector).click();
       const target = ${shot.scrollTo ? `document.querySelector("${shot.scrollTo}")` : "null"};
       window.scrollTo(0, target ? target.getBoundingClientRect().top + window.scrollY - 76 : 0);
       // Sin animaciones de entrada a medias en la imagen.

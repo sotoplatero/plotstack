@@ -3,10 +3,13 @@ import { t } from "../shared/i18n.js";
 const API_ROOT = "https://substack.com/api/v1";
 
 export class SubstackApiError extends Error {
-  constructor(message, status = 0) {
+  constructor(message, status = 0, code = "") {
     super(message);
     this.name = "SubstackApiError";
     this.status = status;
+    // Motivo con nombre para que el dashboard reaccione sin leer el mensaje,
+    // que ya va traducido: "reauth" = Substack pide volver a iniciar sesión.
+    this.code = code;
   }
 }
 
@@ -84,7 +87,17 @@ async function performRequest(url, options = {}) {
     throw error;
   }
   if (response.status === 401) throw new SubstackApiError(t("Tu sesión de Substack no está activa."), 401);
-  if (response.status === 403) throw new SubstackApiError(t("La cuenta conectada no tiene acceso a esta publicación."), 403);
+  if (response.status === 403) {
+    // Substack exige una sesión reciente para leer datos personales (la lista
+    // de suscriptores): responde 403 con `type: "reauthentication_required"`
+    // aunque el resto del panel funcione. No es falta de acceso, y decirlo así
+    // mandaba a buscar el fallo donde no estaba.
+    const body = await response.json().catch(() => null);
+    if (body?.type === "reauthentication_required") {
+      throw new SubstackApiError(t("Substack pide que vuelvas a iniciar sesión para leer tu lista de suscriptores. Cierra sesión en Substack, entra de nuevo y sincroniza."), 403, "reauth");
+    }
+    throw new SubstackApiError(t("La cuenta conectada no tiene acceso a esta publicación."), 403);
+  }
   if (response.status === 429) throw new SubstackApiError(t("Substack limitó temporalmente las solicitudes. Espera un momento y sincroniza de nuevo."), 429);
   if (!response.ok) throw new SubstackApiError(t("Substack respondió con un error ({status}).", { status: response.status }), response.status);
   if (response.status === 204) return {};

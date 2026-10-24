@@ -562,7 +562,7 @@ export async function getExtendedAnalytics(publication) {
     const source = sources[index];
     if (result.status === "rejected") {
       data[source.key] = source.normalize({ sourceState: "unavailable", sourceError: result.reason?.message || t("No disponible") });
-      return { key: source.key, label: source.label, status: "unavailable", records: 0, error: result.reason?.message || t("No disponible") };
+      return { key: source.key, label: source.label, status: "unavailable", records: 0, error: result.reason?.message || t("No disponible"), reason: result.reason?.code || "" };
     }
     raw[source.key] = result.value;
     data[source.key] = source.normalize(result.value);
@@ -579,6 +579,7 @@ export async function getExtendedAnalytics(publication) {
     status: timelineCoverage?.status === "ready" ? "ready" : "unavailable",
     records: recordCount(data.audience),
     error: timelineCoverage?.status === "ready" ? "" : timelineCoverage?.error || t("No disponible"),
+    reason: timelineCoverage?.reason || "",
   });
 
   return {

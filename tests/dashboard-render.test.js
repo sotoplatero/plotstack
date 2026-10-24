@@ -296,7 +296,7 @@ test("Publicaciones ordena y busca sin perder la tabla", async () => {
   await verVista("publicaciones");
   // Fixture con fechas fijas: "Todo" evita que el rango por defecto las deje fuera.
   await rango("all");
-  assert.equal($$("#campaigns-head th").length, 12);
+  assert.equal($$("#campaigns-head th").length, 13);
   assert.equal($$("#campaigns-body tr").length, 2);
 
   $$("#campaigns-head th")[3].click();
@@ -324,7 +324,7 @@ test("las columnas de Artículos no incluyen las que la API deja siempre en cero
   for (const muerta of ["Subtítulo", "Palabras", "Audiencia", "Valor", "Suscripciones", "Bajas D1"]) {
     assert.equal(cabeceras.includes(muerta), false, `${muerta} no debería estar: ${cabeceras.join(", ")}`);
   }
-  for (const viva of ["Artículo", "Apertura", "CTR", "Reacciones", "Comentarios"]) {
+  for (const viva of ["Artículo", "Apertura", "CTR", "Reacciones", "Comentarios", "Altas"]) {
     assert.equal(cabeceras.includes(viva), true, `falta ${viva}: ${cabeceras.join(", ")}`);
   }
 });
@@ -1005,7 +1005,7 @@ test("la postal resume el estado sin pago, sin ingresos y sin huecos", async () 
   assert.match($("#postal-chart").getAttribute("aria-label"), /^Suscriptores: de .+ a .+\.$/);
 });
 
-test("el configurador de la postal cambia formato, color y secciones sin recrearla", async () => {
+test("el configurador de la postal cambia formato y color sin recrearla", async () => {
   await arrancar();
   await verVista("postal");
   const tarjeta = $("#postal-card");
@@ -1016,26 +1016,102 @@ test("el configurador de la postal cambia formato, color y secciones sin recrear
   assert.equal($('[data-postal-format="square"]').getAttribute("aria-pressed"), "true");
   $('[data-postal-theme="light"]').click();
   assert.equal(tarjeta.dataset.theme, "light");
-  const grafico = $('[data-postal-show="chart"]');
-  grafico.checked = false;
-  grafico.dispatchEvent({ type: "change", target: grafico });
-  assert.equal(tarjeta.classList.contains("is-without-chart"), true, "el gráfico se puede ocultar");
-  grafico.checked = true;
-  grafico.dispatchEvent({ type: "change", target: grafico });
-  const casilla = $('[data-postal-show="milestone"]');
-  casilla.checked = false;
-  casilla.dispatchEvent({ type: "change", target: casilla });
-  assert.equal(tarjeta.classList.contains("is-without-milestone"), true);
+  // Sin casillas: cada historia trae sus cifras.
+  assert.equal($$("[data-postal-show]").length, 0);
   // Volver a pintar la vista respeta la configuración y no recrea los nodos.
   await rango("30");
   assert.equal(tarjeta.dataset.format, "square");
-  assert.equal(tarjeta.classList.contains("is-without-milestone"), true);
+  assert.equal(tarjeta.dataset.theme, "light");
   assert.equal($("#postal-tiles"), cifras);
+  // Descargar y copiar van debajo de la tarjeta, no en la columna de opciones.
+  assert.ok($(".postal-preview #postal-download"), "descargar vive bajo la postal");
+  assert.ok($(".postal-preview #postal-copy"), "copiar vive bajo la postal");
+  // Horizontal: el tamaño de vista previa de un post de Substack (14:10).
+  $('[data-postal-format="landscape"]').click();
+  assert.equal(tarjeta.dataset.format, "landscape");
+  assert.match($("#postal-size").textContent, /1456 × 1048/);
+  assert.equal($('[data-postal-format="landscape"]').getAttribute("aria-pressed"), "true");
+  assert.equal($$("[data-postal-format] .postal-format-icon").length, 3, "cada formato lleva su icono");
   // Restaura la configuración de fábrica para no afectar a otros casos.
   $('[data-postal-format="portrait"]').click();
   $('[data-postal-theme="ink"]').click();
-  casilla.checked = true;
-  casilla.dispatchEvent({ type: "change", target: casilla });
+});
+
+test("cada historia de la postal trae su cifra, sus cifras y su marca sobre la curva", async () => {
+  await arrancar();
+  await verVista("postal");
+  await rango("all");
+  const tarjeta = $("#postal-card");
+  const cifra = $("#postal-subscribers");
+  const etiquetas = () => $$("#postal-tiles .postal-tile span").map((nodo) => txt(nodo.textContent));
+
+  assert.equal($$("[data-postal-story]").length, 3, "la nota destacada ya no es una historia");
+  assert.deepEqual(etiquetas().slice(0, 1), ["Nuevos lectores"]);
+  assert.ok(etiquetas().includes("Abren tus correos"), "la apertura solo vive en Mi periodo");
+  assert.equal($$("#postal-chart .postal-chart-mark, #postal-chart .postal-chart-band").length, 0);
+
+  $('[data-postal-story="week"]').click();
+  assert.equal(tarjeta.dataset.story, "week");
+  assert.match(cifra.textContent, /^\+/);
+  assert.equal(txt($("#postal-hero-label").textContent), "altas en una semana");
+  assert.ok(etiquetas().includes("De las altas del periodo"), "el récord se lee contra el periodo");
+  assert.ok(etiquetas().length >= 4, "cada historia trae cifras de sobra para los diseños");
+  assert.ok($$("#postal-tiles .postal-tile strong").every((nodo) => txt(nodo.textContent) !== "0"), "un cero no se pinta");
+  assert.ok(!etiquetas().includes("Abren tus correos"));
+  assert.equal($$("#postal-chart .postal-chart-band").length, 1, "la mejor semana se marca en la curva");
+
+  $('[data-postal-story="milestone"]').click();
+  assert.equal(tarjeta.dataset.story, "milestone");
+  assert.match(cifra.textContent, /^\d[\d.]*$/, "el hito va completo, sin abreviar");
+  assert.ok(etiquetas().some((texto) => /^Faltan para /.test(texto)));
+  assert.equal($$("#postal-chart .postal-chart-band").length, 0);
+  assert.doesNotMatch(txt(tarjeta.textContent), /pago|ingreso|€|\$|NaN|undefined/i);
+
+  // Frase: la sugerida sin escribir nada; la propia al teclear; vacía, no hay.
+  const campo = $("#postal-line-input");
+  assert.equal($("#postal-line").textContent, "Gracias a cada persona que se ha sumado por el camino.");
+  assert.equal($("#postal-line-reset").hidden, true);
+  campo.value = "Gracias por estar aquí";
+  campo.dispatchEvent({ type: "input", target: campo });
+  assert.equal($("#postal-line").textContent, "Gracias por estar aquí");
+  assert.equal($("#postal-line-count").textContent, "22/80");
+  assert.equal($("#postal-line-reset").hidden, false);
+  campo.value = "";
+  campo.dispatchEvent({ type: "input", target: campo });
+  assert.equal($("#postal-line").hidden, true, "una frase borrada a propósito no se rellena");
+  $("#postal-line-reset").click();
+  assert.match($("#postal-line").textContent, /^Gracias a cada persona/);
+
+  // Sin logo medido no hay color de marca: la muestra no aparece y se pinta tinta.
+  assert.equal($('[data-postal-theme="brand"]').hidden, true);
+  $('[data-postal-theme="brand"]').click();
+  assert.equal(tarjeta.dataset.theme, "ink");
+
+  $('[data-postal-story="period"]').click();
+  $('[data-postal-theme="ink"]').click();
+  assert.equal(txt($("#postal-hero-label").textContent), "suscriptores");
+});
+
+test("toda historia cabe en todo diseño, sin recrear la tarjeta", async () => {
+  await arrancar();
+  await verVista("postal");
+  await rango("all");
+  const tarjeta = $("#postal-card");
+  const cifras = $("#postal-tiles");
+  for (const diseno of ["classic", "number", "chart", "mosaic", "split"]) {
+    for (const historia of ["period", "milestone", "week"]) {
+      $(`[data-postal-story="${historia}"]`).click();
+      $(`[data-postal-layout="${diseno}"]`).click();
+      assert.equal($(`[data-postal-layout="${diseno}"]`).disabled, false);
+      assert.equal(tarjeta.dataset.layout, diseno);
+      assert.equal(tarjeta.dataset.story, historia);
+      assert.match(tarjeta.dataset.figure, /^(short|medium|long)$/);
+      assert.ok($$("#postal-tiles .postal-tile").length >= 1, `${historia} en ${diseno} lleva cifras`);
+    }
+  }
+  assert.equal($("#postal-tiles"), cifras, "cambiar de diseño no recrea nodos");
+  $('[data-postal-story="period"]').click();
+  $('[data-postal-layout="classic"]').click();
 });
 
 test("el eje X de un gráfico nunca lleva más de cinco fechas", async () => {
@@ -1046,4 +1122,29 @@ test("el eje X de un gráfico nunca lleva más de cinco fechas", async () => {
   const fechas = $$("#growth-chart .chart-label").filter((nodo) => /[a-z]{3}/i.test(nodo.textContent) && !/mil/.test(nodo.textContent));
   assert.ok(fechas.length >= 2, "hay fechas en el eje");
   assert.ok(fechas.length <= 5, `demasiadas fechas en el eje: ${fechas.length}`);
+});
+
+test("si Substack pide volver a iniciar sesión, un aviso lo dice en todas las vistas", async () => {
+  await arrancar();
+  const listener = globalThis.__plotstackStorageListener;
+  const original = (await globalThis.chrome.storage.local.get())["plotstack.analytics"];
+  assert.equal(esVisible($("#reauth-notice")), false, "sin motivo no hay aviso");
+  listener({
+    "plotstack.analytics": {
+      newValue: {
+        ...(original || {}),
+        coverage: [{ key: "audience", label: "Audiencia", status: "unavailable", records: 0, error: "x", reason: "reauth" }],
+      },
+    },
+  }, "local");
+  try {
+    for (const vista of VISTAS) {
+      await verVista(vista);
+      assert.equal(esVisible($("#reauth-notice")), true, `${vista}: el aviso tiene que verse`);
+    }
+  } finally {
+    listener({ "plotstack.analytics": { newValue: original } }, "local");
+  }
+  await verVista("resumen");
+  assert.equal(esVisible($("#reauth-notice")), false, "una sincronización buena lo quita");
 });

@@ -85,8 +85,10 @@ SIETE VISTAS
 • Artículos — tabla ordenable con las métricas por post, apertura y CTR por
   artículo, lectura fuera del correo, diagnóstico asunto/contenido y cortes por
   día, sección y longitud.
-• Postal — una tarjeta con tus cifras públicas lista para compartir, en
-  vertical o cuadrada y en tres colores.
+• Postal — una tarjeta con tus cifras públicas lista para compartir: tu
+  periodo, tu último hito o tu mejor semana, en cinco diseños, en vertical,
+  cuadrada u horizontal (el tamaño de la vista previa de Substack) y con el
+  color de tu logo.
 • Estado de datos — qué fuentes respondieron y cuándo fue la última
   sincronización.
 
@@ -180,8 +182,9 @@ SEVEN VIEWS
 • Posts — a sortable table with per-post metrics, open rate and CTR per post,
   reading beyond the inbox, a subject-vs-content diagnosis, and cuts by day,
   section and length.
-• Postcard — a card with your public numbers ready to share, portrait or
-  square, in three colors.
+• Postcard — a card with your public numbers ready to share: your period,
+  your latest milestone or your best week, in five layouts, portrait, square
+  or landscape (Substack's post preview size), and in your logo's color.
 • Data status — which sources responded and when the last sync happened.
 
 IN ENGLISH OR SPANISH
@@ -284,7 +287,7 @@ Lo que la tienda exige y lo que ya está resuelto:
 | Recurso | Tamaño | Estado |
 | --- | --- | --- |
 | Icono de la tienda | 128×128 PNG | ✅ `assets/icons/icon-128.png` |
-| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/`, regeneradas para 1.3.0 con `npm run store-shots`: Resumen, Hallazgos, Récords (Cómo creces), Notas y Postal |
+| Capturas de pantalla | 1280×800 PNG | ✅ 5 en `dist/store/`, regeneradas para 1.5.0 con `npm run store-shots`: Resumen, Hallazgos, Récords (Cómo creces), Notas y Postal |
 | Mosaico pequeño | 440×280 PNG | ⏳ opcional |
 | Imagen destacada | 1400×560 PNG | ⏳ opcional |
 
@@ -370,6 +373,15 @@ Código fuente completo: https://github.com/sotoplatero/plotstack
 La tienda no tiene un campo de «What's new» propio: el cambio se cuenta en la
 descripción detallada y, si se quiere, en el primer párrafo. Texto listo para
 usar en el anuncio o en el repositorio:
+
+```
+1.5.0
+
+• Postal nueva: elige qué cuenta (tu periodo, el hito que acabas de cruzar o
+  tu mejor semana), en cinco diseños y en vertical, cuadrada u horizontal, el
+  tamaño de la vista previa de un post en Substack. Con tu frase y el color
+  de tu logo.
+```
 
 ```
 1.4.0
