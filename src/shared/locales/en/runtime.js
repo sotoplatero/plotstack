@@ -1,0 +1,61 @@
+// Diccionario inglés: cadena española literal → traducción.
+// Zona: service worker, proveedores de Substack, captura y privacidad.
+export default {
+  // src/background.js
+  "La sincronización se interrumpió antes de terminar. Vuelve a sincronizar.": "The sync was interrupted before it finished. Sync again.",
+  "El detalle tardó demasiado y se detuvo.": "The detail phase took too long and was stopped.",
+  "No se pudo completar el detalle.": "The detail phase could not be completed.",
+  "{error} Se quedó en: {step}.": "{error} It stopped at: {step}.",
+  "Detalle por publicación y por nota": "Per-post and per-note detail",
+  "Resumen, publicaciones y audiencia": "Overview, posts and audience",
+  "La fase rápida tardó demasiado y se detuvo.": "The quick phase took too long and was stopped.",
+  "No se pudo sincronizar.": "Could not sync.",
+  "Conecta una publicación primero.": "Connect a publication first.",
+  "No se pudo completar la operación.": "The operation could not be completed.",
+
+  // src/providers/substack-api.js
+  "Substack no respondió a tiempo.": "Substack did not respond in time.",
+  "Tu sesión de Substack no está activa.": "Your Substack session is not active.",
+  "La cuenta conectada no tiene acceso a esta publicación.": "The connected account does not have access to this publication.",
+  "Substack pide que vuelvas a iniciar sesión para leer tu lista de suscriptores. Cierra sesión en Substack, entra de nuevo y sincroniza.": "Substack asks you to sign in again to read your subscriber list. Sign out of Substack, sign back in and sync.",
+  "Substack limitó temporalmente las solicitudes. Espera un momento y sincroniza de nuevo.": "Substack temporarily rate-limited requests. Wait a moment and sync again.",
+  "Substack respondió con un error ({status}).": "Substack responded with an error ({status}).",
+  "Creador": "Creator",
+  "Sin título": "Untitled",
+  "Detalle de publicaciones": "Post details",
+  "Historial de notas": "Notes history",
+  "Estadísticas de notas": "Notes stats",
+
+  // src/providers/substack-extended.js
+  "Sin identificar": "Unidentified",
+  "sin identificar": "unidentified",
+  "Otros": "Other",
+  "Por encima de la media de Substack": "Above the Substack average",
+  "En la media de Substack": "At the Substack average",
+  "Por debajo de la media de Substack": "Below the Substack average",
+  "Sin nombre": "Unnamed",
+  "Altas por día": "Signups per day",
+  "Fuentes de crecimiento": "Growth sources",
+  "Fuentes de tráfico": "Traffic sources",
+  "Efecto de red": "Network effect",
+  "Visitas por día": "Visits per day",
+  "Comparación con Substack": "Comparison with Substack",
+  "Solapamiento de audiencia": "Audience overlap",
+  "Histórico de seguidores": "Follower history",
+  "Ubicación de la audiencia": "Audience location",
+  "Altas y bajas gratuitas": "Free signups and unsubscribes",
+  "Altas y bajas de pago": "Paid signups and unsubscribes",
+  "Retención gratuita": "Free retention",
+  "Retención de pago": "Paid retention",
+  "No disponible": "Unavailable",
+  "Audiencia": "Audience",
+
+  // dashboard/capture.js
+  "Chrome no pudo dibujar la vista para la captura.": "Chrome could not draw the view for the capture.",
+  "No se pudo generar el archivo PNG.": "The PNG file could not be generated.",
+  "No se encontró el contenido para capturar.": "No content was found to capture.",
+  "El portapapeles de imágenes no está disponible en este navegador.": "The image clipboard is not available in this browser.",
+  "No se encontró la vista para capturar.": "No view was found to capture.",
+  "La vista no tiene contenido visible.": "The view has no visible content.",
+  "Esta vista es demasiado larga para un solo PNG.": "This view is too long for a single PNG.",
+};

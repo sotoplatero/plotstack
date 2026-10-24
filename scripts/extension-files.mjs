@@ -18,6 +18,14 @@ export const EXTENSION_FILES = [
   "src/shared/analytics.js",
   "src/shared/content-analytics.js",
   "src/shared/insights.js",
+  // Idioma de la interfaz: español (fuente) o inglés según el navegador.
+  "src/shared/i18n.js",
+  "src/shared/locales/en.js",
+  "src/shared/locales/en/html.js",
+  "src/shared/locales/en/app.js",
+  "src/shared/locales/en/insights.js",
+  "src/shared/locales/en/analytics.js",
+  "src/shared/locales/en/runtime.js",
   "src/providers/substack-api.js",
   "src/providers/substack-extended.js",
   "assets/icon.svg",
@@ -28,8 +36,9 @@ export const EXTENSION_FILES = [
 ];
 
 // Directorios que entran completos. `assets/icons` lo genera
-// `npm run icons` a partir de assets/icon.svg.
-export const EXTENSION_DIRECTORIES = ["assets/icons"];
+// `npm run icons` a partir de assets/icon.svg; `_locales` traduce el nombre,
+// la descripción y el título del botón del manifiesto (lo elige Chrome).
+export const EXTENSION_DIRECTORIES = ["assets/icons", "_locales"];
 
 // Tamaños que la Chrome Web Store espera en `icons` y `action.default_icon`.
 // El de 128 es obligatorio: es el que se muestra en la ficha y en la

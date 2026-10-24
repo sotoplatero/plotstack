@@ -1,4 +1,6 @@
-const NUMBER_FORMAT = new Intl.NumberFormat("es-ES", {
+import { LOCALE, t } from "./i18n.js";
+
+const NUMBER_FORMAT = new Intl.NumberFormat(LOCALE, {
   notation: "compact",
   maximumFractionDigits: 1,
 });
@@ -123,7 +125,7 @@ export function normalizeSnapshot(input = {}) {
   const campaigns = Array.isArray(input.campaigns)
     ? input.campaigns.map((campaign, index) => ({
         id: String(campaign?.id ?? index),
-        title: String(campaign?.title || "Sin título"),
+        title: String(campaign?.title || t("Sin título")),
         subtitle: String(campaign?.subtitle || ""),
         slug: String(campaign?.slug || ""),
         audience: String(campaign?.audience || ""),
@@ -163,7 +165,7 @@ export function normalizeSnapshot(input = {}) {
   const notes = Array.isArray(input.notes)
     ? input.notes.map((note, index) => ({
         id: String(note?.id ?? index),
-        body: String(note?.body || "Nota sin texto"),
+        body: String(note?.body || NOTE_PLACEHOLDER),
         date: String(note?.date || ""),
         reactions: Math.max(0, Math.round(safeNumber(note?.reactions))),
         replies: Math.max(0, Math.round(safeNumber(note?.replies))),
@@ -176,7 +178,7 @@ export function normalizeSnapshot(input = {}) {
   return {
     version: 1,
     provider: String(input.provider || "unconnected"),
-    publication: String(input.publication || "Mi newsletter"),
+    publication: String(input.publication || t("Mi newsletter")),
     capturedAt: String(input.capturedAt || new Date().toISOString()),
     sourceUrl: String(input.sourceUrl || ""),
     metrics: cleanMetricSet(input.metrics),
@@ -244,7 +246,7 @@ export function formatCompactNumber(value) {
 }
 
 export function formatPercent(value, digits = 1) {
-  return `${safeNumber(value).toLocaleString("es-ES", {
+  return `${safeNumber(value).toLocaleString(LOCALE, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}%`;
@@ -257,14 +259,14 @@ export function formatPercent(value, digits = 1) {
 // de desaparecer. La clave se compara sin mayúsculas ni espacios extra.
 const SOURCE_LABELS = new Map(Object.entries({
   // network_attribution
-  "substack app": "App de Substack",
-  "substack existing accounts": "Cuentas que ya usaban Substack",
-  "other substack network": "Resto de la red de Substack",
-  "imported accounts": "Suscriptores importados",
+  "substack app": t("App de Substack"),
+  "substack existing accounts": t("Cuentas que ya usaban Substack"),
+  "other substack network": t("Resto de la red de Substack"),
+  "imported accounts": t("Suscriptores importados"),
   // visitor_sources: fuente
-  "direct to app": "Directo a la app",
-  "direct": "Directo",
-  "email opens": "Aperturas de email",
+  "direct to app": t("Directo a la app"),
+  "direct": t("Directo"),
+  "email opens": t("Aperturas de email"),
   "email": "Email",
   "google": "Google",
   "bing": "Bing",
@@ -278,26 +280,28 @@ const SOURCE_LABELS = new Map(Object.entries({
   "threads": "Threads",
   "bluesky": "Bluesky",
   // visitor_sources: categoría
-  "search": "Buscadores",
-  "social": "Redes sociales",
-  "other": "Otros",
+  "search": t("Buscadores"),
+  "social": t("Redes sociales"),
+  "other": t("Otros"),
   "substack": "Substack",
   // growth/sources: hijos de la fuente `substack`
-  "notes": "Notas",
-  "recommendations": "Recomendaciones",
-  "onboarding": "Registro en Substack",
-  "trackbacks": "Menciones en otras publicaciones",
+  "notes": t("Notas"),
+  "recommendations": t("Recomendaciones"),
+  "onboarding": t("Registro en Substack"),
+  "trackbacks": t("Menciones en otras publicaciones"),
+  // respaldo de los proveedores cuando Substack no nombra la fuente
+  "sin identificar": t("Sin identificar"),
 }));
 
 export function sourceLabel(raw) {
   const value = String(raw ?? "").trim();
-  if (!value) return "Sin identificar";
+  if (!value) return t("Sin identificar");
   const known = SOURCE_LABELS.get(value.toLowerCase().replace(/\s+/g, " "));
-  return known || value.charAt(0).toLocaleUpperCase("es-ES") + value.slice(1);
+  return known || value.charAt(0).toLocaleUpperCase(LOCALE) + value.slice(1);
 }
 
 export function formatCurrency(value) {
-  return safeNumber(value).toLocaleString("es-ES", {
+  return safeNumber(value).toLocaleString(LOCALE, {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
@@ -501,11 +505,22 @@ export function getChannelAttribution(snapshot = {}, days = 30, now = Date.now()
 // cortes: Sigma abrieron / Sigma entregados, nunca media de tasas. Los posts sin
 // seccion se agrupan aparte en vez de descartarse: "sin seccion" es un grupo
 // real, y en muchas publicaciones es el unico.
+// Grupo de los posts sin sección. insights.js lo compara como dato: usa la
+// constante, no el literal.
+export const NO_SECTION = t("Sin sección");
+
+// Una nota sin texto se guarda con la marca española, que es un dato (la
+// comparan content-analytics e insights), y se traduce solo al pintarla. Las
+// guardadas antes en inglés también se reconocen.
+export const NOTE_PLACEHOLDER = "Nota sin texto";
+export const noteBodyLabel = (body) =>
+  !body || body === NOTE_PLACEHOLDER || body === t("Nota sin texto") ? t("Nota sin texto") : body;
+
 export function getCampaignSections(campaigns = []) {
   const sent = campaigns.filter((campaign) => safeNumber(campaign.delivered) > 0);
   const groups = new Map();
   for (const campaign of sent) {
-    const key = String(campaign.section || "").trim() || "Sin sección";
+    const key = String(campaign.section || "").trim() || NO_SECTION;
     const bucket = groups.get(key) || [];
     bucket.push(campaign);
     groups.set(key, bucket);

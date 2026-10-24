@@ -72,9 +72,74 @@ Se sirven por el CDN de imagen de Substack (`substackcdn.com/image/fetch/…`),
 que devuelve CORS abierto también para los buckets antiguos sin CORS: así
 `captureElementPng` puede incrustarlas como `data:`. Si una imagen falla, queda
 la inicial que va debajo; nunca un icono roto ni un permiso de host nuevo.
-Un configurador junto a la tarjeta elige **formato** (vertical 1080×1350 o
-cuadrado 1080×1080), **color** (tinta, claro, índigo) y **qué mostrar** (cifras,
-mejor semana, hito, autor); se guarda en `localStorage` bajo `plotstack.postal`
+Un configurador junto a la tarjeta elige primero **qué cuenta** (historia:
+`period`, `milestone`, `week`). **Cada historia trae sus cifras y no hay
+casillas para quitar piezas**: cada una ordena una reserva de 6-7 candidatas
+por importancia y se pintan las `POSTAL_TILES` (6) primeras con valor; cada
+diseño enseña las que caben (mosaico 6 en vertical y 4 en cuadrado u
+horizontal, clásica y columnas 4, curva 3, cifra ninguna) y el CSS oculta el resto, así que el orden es lo que decide. Mi
+periodo: nuevos lectores, apertura, núcleo fiel, racha, seguidores, artículos
+y notas publicados. Hito (el hito completo, y la barra del próximo, que solo
+vive aquí): lo que falta, altas netas por semana a 30 días, nuevos lectores,
+crecimiento, días desde el hito, seguidores, racha. Mejor semana: veces la
+semana media, % de las altas del periodo, su mejor día, artículos, notas e
+interacciones de notas esa semana, nuevos lectores. La apertura solo sale en
+Mi periodo: una historia no muestra cifras ajenas a lo que cuenta, y esa es
+la respuesta a "no quiero enseñar X", no volver a las casillas. Un cero
+no se pinta. Cada historia marca la curva (hito: línea discontinua a su
+altura; semana: franja) y cabe en **todos** los diseños. La nota destacada se
+retiró: forzaba texto en una pieza de cifras y rompía "Curva". Una historia
+sin datos en el rango se deshabilita y, si era la guardada, se pinta `period`
+sin perder la elección. Solo se **sugiere** el hito cuando la curva lo cruzó
+dentro del periodo. Debajo, **tu frase** (80 caracteres; `line: null` = la
+sugerida de la historia, que nunca lleva cifras; `""` = sin frase). El color
+**Tu marca** es el tono dominante del logo, medido con un lienzo en el
+navegador (nunca se guarda) y oscurecido hasta contraste 4,5 con blanco; sin
+color medible la muestra no aparece y la tarjeta se pinta en tinta. El
+**diseño** (`data-layout`: clásica, cifra, curva, mosaico, columnas) es una
+plantilla al estilo de los generadores de imágenes OG: mismo contenido y
+mismos nodos, otra composición solo por CSS (el mosaico es un bento de
+bloques de tamaños distintos, no una rejilla de piezas iguales: la frase va
+encima y debajo, en diez columnas con `grid-template-areas`, la cifra en un
+bloque de seis columnas y dos filas con dos cifras apiladas al lado, y filas
+de anchos distintos debajo; `data-tiles` (cuántas cifras hay) elige la
+plantilla para que con 3 o 5 no quede hueco; `.postal-tiles` se disuelve con
+`display: contents` para que cada cifra sea una celda, con un único
+espaciado de 2,8cqi entre bloques); `data-figure`
+(short/medium/long) escala la cifra para que "+1,3 mil" quepa donde cabe
+"124". Después elige **formato** (vertical 1080×1350, cuadrado 1080×1080 u
+horizontal 1456×1048, el 14:10 que Substack recomienda para la vista previa de
+un post; cada formato fija su ancho de PNG en `POSTAL_FORMATS` y se compone a
+la mitad). El horizontal es otra composición, no la vertical encogida:
+cabecera a todo el ancho y dos columnas debajo, con menos piezas (frase en dos
+líneas, sin barra del hito, sin curva en Columnas). La
+clásica horizontal va en franjas a todo el ancho, no en columnas: newsletter
+y autor enfrentados, la cifra con su explicación al lado (`.postal-hero` se
+disuelve), la curva en panorámica a sangre y las cuatro cifras en fila. En
+**Curva** (cualquier formato) la curva es la postal: panorámica a todo el
+ancho, a sangre por los lados y abajo, con la mitad o más del alto; sin franja
+de cifras (las cifras de la curva son su inicio y su fin); el pie va encima
+de la curva, abajo, sobre una franja con su mismo relleno (`::after`), para
+que el trazo nunca pase bajo el autor; en horizontal, la cifra con su
+etiqueta debajo, la variación y la frase al lado, y la curva como horizonte
+abajo. Todas sus reglas viven en un solo bloque al final de `styles.css`.
+**Columnas horizontal** enmarca dos columnas de igual alto: la cifra arriba y la frase abajo a la izquierda, alineadas con la primera y la última fila de las cuatro cifras en 2 × 2; la etiqueta de cada cifra reserva dos líneas para que las cifras de una fila queden a la misma altura. El **Mosaico horizontal** es un bento continuo bajo la cabecera y la frase: la
+cifra a todo el alto y las cuatro primeras cifras en 2 × 2, con el mismo hueco
+(seis en tres filas no caben a 14:10). **Coherencia entre diseños y
+formatos**: la cabecera es solo la newsletter; el pie va siempre abajo, con
+"Por <autor>" a la izquierda y "Hecho con PlotStack" a la derecha en la misma
+línea (en Curva, encima de la curva en el eje Z; un pie posicionado lleva
+`grid-area: auto` o sus desplazamientos se miden desde su área y el margen se
+cuenta dos veces); y la etiqueta va siempre justo debajo de su cifra. Sus
+reglas van al final de `styles.css` para ganar a las de los diseños a igual
+especificidad. Y
+**color** (tinta, claro, índigo, tu marca). Descargar y copiar van **debajo de
+la tarjeta**, no en la columna de opciones. El título y su explicación
+ocupan todo el ancho y, debajo, editor y postal arrancan a la misma altura
+(`.postal-intro` se disuelve con `display: contents` para que sus piezas sean
+celdas de la rejilla); en una columna (≤960px) la tarjeta va justo tras el
+título y antes de las opciones, y la postal clara lleva en pantalla un
+filo de 1px que la captura no incluye. Todo se guarda en `localStorage` bajo `plotstack.postal`
 con lectura y escritura protegidas, y solo cambia atributos y clases de la
 tarjeta, sin recrearla. Ojo con `cqi`: la `.postal` ES el contenedor, así que
 sus propias propiedades en `cqi` resuelven contra el viewport. El espaciado
@@ -220,6 +285,14 @@ listeners quedarían colgando.
   cuelga de verdad** si quitas el plazo: no lo debilites dejando el stub sin
   publicaciones, que fue como se colo vacío la primera vez.
 
+- **Un 403 no siempre es falta de acceso.** `subscriber-stats` responde 403
+  con `type: "reauthentication_required"` cuando Substack quiere una sesión
+  reciente para dar datos personales, aunque el resto del panel funcione.
+  `performRequest` lo traduce a `SubstackApiError` con `code: "reauth"`, la
+  cobertura lo guarda en `reason` y `#reauth-notice` se muestra encima de
+  todas las vistas mientras alguna fuente lo tenga. No lo conviertas en
+  "sin acceso": mandaba a buscar el fallo donde no estaba.
+
 - **Ninguna petición sale sin plazo.** `performRequest` adjunta
   `AbortSignal.timeout(limiter.timeoutMs)` (30 s) y traduce el corte a
   `SubstackApiError`. `fetch` sin `signal` nunca rechaza una conexión que se
@@ -306,7 +379,8 @@ entre peticiones multiplicaba por diez la duración de la suite.
 
 - ES modules nativos en todas partes (`"type": "module"`); sin transpilación ni TypeScript.
 - Los tests parchean `globalThis.fetch` y lo restauran en `finally`; no hay librería de mocks.
-- Todo el texto de interfaz, mensajes de error y documentación está en español.
+- Todo el texto de interfaz, mensajes de error y documentación está en español, que es el **idioma fuente**; la interfaz también se sirve en inglés (ver abajo).
+- **Idiomas: español o inglés, según el navegador.** `src/shared/i18n.js` recorre `navigator.languages` y se queda con el primero que sabe pintar (`es`/`en`); cualquier otro cae al inglés. Lo usan igual el service worker y el dashboard. Estilo gettext: la clave es la cadena española literal, `t("Hace {n} días", { n })` o `tn(count, "{n} nota", "{n} notas")`, y el diccionario inglés vive en `src/shared/locales/en/*.js` (uno por zona). El HTML estático se traduce al arrancar con `translateDocument()` (nodos de texto y `title`/`aria-label`/`placeholder`/`alt`), así que un texto nuevo en `index.html` necesita su entrada en `en/html.js`. Reglas: el primer argumento de `t()` es **siempre un literal** entre comillas dobles (el test de `tests/i18n.test.js` lo extrae y exige traducción, igual que para cada texto del HTML); las frases se traducen enteras con marcadores, no por trozos concatenados; ningún `Intl`/`toLocale*` fija `"es-ES"`: se usa `LOCALE`. La suite corre forzada a español con `--import ./tests/fixtures/locale-es.js`. El nombre y la descripción del manifiesto van por `_locales/` (`default_locale: "en"`).
 - **Las fechas `YYYY-MM-DD` van por `parseDay()`, nunca por `new Date(valor)` directo.** `new Date("2026-06-10")` es medianoche **UTC**, así que en zonas negativas se renderiza como 9 jun. Son fechas civiles, no instantes.
 - El alcance de la v1 son publicaciones bajo `*.substack.com`; los dominios personalizados quedan fuera.
 

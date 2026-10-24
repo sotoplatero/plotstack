@@ -508,3 +508,23 @@ test("enrichSnapshot anade detalle y no pierde notas de paginas que no se releye
     globalThis.fetch = originalFetch;
   }
 });
+
+test("un 403 por reautenticacion pide volver a iniciar sesion, no habla de acceso", async () => {
+  const originalFetch = globalThis.fetch;
+  configureRequestLimiter({ gapMs: 0 });
+  globalThis.fetch = async (url) => (url.includes("subscriber-stats")
+    ? jsonResponse({ error: "Por tu seguridad, cierra sesión y vuelve a iniciarla para hacer esto.", type: "reauthentication_required" }, 403)
+    : jsonResponse({ error: "Forbidden" }, 403));
+  try {
+    await assert.rejects(
+      requestJson("https://muestra.substack.com/api/v1/subscriber-stats", { method: "POST", json: {} }),
+      (error) => error.status === 403 && /vuelvas a iniciar sesión/.test(error.message),
+    );
+    await assert.rejects(
+      requestJson("https://muestra.substack.com/api/v1/otra"),
+      (error) => error.status === 403 && /no tiene acceso/.test(error.message),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
