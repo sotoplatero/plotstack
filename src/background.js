@@ -14,6 +14,17 @@ const DAILY_ALARM = "plotstack-daily";
 // botón mientras corre la alarma) compartían la ráfaga de peticiones y se
 // pisaban al escribir el snapshot.
 let syncInFlight = null;
+let syncPublicationKey = "";
+let syncGeneration = 0;
+let storageWrites = Promise.resolve();
+const persist = (values, generation = syncGeneration) => {
+  const operation = storageWrites.then(() => {
+    if (generation !== syncGeneration) return;
+    return chrome.storage.local.set(values);
+  });
+  storageWrites = operation.catch(() => {});
+  return operation;
+};
 
 async function openDashboard() {
   const existing = await chrome.tabs.query({ url: `${DASHBOARD_URL}*` });
@@ -40,7 +51,7 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 });
 chrome.runtime.onStartup?.addListener(() => {
   scheduleDailySync();
-  void recoverOrphanProgress();
+  return recoverOrphanProgress();
 });
 chrome.alarms?.onAlarm.addListener(async (alarm) => {
   if (alarm?.name !== DAILY_ALARM) return;
@@ -78,9 +89,10 @@ async function connect() {
 // `phase: "detail"` guardado se quedaba para siempre y dejaba el boton de
 // sincronizar deshabilitado incluso tras recargar el dashboard.
 let lastProgress = null;
-const writeProgress = (progress) => {
+const writeProgress = (progress, generation = syncGeneration) => {
+  if (generation !== syncGeneration) return Promise.resolve();
   lastProgress = { ...progress, updatedAt: new Date().toISOString() };
-  return chrome.storage.local.set({ [PROGRESS_KEY]: lastProgress });
+  return persist({ [PROGRESS_KEY]: lastProgress }, generation);
 };
 
 // Chrome termina el service worker a los 30 s sin eventos. La fase de detalle
@@ -117,10 +129,11 @@ async function withDeadline(trabajo, ms, mensaje) {
   }
 }
 
-function startHeartbeat() {
+function startHeartbeat(generation = syncGeneration) {
   const timer = setInterval(() => {
+    if (generation !== syncGeneration) return;
     void chrome.runtime.getPlatformInfo?.();
-    if (lastProgress) void chrome.storage.local.set({ [PROGRESS_KEY]: { ...lastProgress, updatedAt: new Date().toISOString() } });
+    if (lastProgress) void persist({ [PROGRESS_KEY]: { ...lastProgress, updatedAt: new Date().toISOString() } }, generation);
   }, HEARTBEAT_MS);
   return () => clearInterval(timer);
 }
@@ -145,21 +158,23 @@ async function recoverOrphanProgress() {
 
 // Fase de detalle: lo caro. Corre DESPUÉS de haber persistido la fase rápida,
 // así que un fallo aquí deja el snapshot recién guardado intacto.
-async function runDetailPhase(publication, core, startedAt) {
-  const stopHeartbeat = startHeartbeat();
+async function runDetailPhase(publication, core, startedAt, generation) {
+  const stopHeartbeat = startHeartbeat(generation);
   // El paso alcanzado se recuerda para que un plazo agotado diga DONDE se
   // quedó. Sin eso, "no terminó" no permite arreglar nada.
   let ultimoPaso = "";
+  let running = true;
   try {
     const trabajo = enrichSnapshot(core, publication, {
       onProgress: ({ step, done, total }) => {
+        if (!running || generation !== syncGeneration) return;
         ultimoPaso = step;
-        void writeProgress({ phase: "detail", step, detail: { done, total }, startedAt, finishedAt: "", error: "" });
+        void writeProgress({ phase: "detail", step, detail: { done, total }, startedAt, finishedAt: "", error: "" }, generation);
       },
     });
     const enriched = await withDeadline(trabajo, deadlines.detailMs, t("El detalle tardó demasiado y se detuvo."));
-    await chrome.storage.local.set({ [SNAPSHOT_KEY]: normalizeSnapshot(enriched) });
-    await writeProgress({ phase: "done", step: "", detail: { done: 0, total: 0 }, startedAt, finishedAt: new Date().toISOString(), error: "" });
+    await persist({ [SNAPSHOT_KEY]: normalizeSnapshot(enriched) }, generation);
+    await writeProgress({ phase: "done", step: "", detail: { done: 0, total: 0 }, startedAt, finishedAt: new Date().toISOString(), error: "" }, generation);
   } catch (error) {
     const mensaje = error.message || t("No se pudo completar el detalle.");
     await writeProgress({
@@ -169,19 +184,27 @@ async function runDetailPhase(publication, core, startedAt) {
       startedAt,
       finishedAt: new Date().toISOString(),
       error: ultimoPaso ? t("{error} Se quedó en: {step}.", { error: mensaje, step: ultimoPaso }) : mensaje,
-    });
+    }, generation);
   } finally {
+    running = false;
     stopHeartbeat();
   }
 }
 
 async function syncPublication(publication) {
-  if (syncInFlight) return syncInFlight;
-  syncInFlight = (async () => {
+  if (syncInFlight && syncPublicationKey === publication.subdomain) return syncInFlight;
+  const generation = ++syncGeneration;
+  syncPublicationKey = publication.subdomain;
+  const work = (async () => {
     const startedAt = new Date().toISOString();
     try {
-      await writeProgress({ phase: "core", step: t("Resumen, publicaciones y audiencia"), detail: { done: 0, total: 0 }, startedAt, finishedAt: "", error: "" });
+      await writeProgress({ phase: "core", step: t("Resumen, publicaciones y audiencia"), detail: { done: 0, total: 0 }, startedAt, finishedAt: "", error: "" }, generation);
       const stored = await chrome.storage.local.get([SNAPSHOT_KEY, ANALYTICS_KEY]);
+      const samePublication = stored[SNAPSHOT_KEY]?.sourceUrl === `https://${publication.subdomain}.substack.com/publish`;
+      if (!samePublication && stored[SNAPSHOT_KEY]?.sourceUrl) {
+        delete stored[SNAPSHOT_KEY];
+        delete stored[ANALYTICS_KEY];
+      }
       // Fase rápida: escalares y listas. Devuelve un snapshot completo y válido
       // para pintar sin esperar a una sola petición de detalle.
       // La fase rápida lanza ~50 peticiones (13 fuentes ampliadas, varias por
@@ -191,7 +214,7 @@ async function syncPublication(publication) {
       const [core, freshAnalytics] = await withDeadline(
         Promise.all([
           getCoreSnapshot(publication, stored[SNAPSHOT_KEY]),
-          getExtendedAnalytics(publication),
+          getExtendedAnalytics(publication, stored[ANALYTICS_KEY]),
         ]),
         deadlines.coreMs,
         t("La fase rápida tardó demasiado y se detuvo."),
@@ -201,10 +224,13 @@ async function syncPublication(publication) {
       // la foto de hoy. Una captura por día, heredada de la anterior.
       const analytics = withLoyaltyHistory(freshAnalytics, stored[ANALYTICS_KEY]);
       const connection = { provider: "substack", publication, connectedAt: new Date().toISOString() };
-      await chrome.storage.local.set({ [SNAPSHOT_KEY]: snapshot, [CONNECTION_KEY]: connection, [ANALYTICS_KEY]: analytics });
+      if (generation !== syncGeneration) throw new Error(t("La sincronización fue cancelada."));
+      await persist({ [SNAPSHOT_KEY]: snapshot, [CONNECTION_KEY]: connection, [ANALYTICS_KEY]: analytics }, generation);
       // La fase de detalle sigue sin bloquear la respuesta: el dashboard pinta
       // ya y se actualiza por `chrome.storage.onChanged` cuando termine.
-      const detailPhase = runDetailPhase(publication, core, startedAt);
+      const detailPhase = runDetailPhase(publication, core, startedAt, generation).finally(() => {
+        if (generation === syncGeneration) syncInFlight = null;
+      });
       return { snapshot, connection, analytics, detailPending: true, detailPhase };
     } catch (error) {
       await writeProgress({
@@ -214,21 +240,21 @@ async function syncPublication(publication) {
         startedAt,
         finishedAt: new Date().toISOString(),
         error: error.message || t("No se pudo sincronizar."),
-      });
+      }, generation);
+      if (generation === syncGeneration) syncInFlight = null;
       throw error;
     }
   })();
-  try {
-    return await syncInFlight;
-  } finally {
-    syncInFlight = null;
-  }
+  syncInFlight = work;
+  return work;
 }
 
 async function syncConnected() {
+  const generation = syncGeneration;
   const stored = await chrome.storage.local.get([CONNECTION_KEY]);
   const publication = stored[CONNECTION_KEY]?.publication;
   if (!publication) throw new Error(t("Conecta una publicación primero."));
+  if (syncInFlight && syncPublicationKey === publication.subdomain) return syncInFlight;
   // El perfil se refresca en CADA sync, no solo cuando falta `userId`. Ahí vive
   // `followerCount`, que es un número vivo: cachearlo desde el momento de la
   // conexión lo dejaba a 0 en cualquier conexión creada antes de mapearlo.
@@ -239,11 +265,20 @@ async function syncConnected() {
   } catch {
     // Un fallo aquí no invalida el sync: se sigue con lo que ya había.
   }
+  if (generation !== syncGeneration) {
+    if (syncInFlight && syncPublicationKey === publication.subdomain) return syncInFlight;
+    throw new Error(t("La sincronización fue cancelada."));
+  }
   return syncPublication({ ...publication, ...fresh });
 }
 
 async function disconnect() {
-  await chrome.storage.local.remove([SNAPSHOT_KEY, CONNECTION_KEY, ANALYTICS_KEY, PROGRESS_KEY]);
+  syncGeneration += 1;
+  syncInFlight = null;
+  lastProgress = null;
+  const operation = storageWrites.then(() => chrome.storage.local.remove([SNAPSHOT_KEY, CONNECTION_KEY, ANALYTICS_KEY, PROGRESS_KEY]));
+  storageWrites = operation.catch(() => {});
+  await operation;
   return { disconnected: true };
 }
 

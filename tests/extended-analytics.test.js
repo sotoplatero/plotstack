@@ -17,6 +17,37 @@ import {
 
 const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
+test("la cobertura distingue ventanas fallidas y conserva la última medición", async () => {
+  const originalFetch = globalThis.fetch;
+  const { configureRequestLimiter } = await import("../src/providers/substack-api.js");
+  configureRequestLimiter({ gapMs: 0 });
+  let failing = false;
+  let failingDay = "";
+  globalThis.fetch = async (url) => {
+    if (url.includes("growth/sources")) return response({ totals: [{ name: "subscribers", total: 12 }] }, failing || failingDay && url.includes(`from_date=${failingDay}`) ? 500 : 200);
+    return response({});
+  };
+  try {
+    const first = await getExtendedAnalytics({ subdomain: "carta" });
+    assert.equal(first.growth.sources.all.sourceState, "ready");
+    assert.equal(Math.round((new Date(first.growth.sources.all.period.to) - new Date(first.growth.sources.all.period.from)) / 86400000), 365);
+    failingDay = first.growth.sources["7"].period.from;
+    const partial = await getExtendedAnalytics({ subdomain: "carta" }, first);
+    assert.equal(partial.coverage.find((row) => row.key === "growthSources").status, "partial");
+    assert.equal(partial.growth.sources["30"].sourceState, "ready");
+    assert.equal(partial.growth.sources["7"].sourceState, "stale");
+    failing = true;
+    const stale = await getExtendedAnalytics({ subdomain: "carta" }, first);
+    assert.equal(stale.growth.sources["30"].totals.subscribers, 12);
+    assert.equal(stale.growth.sources["30"].sourceState, "stale");
+    assert.equal(stale.coverage.find((row) => row.key === "growthSources").status, "stale");
+    const absent = await getExtendedAnalytics({ subdomain: "carta" });
+    assert.equal(absent.coverage.find((row) => row.key === "growthSources").status, "unavailable");
+    const stillAbsent = await getExtendedAnalytics({ subdomain: "carta" }, absent);
+    assert.equal(stillAbsent.growth.sources["30"].sourceState, "unavailable", "un fallo anterior nunca se convierte en una medición antigua");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("extended normalizers accept the known Substack variants", () => {
   // El payload real usa barras; se normaliza a ISO para que parseDay lo trate
   // como fecha civil y no desplace el dia.

@@ -375,6 +375,14 @@ descripción detallada y, si se quiere, en el primer párrafo. Texto listo para
 usar en el anuncio o en el repositorio:
 
 ```
+1.6.0
+
+• Datos más fiables: no se pierden artículos antiguos, las cifras se
+  refrescan solas y un fallo de Substack ya no aparece como cero. Notas
+  empieza por lo que decide y las curvas se recorren con el teclado.
+```
+
+```
 1.5.0
 
 • Postal nueva: elige qué cuenta (tu periodo, el hito que acabas de cruzar o

@@ -246,7 +246,7 @@ test("la tendencia mide alcance cuando las dos mitades tienen estadísticas", ()
   const notes = Array.from({ length: 40 }, (_, index) => note(index, 80 - index * 2, 5, { stats: detailed(0, index >= 20 ? 3000 + index : 1000 + index) }));
   const insight = byId(getInsights({ snapshot: { notes }, days: 30, now: NOW }), "note-trend:reach");
   assert.ok(insight);
-  assert.match(insight.text, /llegan a un \d+% más de gente/);
+  assert.match(insight.text, /reciben un \d+% más de impresiones por nota/);
 });
 
 test("la tasa de interacción destaca la nota que resonó, no la de más alcance", () => {
@@ -255,7 +255,7 @@ test("la tasa de interacción destaca la nota que resonó, no la de más alcance
   }));
   const insight = byId(getInsights({ snapshot: { notes }, days: 30, now: NOW }), "note-rate");
   assert.ok(insight, "12% frente a ~2% de lo habitual");
-  assert.match(insight.text, /hizo interactuar al 12% de quien la vio/);
+  assert.match(insight.text, /recibió 12 interacciones por cada 100 impresiones/);
   const pocas = notes.map((row, index) => ({ ...row, stats: index === 29 ? detailed(0, 50, 20) : row.stats }));
   assert.equal(byId(getInsights({ snapshot: { notes: pocas }, days: 30, now: NOW }), "note-rate"), undefined, "con menos de 100 impresiones no compite");
 });

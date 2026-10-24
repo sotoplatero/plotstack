@@ -1759,6 +1759,25 @@ html:not(.is-capturing) .postal[data-theme="light"] { box-shadow: inset 0 0 0 1p
 .reauth-button:hover { filter: brightness(1.08); }
 .reauth-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 html.is-capturing .reauth-notice { display: none !important; }
+.data-quality { margin: 0 0 20px; color: var(--muted); font: 400 13px/1.6 var(--sans); max-width: 85ch; }
+.metric-quality { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 12px 0 0; }
+#notes-freshness { padding: 0 var(--pad) 20px; margin: 14px 0 0; }
+.surface-bars { display: grid; gap: 18px; }
+.surface-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px 12px; font-size: 13px; }
+.surface-row strong { font-variant-numeric: tabular-nums; font-size: 13px; }
+.surface-row i { grid-column: 1 / -1; height: 7px; border-radius: 4px; background: var(--notes-green, #34c759); }
+.notes-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.notes-kpis strong { font-size: clamp(24px, 2.5vw, 32px); }
+.notes-kpis small { display: block; margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.notes-kpis span { line-height: 1.5; }
+.chart-tooltip { white-space: normal; max-width: min(360px, 80vw); font-size: 12px; line-height: 1.5; color: var(--paper); }
+svg[tabindex="0"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.range-control button, .source-card small, .pager, .donut-center span, .donut-item { font-size: 12px; }
+@media (max-width: 760px) {
+  .notes-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .surface-row { font-size: 12px; }
+  .range-control button, .icon-button { min-height: 44px; min-width: 44px; }
+}
 @media (max-width: 760px) {
   .reauth-notice { flex-direction: column; align-items: flex-start; }
   .reauth-notice p { margin-left: 0; }

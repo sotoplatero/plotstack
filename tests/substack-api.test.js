@@ -6,6 +6,64 @@ import { collectNoteStats, configureRequestLimiter, enrichSnapshot, getCoreSnaps
 // suite pagaría 60 ms por llamada.
 configureRequestLimiter({ concurrency: 4, gapMs: 0 });
 
+test("la pasada incremental conserva los 120 artículos y sobrevive a un fallo de lista", async () => {
+  const originalFetch = globalThis.fetch;
+  const previous = {
+    capturedAt: new Date().toISOString(), lastFullRefreshAt: new Date().toISOString(),
+    campaigns: Array.from({ length: 120 }, (_, i) => ({ id: String(i + 1), title: `Post ${i + 1}`, date: "2026-01-01", delivered: 100, opened: 50, detailAvailable: true })),
+  };
+  let failPosts = false;
+  globalThis.fetch = async (url) => {
+    if (url.includes("summary-v2")) return jsonResponse({ totalSubscribersEnd: 200 });
+    if (url.includes("post_management/published")) return jsonResponse({ posts: previous.campaigns.slice(0, 50), total: 120 }, failPosts ? 500 : 200);
+    return jsonResponse({});
+  };
+  try {
+    const publication = { name: "Carta", subdomain: "carta" };
+    const core = await getCoreSnapshot(publication, previous);
+    assert.equal(core.snapshot.campaigns.length, 120);
+    assert.equal(core.context.fullRefresh, false);
+    failPosts = true;
+    const failed = await getCoreSnapshot(publication, previous);
+    assert.equal(failed.snapshot.campaigns.length, 120);
+    assert.equal(failed.snapshot.sourceHealth.posts.status, "stale");
+    assert.equal(failed.snapshot.metricMeta.monthlyRevenue.status, "unavailable");
+    assert.equal(failed.snapshot.metricMeta.subscribers.status, "ready");
+    const weekly = await getCoreSnapshot(publication, { ...previous, lastFullRefreshAt: new Date(Date.now() - 8 * 86400000).toISOString() });
+    assert.equal(weekly.context.fullRefresh, true, "capturedAt reciente no retrasa el refresco semanal");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("renueva artículos fuera de la página incremental y notas antiguas sin perder su historial", async () => {
+  const originalFetch = globalThis.fetch;
+  const now = new Date().toISOString();
+  const old = new Date(Date.now() - 8 * 86400000).toISOString();
+  const previous = {
+    capturedAt: now, lastFullRefreshAt: now,
+    campaigns: Array.from({ length: 120 }, (_, i) => ({ id: String(i + 1), title: `Post ${i + 1}`, date: "2026-01-01", delivered: 100, opened: 50, detailAvailable: true, detailUpdatedAt: i === 119 ? old : now })),
+    notes: Array.from({ length: 13 }, (_, i) => ({ id: String(i + 1), body: "Nota", date: `2026-01-${String(20 - i).padStart(2, "0")}`, stats: { available: true, fetchedAt: i === 12 ? old : now, interactions: { total: 1 } } })),
+  };
+  const called = [];
+  globalThis.fetch = async (url) => {
+    called.push(url);
+    if (url.includes("summary-v2")) return jsonResponse({ totalSubscribersEnd: 200 });
+    if (url.includes("post_management/published")) return jsonResponse({ posts: previous.campaigns.slice(0, 50), total: 120 });
+    if (url.includes("post_management/detail")) return jsonResponse({ posts: [{ id: url.match(/detail\/(\d+)/)[1], stats: { delivered: 100, opened: 80 } }] });
+    if (url.includes("note_stats")) return jsonResponse({ cards: [{ cardId: "interactions", headers: [{ title: "Interactions", value: 20 }] }] });
+    return jsonResponse({});
+  };
+  try {
+    const publication = { name: "Carta", subdomain: "carta" };
+    const core = await getCoreSnapshot(publication, previous);
+    const snapshot = await enrichSnapshot(core, publication);
+    assert.equal(snapshot.campaigns.length, 120);
+    assert.equal(snapshot.campaigns.find((row) => row.id === "120").opened, 80);
+    assert.ok(called.some((url) => url.includes("note_stats/c-13")));
+    assert.equal(snapshot.notes.find((row) => row.id === "13").stats.interactions.total, 20);
+    assert.ok(snapshot.campaigns.find((row) => row.id === "120").detailUpdatedAt > old);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 const jsonResponse = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -122,6 +180,9 @@ test("getAllPublishedPosts paginates the complete publication history", async ()
     const posts = await getAllPublishedPosts("https://carta.substack.com/api/v1");
     assert.equal(posts.length, 51);
     assert.equal(urls.length, 2);
+    assert.equal(posts.complete, true);
+    const truncated = await getAllPublishedPosts("https://carta.substack.com/api/v1", { maxPages: 1 });
+    assert.equal(truncated.complete, false, "agotar el tope de páginas no acredita un recorrido completo");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -422,6 +483,7 @@ test("los paginadores paran cuando una pagina entera ya esta en el snapshot", as
     const completo = await getAllProfileFeedItems(7, { knownIds: new Set(["c-201", "c-202"]), fullRefresh: true });
     assert.equal(llamadas, 3, "el refresco completo recorre todo el historial");
     assert.equal(completo.length, 6);
+    assert.equal(completo.complete, true);
 
     llamadas = 0;
     await getAllProfileFeedItems(7, {});

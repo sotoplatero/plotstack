@@ -106,6 +106,33 @@ const conexionAntigua = {
   "plotstack.snapshot": { metrics: { followers: 0, subscribers: 80 } },
 };
 
+test("desconectar durante detalle impide que una respuesta tardía restaure los datos", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  let release;
+  try {
+    const { send, store } = await loadBackground({ storage: conexionAntigua });
+    const normal = globalThis.fetch;
+    const pending = new Promise((resolve) => { release = resolve; });
+    globalThis.fetch = async (url, options) => {
+      if (url.includes("post_management/published")) return jsonResponse({ posts: [{ id: 11, title: "Pendiente" }] });
+      if (url.includes("post_management/detail")) return pending;
+      return normal(url, options);
+    };
+    const first = await send({ type: "PLOTSTACK_SYNC" });
+    const duplicate = await send({ type: "PLOTSTACK_SYNC" });
+    assert.equal(duplicate.snapshot.capturedAt, first.snapshot.capturedAt, "las dos fases comparten una sola operación");
+    await send({ type: "PLOTSTACK_DISCONNECT" });
+    release(jsonResponse({ posts: [{ id: 11, stats: { delivered: 100, opened: 50 } }] }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.deepEqual(Object.keys(store), []);
+  } finally {
+    release?.(jsonResponse({}));
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
 test("PLOTSTACK_SYNC refresca el perfil aunque la conexión ya tenga userId", async () => {
   const originalFetch = globalThis.fetch;
   const originalChrome = globalThis.chrome;

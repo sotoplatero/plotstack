@@ -3,6 +3,7 @@ import { t } from "../shared/i18n.js";
 
 const asNumber = (...values) => {
   for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
@@ -429,13 +430,32 @@ const recordCount = (value) => {
   return value && typeof value === "object" ? 1 : 0;
 };
 
-export async function getExtendedAnalytics(publication) {
+export async function getExtendedAnalytics(publication, previous = null) {
   const base = `https://${publication.subdomain}.substack.com/api/v1`;
   const endDate = new Date();
   const startDate = new Date(endDate);
   startDate.setUTCFullYear(startDate.getUTCFullYear() - 1);
   const from = startDate.toISOString().slice(0, 10);
   const to = endDate.toISOString().slice(0, 10);
+  const fetchedAt = endDate.toISOString();
+  const prior = {
+    subscriberTimeline: previous?.audience?.timeline,
+    growthSources: previous?.growth?.sources,
+    visitorSources: previous?.growth?.visitors,
+    networkAttribution: previous?.growth?.network,
+    trafficTimeseries: previous?.traffic?.daily,
+    growthBenchmark: previous?.growth?.benchmark,
+    audienceOverlap: previous?.audience?.overlap,
+    followerTimeseries: previous?.audience?.followers?.history,
+    audienceLocation: previous?.audience?.location,
+    freeSubscriberGrowth: previous?.growth?.subscribers?.free,
+    paidSubscriberGrowth: previous?.growth?.subscribers?.paid,
+    freeRetention: previous?.retention?.free,
+    paidRetention: previous?.retention?.paid,
+  };
+  for (const key of Object.keys(prior)) {
+    if (previous?.coverage?.find((row) => row.key === key)?.status === "unavailable") delete prior[key];
+  }
   const fromIso = startDate.toISOString();
   const toIso = endDate.toISOString();
   const growthQuery = `start=${encodeURIComponent(fromIso)}&end=${encodeURIComponent(toIso)}&period=day`;
@@ -480,13 +500,14 @@ export async function getExtendedAnalytics(publication) {
     date.setUTCDate(date.getUTCDate() - days);
     return date.toISOString().slice(0, 10);
   };
-  const byRange = (request, normalize) => async () => {
+  const byRange = (request, normalize, sourceKey) => async () => {
     const entries = await Promise.all(Object.entries(RANGE_DAYS).map(async ([key, days]) => {
       try {
-        return [key, normalize(await request(dayBefore(days), to))];
-      } catch {
-        // Una ventana caida no invalida las demas.
-        return [key, normalize({})];
+        return [key, { ...normalize(await request(dayBefore(days), to)), sourceState: "ready", fetchedAt, period: { from: dayBefore(days), to } }];
+      } catch (error) {
+        const candidate = prior[sourceKey]?.[key];
+        const old = candidate?.sourceState === "unavailable" ? null : candidate;
+        return [key, { ...(old || normalize({})), sourceState: old ? "stale" : "unavailable", sourceError: error.message, fetchedAt: old?.fetchedAt || "", period: old?.period || { from: dayBefore(days), to } }];
       }
     }));
     return Object.fromEntries(entries);
@@ -500,6 +521,7 @@ export async function getExtendedAnalytics(publication) {
       request: byRange(
         (desde, hasta) => requestJson(`${base}/publication/stats/growth/sources?from_date=${desde}&to_date=${hasta}&order_by=users&order_direction=desc`),
         normalizeGrowthSources,
+        "growthSources",
       ),
       normalize: (value) => value,
     },
@@ -509,6 +531,7 @@ export async function getExtendedAnalytics(publication) {
       request: byRange(
         (desde, hasta) => requestJson(`${base}/publication/stats/visitor_sources?from_date=${desde}&to_date=${hasta}&offset=0&limit=20&order_by=views&order_direction=desc`),
         normalizeVisitorSources,
+        "visitorSources",
       ),
       normalize: (value) => value,
     },
@@ -518,9 +541,11 @@ export async function getExtendedAnalytics(publication) {
       request: async () => {
         const entries = await Promise.all(Object.entries(NETWORK_WINDOWS).map(async ([key, window]) => {
           try {
-            return [key, normalizeNetworkAttribution(await requestJson(`${base}/publication/stats/network_attribution?time_window=${encodeURIComponent(window)}&is_subscribed=false`))];
-          } catch {
-            return [key, normalizeNetworkAttribution({})];
+            return [key, { ...normalizeNetworkAttribution(await requestJson(`${base}/publication/stats/network_attribution?time_window=${encodeURIComponent(window)}&is_subscribed=false`)), sourceState: "ready", fetchedAt, period: { from: key === "all" ? "" : dayBefore(Number(key)), to } }];
+          } catch (error) {
+            const candidate = prior.networkAttribution?.[key];
+            const old = candidate?.sourceState === "unavailable" ? null : candidate;
+            return [key, { ...(old || normalizeNetworkAttribution({})), sourceState: old ? "stale" : "unavailable", sourceError: error.message, fetchedAt: old?.fetchedAt || "", period: old?.period || { from: key === "all" ? "" : dayBefore(Number(key)), to } }];
           }
         }));
         return Object.fromEntries(entries);
@@ -561,22 +586,28 @@ export async function getExtendedAnalytics(publication) {
   const coverage = settled.map((result, index) => {
     const source = sources[index];
     if (result.status === "rejected") {
-      data[source.key] = source.normalize({ sourceState: "unavailable", sourceError: result.reason?.message || t("No disponible") });
-      return { key: source.key, label: source.label, status: "unavailable", records: 0, error: result.reason?.message || t("No disponible"), reason: result.reason?.code || "" };
+      data[source.key] = prior[source.key] || source.normalize({ sourceState: "unavailable", sourceError: result.reason?.message || t("No disponible") });
+      return { key: source.key, label: source.label, status: prior[source.key] ? "stale" : "unavailable", fetchedAt: previous?.coverage?.find((row) => row.key === source.key)?.fetchedAt || "", records: recordCount(data[source.key]), error: result.reason?.message || t("No disponible"), reason: result.reason?.code || "" };
     }
     raw[source.key] = result.value;
     data[source.key] = source.normalize(result.value);
-    return { key: source.key, label: source.label, status: "ready", records: recordCount(data[source.key]), error: "" };
+    const windows = ["7", "30", "90", "all"].map((key) => data[source.key]?.[key]).filter(Boolean);
+    const failed = windows.filter((row) => row.sourceState !== "ready");
+    const status = windows.length
+      ? failed.length === 0 ? "ready" : failed.length < windows.length ? "partial" : failed.some((row) => row.sourceState === "stale") ? "stale" : "unavailable"
+      : data[source.key]?.sourceState || (data[source.key]?.partial ? "partial" : "ready");
+    return { key: source.key, label: source.label, status, fetchedAt, period: { from, to }, records: recordCount(data[source.key]), error: failed.map((row) => row.sourceError).filter(Boolean).join(" · ") || data[source.key]?.sourceError || "" };
   });
 
   // Los conteos agregados salen de la primera página que ya trajo la timeline:
   // `audienceCounts` es la copia PII-free de `count` y `chartCounts`.
-  data.audience = normalizeAudience(raw.subscriberTimeline?.audienceCounts || {});
+  data.audience = normalizeAudience((raw.subscriberTimeline || data.subscriberTimeline)?.audienceCounts || {});
   const timelineCoverage = coverage.find((row) => row.key === "subscriberTimeline");
   coverage.unshift({
     key: "audience",
     label: t("Audiencia"),
-    status: timelineCoverage?.status === "ready" ? "ready" : "unavailable",
+    status: ["ready", "partial"].includes(timelineCoverage?.status) ? "ready" : timelineCoverage?.status || "unavailable",
+    fetchedAt: timelineCoverage?.fetchedAt || "",
     records: recordCount(data.audience),
     error: timelineCoverage?.status === "ready" ? "" : timelineCoverage?.error || t("No disponible"),
     reason: timelineCoverage?.reason || "",

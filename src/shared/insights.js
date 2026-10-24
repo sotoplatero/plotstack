@@ -680,8 +680,8 @@ function detectNoteTrend(ctx) {
       group: "notas",
       text: byReach
         ? (up
-          ? t("Tus últimas {n} notas llegan a un {pct} más de gente que las {n} anteriores.", { n: TREND_N, pct })
-          : t("Tus últimas {n} notas llegan a un {pct} menos de gente que las {n} anteriores.", { n: TREND_N, pct }))
+          ? t("Tus últimas {n} notas reciben un {pct} más de impresiones por nota que las {n} anteriores.", { n: TREND_N, pct })
+          : t("Tus últimas {n} notas reciben un {pct} menos de impresiones por nota que las {n} anteriores.", { n: TREND_N, pct }))
         : (up
           ? t("Tus últimas {n} notas reciben un {pct} más de interacciones que las {n} anteriores.", { n: TREND_N, pct })
           : t("Tus últimas {n} notas reciben un {pct} menos de interacciones que las {n} anteriores.", { n: TREND_N, pct })),
@@ -728,8 +728,8 @@ function detectNoteEngagementRate(ctx) {
       id: "note-rate",
       group: "notas",
       text: winners.length === 1
-        ? t("Tu nota del {date} hizo interactuar al {rate}% de quien la vio: {times} lo habitual.", { date: shortDay(top.piece.date, ctx.now), rate, times: times(top.multiple) })
-        : t("{n} notas hicieron interactuar a bastante más gente de lo habitual; la mejor, al {rate}% de quien la vio.", { n: winners.length, rate }),
+        ? t("Tu nota del {date} recibió {rate} interacciones por cada 100 impresiones: {times} lo habitual.", { date: shortDay(top.piece.date, ctx.now), rate, times: times(top.multiple) })
+        : t("{n} notas destacan en interacciones por impresión; la mejor, con {rate} por cada 100 impresiones.", { n: winners.length, rate }),
       sample: t("Interacciones sobre impresiones · notas con estadísticas y al menos {n} impresiones", { n: RATE_MIN_IMPRESSIONS }),
       score: scoreOf(top.multiple, evaluated.length) + 0.1,
       strip: stripFor(evaluated, ids, t("% de interacción"), all.slice(-BASELINE_WINDOW).map((row) => row.value)),
@@ -776,7 +776,7 @@ function detectPostOpenRate(ctx) {
     score: Math.abs(row.z) * 0.3,
     strip: stripFor(evaluated, new Set([row.piece.id]), t("% de apertura"), band),
     examples: [{ id: row.piece.id, excerpt: row.piece.title, date: row.piece.date }],
-    action: up ? null : t("Revisa su asunto: la apertura mide el asunto, no el contenido."),
+    action: up ? null : t("Revisa el asunto y las condiciones del envío; la apertura no demuestra por sí sola qué causó la diferencia."),
     target: { view: "publicaciones", panel: "posts-rate-panel" },
   });
   return { insights: [high && build(high, true), low && build(low, false)].filter(Boolean) };
@@ -858,7 +858,8 @@ const sourcesForRange = (source, days) => {
   if (!source || Array.isArray(source)) return null;
   const ranged = RANGE_KEYS.some((key) => key in source);
   if (!ranged) return source;
-  return source[Number.isFinite(days) ? String(days) : "all"] || null;
+  const selected = source[Number.isFinite(days) ? String(days) : "all"];
+  return selected?.sourceState && selected.sourceState !== "ready" ? null : selected || null;
 };
 
 export function getInsights({ snapshot = {}, analytics = null, days = 30, now = Date.now(), timeZoneOffsetMinutes = 0 } = {}) {

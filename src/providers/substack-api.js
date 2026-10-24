@@ -115,6 +115,7 @@ export async function getAllProfileFeedItems(userId, options = 60) {
   const { maxPages = 60, knownIds = null, fullRefresh = false } = typeof options === "number" ? { maxPages: options } : options || {};
   if (!userId) return [];
   const items = [];
+  Object.defineProperty(items, "complete", { value: false, writable: true });
   let cursor = "";
   const isKnown = (item) => {
     const key = String(item?.entity_key || "");
@@ -132,7 +133,8 @@ export async function getAllProfileFeedItems(userId, options = 60) {
     const pageItems = Array.isArray(payload?.items) ? payload.items : [];
     items.push(...pageItems);
     const nextCursor = payload?.nextCursor || payload?.next_cursor || "";
-    if (!nextCursor || !pageItems.length || nextCursor === cursor) break;
+    if (!nextCursor || !pageItems.length) { items.complete = true; break; }
+    if (nextCursor === cursor) break;
     if (!fullRefresh && knownIds?.size && pageItems.every(isKnown)) break;
     cursor = nextCursor;
     await pause(80);
@@ -142,6 +144,7 @@ export async function getAllProfileFeedItems(userId, options = 60) {
 
 const asNumber = (...values) => {
   for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
@@ -168,6 +171,7 @@ export async function getProfile() {
       userId: profile.id,
       userHandle: profile.handle || "",
       followerCount: asNumber(profile.followerCount, profile.follower_count),
+      currency: text(entry.publication.currency).toUpperCase(),
     }));
   return {
     user: {
@@ -206,7 +210,9 @@ const unwrapRows = (payload) => {
 // hacía que el cociente diera 0% en payloads que sí traen su propia tasa.
 const firstFinite = (row, keys) => {
   for (const key of keys) {
-    const value = Number(row?.[key] ?? row?.stats?.[key]);
+    const raw = row?.[key] ?? row?.stats?.[key];
+    if (raw === null || raw === undefined || raw === "") continue;
+    const value = Number(raw);
     if (Number.isFinite(value)) return value;
   }
   return null;
@@ -266,6 +272,13 @@ export const mapCampaign = (row, index) => ({
   comments: asNumber(row.comment_count, row.stats?.comment_count),
   engagementRate: rateFrom(row, ["engagement_rate", "engagementRate"], [], []),
   detailAvailable: Boolean(row.stats),
+  detailUpdatedAt: text(row.detailUpdatedAt),
+  measured: {
+    opened: firstFinite(row, ["opened", "emails_opened"]) !== null,
+    clicked: firstFinite(row, ["clicked", "emails_clicked"]) !== null,
+    openRate: firstFinite(row, ["open_rate", "openRate", "opened", "emails_opened"]) !== null,
+    clickRate: firstFinite(row, ["click_through_rate", "click_rate", "clickRate", "clicked", "emails_clicked"]) !== null,
+  },
 });
 
 // Mismo criterio incremental que el feed de notas: la lista viene en orden
@@ -274,6 +287,7 @@ export const mapCampaign = (row, index) => ({
 export async function getAllPublishedPosts(base, options = 40) {
   const { maxPages = 40, knownIds = null, fullRefresh = false } = typeof options === "number" ? { maxPages: options } : options || {};
   const posts = [];
+  Object.defineProperty(posts, "complete", { value: false, writable: true });
   const limit = 50;
   const isKnown = (row) => knownIds?.has(String(row?.id ?? row?.post_id));
   for (let page = 0; page < maxPages; page += 1) {
@@ -282,7 +296,7 @@ export async function getAllPublishedPosts(base, options = 40) {
     const rows = unwrapRows(payload);
     posts.push(...rows);
     const total = asNumber(payload?.total);
-    if (!rows.length || rows.length < limit || (total && posts.length >= total)) break;
+    if (!rows.length || rows.length < limit || (total && posts.length >= total)) { posts.complete = true; break; }
     if (!fullRefresh && knownIds?.size && rows.every(isKnown)) break;
     await pause(80);
   }
@@ -366,8 +380,10 @@ export const normalizeNoteStats = (payload = {}) => {
 
   return {
     // `cards` con solo la tarjeta `note` no es detalle: es una nota sin datos.
-    available: [...cards.keys()].some((id) => id !== "note"),
+    available: ["interactions", "impressions", "new_subscribers", "surfaces", "audience"].some((id) => cards.has(id)),
     updatedAt: payload.lastUpdatedAt || "",
+    fetchedAt: new Date().toISOString(),
+    measured: { impressions: Boolean(impressionsCard), freeSubscribers: Boolean(subscribersCard), profileVisits: Boolean(interactionsCard), linkClicks: Boolean(interactionsCard) },
     interactions,
     results: {
       freeSubscribers: cardValue(subscribersCard, "New free subs"),
@@ -515,6 +531,7 @@ export function weightedRate(campaigns, numeratorKey) {
   for (const campaign of campaigns) {
     const delivered = asNumber(campaign?.delivered);
     if (delivered <= 0) continue;
+    if (campaign.measured?.[numeratorKey] === false) continue;
     numerator += asNumber(campaign?.[numeratorKey]);
     denominator += delivered;
   }
@@ -528,7 +545,7 @@ export function weightedRate(campaigns, numeratorKey) {
 const FULL_REFRESH_AFTER_MS = 7 * 86400000;
 
 const needsFullRefresh = (existingSnapshot) => {
-  const captured = new Date(existingSnapshot?.capturedAt || 0).getTime();
+  const captured = new Date(existingSnapshot?.lastFullRefreshAt || 0).getTime();
   if (!Number.isFinite(captured) || captured <= 0) return true;
   return Date.now() - captured > FULL_REFRESH_AFTER_MS;
 };
@@ -539,14 +556,22 @@ const campaignId = (row, index) => String(row?.id ?? row?.post_id ?? index);
 // conserva el de la sincronización anterior. Un fallo nunca degrada a cero lo
 // que ya se había medido.
 function buildCampaigns(rawRows, detailById, previousById) {
-  return rawRows.map((row, index) => {
+  const merged = new Map(previousById);
+  const ids = new Set(rawRows.map(campaignId));
+  const rows = [...rawRows, ...[...detailById.keys()].filter((id) => !ids.has(id)).map((id) => previousById.get(id) || { id })];
+  rows.forEach((row, index) => {
     const id = campaignId(row, index);
     const detailResult = detailById.get(id);
     const detailedRow = detailResult?.status === "fulfilled" ? unwrapRows(detailResult.value)[0] : null;
-    if (detailedRow) return mapCampaign({ ...row, ...detailedRow, stats: detailedRow.stats }, index);
+    if (detailedRow) {
+      const metadata = { id, title: row.title, subtitle: row.subtitle, slug: row.slug, audience: row.audience, type: row.type, section_name: row.section_name || row.section, wordcount: row.wordcount, post_date: row.post_date || row.published_at || row.date };
+      merged.set(id, mapCampaign({ ...metadata, ...detailedRow, stats: detailedRow.stats, detailUpdatedAt: new Date().toISOString() }, index));
+      return;
+    }
     const previous = previousById.get(id);
-    return previous?.detailAvailable ? previous : mapCampaign(row, index);
+    merged.set(id, previous?.detailAvailable ? { ...previous, title: row.title || previous.title, date: row.post_date || row.published_at || previous.date } : mapCampaign(row, index));
   });
+  return [...merged.values()].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
 }
 
 // Notas PROPIAS del feed de perfil: el feed incluye restacks ajenos, que se
@@ -630,13 +655,26 @@ export async function getCoreSnapshot(publication, existingSnapshot) {
   }
   // `summary.subscribers` NO es el total: en la captura real vale 0 con 97
   // suscriptores. El total esta en `totalEmail`. Ver docs/product/substack-payloads-observados.md
-  const currentSubscribers = asNumber(range30.totalSubscribersEnd, summary.totalEmail);
-  const currentPaid = asNumber(range30.paidSubscribersEnd, summary.paidSubscribers, summary.numPledges);
+  const currentSubscribers = asNumber(range30.totalSubscribersEnd, summary.totalEmail, existingSnapshot?.metrics?.subscribers);
+  const currentPaid = asNumber(range30.paidSubscribersEnd, summary.paidSubscribers, summary.numPledges, existingSnapshot?.metrics?.paidSubscribers);
   const currentFollowers = asNumber(publication.followerCount, existingSnapshot?.metrics?.followers);
-  const currentArr = asNumber(range30.arrEnd, range30.pledgedArrEnd, summary.arr, summary.pledgesAmount);
+  const currentArr = asNumber(range30.arrEnd, range30.pledgedArrEnd, summary.arr, summary.pledgesAmount, existingSnapshot?.metrics?.monthlyRevenue === undefined ? undefined : existingSnapshot.metrics.monthlyRevenue * 12);
   const now = new Date().toISOString();
+  const metricMeta = {};
+  const measure = (key, unit, source, values) => {
+    const available = values.some((value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)));
+    metricMeta[key] = {
+      status: available ? "ready" : existingSnapshot?.metrics?.[key] !== undefined ? "stale" : "unavailable",
+      fetchedAt: available ? now : existingSnapshot?.metricMeta?.[key]?.fetchedAt || "",
+      source, unit,
+    };
+  };
+  measure("subscribers", "people", "summary-v2/summary", [range30.totalSubscribersEnd, summary.totalEmail]);
+  measure("paidSubscribers", "people", "summary-v2/summary", [range30.paidSubscribersEnd, summary.paidSubscribers]);
+  measure("monthlyRevenue", "currency/month", "ARR/12", [range30.arrEnd, range30.pledgedArrEnd, summary.arr, summary.pledgesAmount]);
+  measure("totalViews", "views", "summary", [summary.views, range30.totalViewsEnd]);
   const anchors = [
-    { date: dateBefore(90), subscribers: asNumber(range90.totalSubscribersStart, range30.totalSubscribersStart), paidSubscribers: asNumber(range90.paidSubscribersStart, range30.paidSubscribersStart) },
+    { date: dateBefore(90), subscribers: asNumber(range90.totalSubscribersStart), paidSubscribers: asNumber(range90.paidSubscribersStart) },
     { date: dateBefore(30), subscribers: asNumber(range30.totalSubscribersStart), paidSubscribers: asNumber(range30.paidSubscribersStart) },
     { date: dateBefore(7), subscribers: asNumber(range7.totalSubscribersStart), paidSubscribers: asNumber(range7.paidSubscribersStart) },
     { date: now.slice(0, 10), subscribers: currentSubscribers, paidSubscribers: currentPaid, followers: currentFollowers },
@@ -665,6 +703,13 @@ export async function getCoreSnapshot(publication, existingSnapshot) {
     provider: "substack",
     publication: publication.name,
     capturedAt: now,
+    lastFullRefreshAt: existingSnapshot?.lastFullRefreshAt || "",
+    currency: publication.currency || existingSnapshot?.currency || "",
+    metricMeta,
+    sourceHealth: {
+      summary: { status: summaryResult.status === "fulfilled" ? "ready" : "stale", fetchedAt: summaryResult.status === "fulfilled" ? now : existingSnapshot?.sourceHealth?.summary?.fetchedAt || "" },
+      posts: { status: postsResult.status === "fulfilled" ? "ready" : "stale", fetchedAt: postsResult.status === "fulfilled" ? now : existingSnapshot?.sourceHealth?.posts?.fetchedAt || "" },
+    },
     sourceUrl: `https://${publication.subdomain}.substack.com/publish`,
     metrics: {
       subscribers: currentSubscribers,
@@ -672,7 +717,7 @@ export async function getCoreSnapshot(publication, existingSnapshot) {
       openRate: asNumber(summary.openRate, summary.open_rate),
       clickRate: weightedRate(campaigns, "clicked"),
       monthlyRevenue: currentArr / 12,
-      totalViews: asNumber(summary.views, range30.totalViewsEnd),
+      totalViews: asNumber(summary.views, range30.totalViewsEnd, existingSnapshot?.metrics?.totalViews),
       // Variación de vistas que ya publica Substack para su ventana de 30 días.
       // Puede ser negativa: es una variación, no un contador.
       viewsDelta: asNumber(summary.viewsDelta),
@@ -705,7 +750,7 @@ export async function getCoreSnapshot(publication, existingSnapshot) {
     notes,
   };
 
-  return { snapshot, context: { base, rawCampaigns, previousCampaigns, previousNotes, fullRefresh } };
+  return { snapshot, context: { base, rawCampaigns, previousCampaigns, previousNotes, fullRefresh, postsAvailable: postsResult.status === "fulfilled" && postsResult.value.complete !== false } };
 }
 
 // FASE DE DETALLE. Lo caro: detalle por publicación, feed completo de notas y
@@ -716,7 +761,12 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
   const { base, rawCampaigns, previousCampaigns, previousNotes, fullRefresh } = context;
 
   // Detalle de publicaciones: los 12 más recientes más los que aún no lo tienen.
-  const postsToRefresh = rawCampaigns.filter((row, index) => index < 12 || !previousCampaigns.get(campaignId(row, index))?.detailAvailable);
+  const stalePosts = snapshot.campaigns.filter((row) => row.detailAvailable && Date.now() - new Date(row.detailUpdatedAt || 0).getTime() > FULL_REFRESH_AFTER_MS)
+    .sort((a, b) => String(a.detailUpdatedAt || "").localeCompare(String(b.detailUpdatedAt || ""))).slice(0, 24);
+  const postsToRefresh = [...new Map([
+    ...rawCampaigns.filter((row, index) => index < 12 || !previousCampaigns.get(campaignId(row, index))?.detailAvailable),
+    ...stalePosts,
+  ].map((row, index) => [campaignId(row, index), row])).values()];
   onProgress({ step: t("Detalle de publicaciones"), done: 0, total: postsToRefresh.length });
   let detailsDone = 0;
   const postDetailResults = await mapWithConcurrency(postsToRefresh, 3, async (row, index) => {
@@ -736,11 +786,13 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
   // el refresco completo semanal.
   onProgress({ step: t("Historial de notas"), done: 0, total: 0 });
   let feedItems = [];
+  let feedAvailable = false;
   try {
     feedItems = await getAllProfileFeedItems(publication.userId, {
       knownIds: new Set(previousNotes.keys()),
       fullRefresh,
     });
+    feedAvailable = Boolean(publication.userId) && feedItems.complete !== false;
   } catch {
     // El feed es una fuente más: si falla, se conservan las notas guardadas.
   }
@@ -752,8 +804,11 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
   }
   let notes = [...merged.values()].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
 
+  const staleNoteIds = new Set(notes.filter((note) => note.stats?.available && Date.now() - new Date(note.stats.fetchedAt || note.stats.updatedAt || 0).getTime() > FULL_REFRESH_AFTER_MS)
+    .sort((a, b) => String(a.stats.fetchedAt || a.stats.updatedAt || "").localeCompare(String(b.stats.fetchedAt || b.stats.updatedAt || ""))).slice(0, 24).map((note) => note.id));
   const notesToRefresh = notes.filter((note, index) => {
     if (index < 12) return true;
+    if (staleNoteIds.has(note.id)) return true;
     const previous = previousNotes.get(String(note.id))?.stats;
     if (previous?.available) return false;
     return Math.max(0, Number(previous?.attempts) || 0) < NOTE_STATS_MAX_ATTEMPTS;
@@ -769,6 +824,7 @@ export async function enrichSnapshot(core, publication, { onProgress = () => {} 
 
   return {
     ...snapshot,
+    lastFullRefreshAt: fullRefresh && feedAvailable && context.postsAvailable ? new Date().toISOString() : snapshot.lastFullRefreshAt,
     metrics: { ...snapshot.metrics, clickRate: weightedRate(campaigns, "clicked") },
     campaigns,
     notesSummary: summarizeNotes(notes, throttled),

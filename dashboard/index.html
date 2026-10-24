@@ -137,6 +137,7 @@
         </header>
 
         <div class="content" id="overview">
+          <p class="data-quality" id="data-quality" role="status" hidden></p>
 
           <div class="reauth-notice" id="reauth-notice" role="alert" hidden>
             <div>
@@ -401,66 +402,20 @@
           <div class="view" data-view="notas" hidden>
             <section class="panel campaigns-panel reveal" id="notes-analytics">
               <div class="panel-header notes-overview-header">
-                <div><h2>Notas</h2></div>
+                <div><h2>Notas</h2><p class="panel-copy">Resultados acumulados de las notas publicadas en el periodo. Las más recientes han tenido menos tiempo para crecer.</p><p class="panel-copy"><strong id="notes-total">—</strong> notas publicadas</p></div>
                 <div class="detail-coverage"><span>Con estadísticas</span><strong id="notes-detail-coverage">—</strong></div>
               </div>
               <!-- Seis cifras grandes y nada más. Las tasas y desgloses viven en
                    la tabla por nota, no aquí. -->
               <div class="post-kpi-strip notes-kpis">
-                <div><span>Notas</span><strong id="notes-total">—</strong></div>
-                <div><span>Impresiones</span><strong id="notes-impressions">—</strong></div>
-                <div><span>Interacciones</span><strong id="notes-interactions">—</strong></div>
+                <div class="is-outcome"><span>Altas atribuidas</span><strong id="notes-signups">—</strong><small id="notes-signups-basis"></small></div>
+                <div><span>Impresiones por nota típica</span><strong id="notes-typical">—</strong></div>
+                <div><span>Impresiones</span><strong id="notes-impressions">—</strong><small id="notes-impressions-basis"></small></div>
+                <div><span>Me gusta, respuestas y restacks</span><strong id="notes-interactions">—</strong></div>
                 <div><span>Visitas al perfil</span><strong id="notes-profile-visits">—</strong></div>
                 <div><span>Clics a enlaces</span><strong id="notes-link-clicks">—</strong></div>
-                <div class="is-outcome"><span>Altas atribuidas</span><strong id="notes-signups">—</strong></div>
               </div>
-            </section>
-
-            <div class="two-up notes-reach-grid" aria-label="Alcance de las notas">
-              <section class="panel list-panel reveal" id="notes-surfaces-panel">
-                <div class="panel-header"><div><h2>Superficies de las notas</h2><p class="panel-copy">Impresiones por superficie de Substack.</p></div><span class="period-badge" id="notes-surfaces-coverage">—</span></div>
-                <div class="donut-wrap">
-                  <svg id="notes-surfaces-donut" viewBox="0 0 200 200" role="img" aria-label="Reparto de impresiones por superficie"></svg>
-                  <div class="donut-center" id="notes-surfaces-center"></div>
-                </div>
-                <div class="donut-legend" id="notes-surfaces-legend"></div>
-              </section>
-              <section class="panel list-panel reveal" id="notes-audience-panel">
-                <div class="panel-header"><div><h2>Audiencia de las notas</h2><p class="panel-copy">Qué relación tenían contigo antes de encontrar la nota.</p></div><span class="period-badge" id="notes-audience-coverage">—</span></div>
-                <div class="donut-wrap">
-                  <svg id="notes-audience-donut" viewBox="0 0 200 200" role="img" aria-label="Reparto de impresiones por tipo de audiencia"></svg>
-                  <div class="donut-center" id="notes-audience-center"></div>
-                </div>
-                <div class="donut-legend" id="notes-audience-legend"></div>
-              </section>
-            </div>
-
-            <section class="panel reveal" id="cadence-panel">
-              <div class="panel-header">
-                <div><h2>Horario de publicación</h2><p class="panel-copy">Más verde, más notas publicadas ese día a esa hora.</p></div>
-                <span class="period-badge" id="cadence-summary">—</span>
-              </div>
-              <div class="heatmap" id="cadence-heatmap" aria-label="Mapa de actividad: notas publicadas por día de la semana y hora"></div>
-              <div class="heatmap-legend" aria-hidden="true"><span>Menos</span><i></i><i></i><i></i><i></i><span>Más notas</span></div>
-              <div class="findings" id="cadence-findings" hidden></div>
-              <div class="table-wrap cadence-table-wrap">
-                <table>
-                  <caption>Tu ritmo durante las últimas 12 semanas</caption>
-                  <thead><tr><th>Semana que empieza</th><th>Notas publicadas</th><th>Interacciones medidas</th><th>Promedio por nota medida</th></tr></thead>
-                  <tbody id="cadence-table-body"></tbody>
-                </table>
-              </div>
-            </section>
-
-            <section class="panel chart-panel reveal" id="attribution-panel">
-              <div class="panel-header">
-                <div><h2>Altas atribuidas a notas</h2><p class="panel-copy">Altas gratuitas que Substack atribuye a tus notas, por día.</p></div>
-                <span class="period-badge" id="attribution-coverage">—</span>
-              </div>
-              <div class="chart-wrap">
-                <svg id="attribution-chart" viewBox="0 0 820 200" role="img" aria-label="Altas gratuitas atribuidas a notas por día"></svg>
-                <div class="chart-empty" id="attribution-empty" hidden>Ninguna nota del periodo tiene estadísticas; Substack solo atribuye altas a esas.</div>
-              </div>
+              <p class="panel-copy" id="notes-freshness"></p>
             </section>
 
             <section class="panel notes-panel reveal" id="notes">
@@ -506,6 +461,52 @@
                 <button type="button" class="text-button" id="notes-pager-next">Siguientes →</button>
               </div>
             </section>
+
+            <div class="two-up notes-reach-grid" aria-label="Alcance de las notas">
+              <section class="panel list-panel reveal" id="notes-surfaces-panel">
+                <div class="panel-header"><div><h2>Dónde se ven tus notas</h2><p class="panel-copy">Reparto de impresiones; una persona puede generar varias.</p></div><span class="period-badge" id="notes-surfaces-coverage">—</span></div>
+                <div class="surface-bars" id="notes-surfaces-donut"></div>
+                <div class="donut-legend" id="notes-surfaces-legend"></div>
+              </section>
+              <section class="panel list-panel reveal" id="notes-audience-panel">
+                <div class="panel-header"><div><h2>Audiencia de las notas</h2><p class="panel-copy">Reparto de impresiones según la relación con tu cuenta; no son personas únicas.</p></div><span class="period-badge" id="notes-audience-coverage">—</span></div>
+                <div class="donut-wrap">
+                  <svg id="notes-audience-donut" viewBox="0 0 200 200" role="img" aria-label="Reparto de impresiones por tipo de audiencia"></svg>
+                  <div class="donut-center" id="notes-audience-center"></div>
+                </div>
+                <div class="donut-legend" id="notes-audience-legend"></div>
+              </section>
+            </div>
+
+            <section class="panel reveal" id="cadence-panel">
+              <div class="panel-header">
+                <div><h2>Horario de publicación</h2><p class="panel-copy">Más verde, más notas publicadas ese día a esa hora.</p></div>
+                <span class="period-badge" id="cadence-summary">—</span>
+              </div>
+              <div class="heatmap" id="cadence-heatmap" aria-label="Mapa de actividad: notas publicadas por día de la semana y hora"></div>
+              <div class="heatmap-legend" aria-hidden="true"><span>Menos</span><i></i><i></i><i></i><i></i><span>Más notas</span></div>
+              <div class="findings" id="cadence-findings" hidden></div>
+              <div class="table-wrap cadence-table-wrap">
+                <table>
+                  <caption>Tu ritmo durante las últimas 12 semanas</caption>
+                  <thead><tr><th>Semana que empieza</th><th>Notas publicadas</th><th>Interacciones medidas</th><th>Promedio por nota medida</th></tr></thead>
+                  <tbody id="cadence-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel chart-panel reveal" id="attribution-panel">
+              <div class="panel-header">
+                <div><h2>Altas atribuidas a notas</h2><p class="panel-copy">Altas gratuitas acumuladas, agrupadas por el día de publicación de la nota.</p></div>
+                <span class="period-badge" id="attribution-coverage">—</span>
+              </div>
+              <div class="chart-wrap">
+                <svg id="attribution-chart" viewBox="0 0 820 200" role="img" aria-label="Altas gratuitas atribuidas a notas por día"></svg>
+                <div class="chart-empty" id="attribution-empty" hidden>Ninguna nota del periodo tiene estadísticas; Substack solo atribuye altas a esas.</div>
+              </div>
+            </section>
+
+
           </div>
 
           <div class="ui-hint" id="ui-hint" role="tooltip" hidden></div>

@@ -95,6 +95,7 @@ const campaigns = CAMPAIGNS.map(
     unsubscribesWithin1Day: Math.round(signups / 6),
     engagementRate: Number((((reactions + comments + shares) / delivered) * 100).toFixed(2)),
     detailAvailable: true,
+    detailUpdatedAt: CAPTURED_AT,
     wordCount: words,
     audience: "everyone",
     type: "newsletter",
@@ -120,6 +121,7 @@ const notes = NOTES.map(([body, ago, likes, replies, restacks, impressions, free
   restacks,
   stats: {
     available: true,
+    fetchedAt: CAPTURED_AT,
     fetchState: "ready",
     attempts: 1,
     interactions: {
@@ -191,6 +193,7 @@ const trend = [0, 60, 120, 170, 209].map((index) => ({
 const SNAPSHOT = {
   publication: "Carta de muestra",
   capturedAt: CAPTURED_AT,
+  currency: "USD",
   metrics: {
     subscribers: 2840,
     paidSubscribers: 184,

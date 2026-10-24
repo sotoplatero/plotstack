@@ -4,6 +4,35 @@ Las versiones que se han subido a la Chrome Web Store. La tienda **no permite
 bajar** un número de versión, así que cada entrada aquí corresponde a un
 `manifest.json` que ya se publicó o está listo para publicarse.
 
+## 1.6.0 — 24 de octubre de 2026
+
+### Datos más fiables
+
+- **No se pierden artículos.** Con más de 50 artículos, una sincronización
+  sin novedades podía dejar el histórico en la primera página. Ahora se
+  conservan todos, también si la lista de Substack falla.
+- **Las cifras antiguas se refrescan.** El refresco completo ya no depende de
+  pasar una semana sin abrir PlotStack, y el detalle de artículos y notas
+  antiguos se va actualizando por turnos.
+- **Desconectar es definitivo.** Una sincronización en curso ya no puede
+  volver a guardar datos después de desconectar ni pisar a otra más reciente.
+- **Un fallo no parece un cero.** Estado de datos distingue una fuente
+  medida, parcial o caída en cada ventana, y conserva el último dato válido.
+  «Todo» dice qué periodo cubre de verdad cada fuente.
+
+### Textos más precisos
+
+- Las notas y los envíos del periodo muestran **resultados acumulados**, y
+  el titular del Resumen explica el **movimiento neto** (altas y bajas).
+- Los hallazgos hablan de interacciones **por cada 100 impresiones**, no de
+  personas, y la apertura baja ya no se achaca solo al asunto.
+
+### Notas y accesibilidad
+
+- Notas empieza por el alcance típico y las altas atribuidas; dónde se ven
+  tus notas va en barras ordenadas.
+- Las curvas se pueden recorrer punto a punto con el teclado.
+
 ## 1.5.0 — 12 de octubre de 2026
 
 ### Postal

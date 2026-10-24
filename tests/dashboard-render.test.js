@@ -279,7 +279,7 @@ test("Notas usa el detalle real y no inventa lo que no existe", async () => {
   assert.equal($("#notes-total").textContent, "3");
   assert.equal($("#notes-table-body").children.length, 3);
   // Impresiones sí existen en note_stats; seguidores e ingresos por nota no.
-  assert.equal(txt($("#notes-impressions").textContent), "11,7 mil");
+  assert.equal(txt($("#notes-impressions").textContent), "≥ 11,7 mil");
   const primeraNota = $("#notes-table-body").children[0];
   assert.equal(primeraNota.querySelectorAll("td")[6].textContent, "8", "la tabla muestra las visitas al perfil de la nota");
   const headerHints = $$(".notes-data-table abbr").map((abbr) => abbr.dataset.hint);
@@ -660,6 +660,31 @@ test("todo grafico tiene etiqueta accesible y tooltip de cursor", async () => {
   assert.equal(tooltips[0].hidden, true, "arranca oculto");
 });
 
+test("las curvas permiten explorar valores exactos con teclado", async () => {
+  await arrancar(); await verVista("resumen"); await rango("all");
+  const chart = $("#growth-chart");
+  const tooltip = chart.parentNode.querySelector(".chart-tooltip");
+  assert.equal(chart.getAttribute("tabindex"), "0");
+  chart.dispatchEvent({ type: "keydown", key: "Home" });
+  assert.equal(tooltip.hidden, false);
+  const first = tooltip.textContent;
+  chart.dispatchEvent({ type: "keydown", key: "End" });
+  assert.notEqual(tooltip.textContent, first);
+  assert.equal(chart.getAttribute("aria-describedby"), tooltip.getAttribute("id"));
+  const previous = { cancelAnimationFrame: globalThis.cancelAnimationFrame, innerWidth: globalThis.innerWidth, innerHeight: globalThis.innerHeight };
+  Object.assign(globalThis, { cancelAnimationFrame: clearTimeout, innerWidth: 1280, innerHeight: 800 });
+  chart.getBoundingClientRect = () => ({ left: 0, bottom: 200, width: 800 });
+  try {
+    chart.dispatchEvent({ type: "focusin" });
+    assert.equal(chart.getAttribute("aria-describedby"), `${tooltip.getAttribute("id")} ui-hint`);
+    chart.dispatchEvent({ type: "focusout" });
+    assert.equal(chart.getAttribute("aria-describedby"), tooltip.getAttribute("id"));
+    await settle(4);
+  } finally { Object.assign(globalThis, previous); delete chart.getBoundingClientRect; }
+  chart.dispatchEvent({ type: "keydown", key: "Escape" });
+  assert.equal(tooltip.hidden, true);
+});
+
 test("los graficos con serie secundaria la declaran en su leyenda", async () => {
   await arrancar();
   await verVista("crecimiento");
@@ -813,19 +838,35 @@ test("el listado de notas se pagina de 25 en 25 y se reinicia al buscar", async 
 
 
 
-test("la cabecera de Notas son seis cifras grandes y nada de letra pequeña", async () => {
+test("la cabecera de Notas declara cobertura y distingue el alcance típico", async () => {
   await arrancar();
   await verVista("notas");
   await rango("all");
   assert.equal($$("#notes-analytics .notes-kpis strong").length, 6, "seis cifras, ni una más");
   assert.equal(txt($("#notes-total").textContent), "3");
-  assert.equal(txt($("#notes-impressions").textContent), "11,7 mil");
-  assert.equal(txt($("#notes-signups").textContent), "11", "las altas atribuidas están en la cabecera");
+  assert.equal(txt($("#notes-impressions").textContent), "≥ 11,7 mil");
+  assert.equal(txt($("#notes-signups").textContent), "≥ 11", "las altas parciales están en la cabecera");
+  assert.equal($("#notes-impressions-basis").textContent, "Medido en 2 de 3 notas");
+  assert.ok($("#notes-typical").textContent);
   assert.equal($$("#notes-analytics .funnel-stage").length, 0, "sin embudo");
   assert.equal($$("#notes-analytics em, #notes-analytics .funnel-breakdown").length, 0, "sin tasas ni desgloses en letra pequeña");
 });
 
-test("Dónde se ven y Quién las ve son dos cards con pastel y leyenda en español", async () => {
+test("una tarjeta de detalle sin impresiones ni altas no se presenta como cero medido", async () => {
+  await arrancar(); await verVista("notas"); await rango("all");
+  const original = (await chrome.storage.local.get())["plotstack.snapshot"];
+  const changed = structuredClone(original);
+  changed.notes.forEach((note) => { if (note.stats) note.stats.measured = { impressions: false, freeSubscribers: false, profileVisits: false, linkClicks: false }; });
+  try {
+    globalThis.__plotstackStorageListener({ "plotstack.snapshot": { newValue: changed } }, "local");
+    assert.equal($("#notes-impressions").textContent, "Sin dato");
+    assert.equal($("#notes-signups").textContent, "Sin dato");
+    assert.equal($("#notes-typical").textContent, "Sin dato");
+    assert.equal($("#notes-impressions-basis").textContent, "Medido en 0 de 3 notas");
+  } finally { globalThis.__plotstackStorageListener({ "plotstack.snapshot": { newValue: original } }, "local"); }
+});
+
+test("Dónde se ven usa barras ordenadas y la audiencia conserva su composición", async () => {
   await arrancar();
   await verVista("notas");
   await rango("all");
@@ -834,9 +875,9 @@ test("Dónde se ven y Quién las ve son dos cards con pastel y leyenda en españ
   assert.ok($(".notes-reach-grid"), "los paneles de alcance necesitan un bloque separado de la cabecera");
   assert.ok($("#notes-surfaces-panel .panel-copy"));
   assert.ok($("#notes-audience-panel .panel-copy"));
-  assert.equal($$("#notes-surfaces-donut .donut-arc").length, 7, "un arco por superficie con impresiones");
+  assert.equal($$("#notes-surfaces-donut .surface-row").length, 7, "una barra por superficie con impresiones");
   assert.equal($$("#notes-audience-donut .donut-arc").length, 3);
-  const superficies = $("#notes-surfaces-legend").textContent;
+  const superficies = $("#notes-surfaces-donut").textContent;
   for (const crudo of ["Profile page", "Unconnected", "Permalinks", "Subscribers"]) {
     assert.equal(superficies.includes(crudo), false, `clave cruda: ${crudo}`);
     assert.equal($("#notes-audience-legend").textContent.includes(crudo), false, `clave cruda: ${crudo}`);
@@ -984,7 +1025,7 @@ test("la postal resume el estado sin pago, sin ingresos y sin huecos", async () 
   await rango("all");
   assert.equal(txt($("#postal-name").textContent), "Carta de muestra");
   assert.equal(txt($("#postal-subscribers").textContent), "2,8 mil");
-  assert.match($("#postal-period").textContent, /Desde el principio/);
+  assert.match($("#postal-period").textContent, /Histórico disponible/);
   assert.ok($$("#postal-tiles .postal-tile").length >= 2, "al menos dos cifras con base");
   const texto = txt($("#postal-card").textContent);
   // Una postal se comparte: nada de pago ni de ingresos, y ninguna cifra vacía.

@@ -98,6 +98,7 @@ function initializeHints() {
   if (!hint) return;
   $$('[title]').forEach((element) => setHint(element, element.getAttribute("title")));
   let active = null;
+  let previousDescription = null;
   let frame = 0;
   const place = (x, y) => {
     cancelAnimationFrame(frame);
@@ -110,15 +111,21 @@ function initializeHints() {
     });
   };
   const show = (element, x, y) => {
-    active = element;
+    if (active !== element) {
+      hide();
+      active = element;
+      previousDescription = element.getAttribute("aria-describedby");
+    }
     hint.textContent = element.dataset.hint;
     hint.hidden = false;
-    element.setAttribute("aria-describedby", "ui-hint");
+    element.setAttribute("aria-describedby", [previousDescription, "ui-hint"].filter(Boolean).join(" "));
     place(x, y);
   };
   const hide = () => {
-    active?.removeAttribute("aria-describedby");
+    if (previousDescription) active?.setAttribute("aria-describedby", previousDescription);
+    else active?.removeAttribute("aria-describedby");
     active = null;
+    previousDescription = null;
     hint.hidden = true;
   };
   document.addEventListener("pointerover", (event) => {
@@ -342,8 +349,10 @@ function renderMetrics(snapshot, analytics) {
   // marca el selector, y el copy lo dice. Antes decía "vs. sincronización
   // anterior" mientras la base era siempre la de 30 días.
   const versusRange = comparisonCopy(derived.comparison);
-  const versusSync = { versus: t("vs. sincronización anterior"), missing: t("Sin sincronización anterior para comparar") };
   $("#metric-subscribers").textContent = formatCompactNumber(metrics.subscribers);
+  const exactSubscribers = metrics.subscribers.toLocaleString(LOCALE);
+  $("#metric-subscribers").setAttribute("aria-label", exactSubscribers);
+  setHint($("#metric-subscribers").closest("article"), exactSubscribers);
   // La apertura se calcula sobre la ventana activa, igual que el CTR. Sin
   // fallback silencioso a `metrics.openRate`: esa cifra es histórica de la API
   // y mostrarla bajo la etiqueta del rango elegido sería mentir.
@@ -352,7 +361,19 @@ function renderMetrics(snapshot, analytics) {
   $("#metric-open-rate").textContent = openNow === null ? t("Sin dato") : formatPercent(openNow);
   $("#metric-paid").textContent = formatCompactNumber(metrics.paidSubscribers);
   $("#paid-conversion").textContent = formatPercent(derived.paidConversion);
-  $("#metric-revenue").textContent = formatCurrency(metrics.monthlyRevenue);
+  $("#metric-revenue").textContent = formatCurrency(metrics.monthlyRevenue, snapshot.currency);
+  for (const [key, selector] of [["subscribers", "#metric-subscribers"], ["paidSubscribers", "#metric-paid"], ["monthlyRevenue", "#metric-revenue"]]) {
+    const meta = snapshot.metricMeta?.[key];
+    if (meta?.status === "unavailable") {
+      $(selector).textContent = t("Sin dato");
+      $(selector).setAttribute("aria-label", t("Sin dato"));
+    }
+    const card = $(selector).closest("article");
+    let quality = card.querySelector(".metric-quality");
+    if (!quality) { quality = document.createElement("p"); quality.className = "metric-quality"; card.append(quality); }
+    quality.textContent = meta?.status === "stale" ? `${t("Sin actualizar")}${meta.fetchedAt ? ` · ${shortDate(meta.fetchedAt)}` : ""}` : "";
+    quality.hidden = !quality.textContent;
+  }
   setDelta("#delta-subscribers", derived.subscriberGrowth, versusRange);
   // "+2740%" no se lee: a partir de duplicar, se dice por cuánto se multiplicó.
   if (derived.subscriberGrowth !== null && derived.subscriberGrowth >= GROWTH_AS_MULTIPLE) {
@@ -360,7 +381,7 @@ function renderMetrics(snapshot, analytics) {
   }
   setRateDelta("#delta-open-rate", windows);
   setDelta("#delta-paid", derived.paidGrowth, versusRange);
-  setDelta("#delta-revenue", derived.revenueGrowth, versusSync);
+  setDelta("#delta-revenue", derived.revenueGrowth, { versus: t("vs. hace {days} días", { days: 30 }), missing: t("Sin base de hace {days} días para comparar", { days: 30 }) });
 
   // Las tres tarjetas comparten pie: un minigráfico en su color y una leyenda.
   // Apertura y CTR se dibujan por envío del periodo, escalados desde cero.
@@ -378,6 +399,7 @@ function renderMetrics(snapshot, analytics) {
   $("#metric-click-rate").textContent = clickNow === null ? t("Sin dato") : formatPercent(clickNow);
   setRateDelta("#delta-click-rate", windows, "clickRate");
   $("#click-basis").textContent = tn(windows.current.posts, "{n} envío en {range}", "{n} envíos en {range}", { range: rangeLabel() });
+  for (const id of ["#metric-open-rate", "#metric-click-rate"]) setHint($(id).closest("article"), t("Tasa acumulada de los envíos publicados en el periodo, ponderada por entregados."));
 
   // El sparkline muestra altas diarias del periodo escaladas desde cero. El
   // anterior normalizaba min-max el total acumulado con suelo al 20%: una
@@ -427,10 +449,40 @@ function attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel, fo
     wrap.append(tooltip);
   }
   const previous = chartHovers.get(svg);
-  chartHovers.set(svg, { points, xOf, primaryLabel, secondaryLabel, formatValue, tooltip });
+  chartHovers.set(svg, { points, xOf, primaryLabel, secondaryLabel, formatValue, tooltip, index: 0 });
+  svg.setAttribute("tabindex", points.length ? "0" : "-1");
+  tooltip.setAttribute("id", `${svg.getAttribute("id") || "chart"}-detail`);
+  tooltip.setAttribute("role", "status");
+  tooltip.setAttribute("aria-live", "polite");
+  svg.setAttribute("aria-describedby", tooltip.getAttribute("id"));
+  svg.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight Home End");
+  setHint(svg, t("Usa las flechas izquierda y derecha para recorrer las fechas; Inicio y Fin van a los extremos."));
   if (previous) return;
 
   const geometryWidth = () => svg.getBoundingClientRect?.()?.width || 0;
+  const show = (index) => {
+    const hover = chartHovers.get(svg);
+    if (!hover?.points?.length) return;
+    hover.index = clamp(index, 0, hover.points.length - 1);
+    const point = hover.points[hover.index];
+    const lines = [axisDate(point.date), `${hover.primaryLabel}: ${hover.formatValue(point.value)}`];
+    if (Number.isFinite(point.secondary)) lines.push(`${hover.secondaryLabel}: ${hover.formatValue(point.secondary)}`);
+    hover.tooltip.textContent = lines.join(" · ");
+    hover.tooltip.hidden = false;
+    const viewWidth = Number(svg.getAttribute("viewBox")?.split(" ")[2]) || geometryWidth();
+    const ratio = viewWidth ? hover.xOf(hover.index) / viewWidth : 0;
+    hover.tooltip.style.left = `${Math.round(ratio * 100)}%`;
+    hover.tooltip.style.transform = ratio > 0.7 ? "translateX(-100%)" : "translateX(-50%)";
+  };
+  svg.addEventListener("focus", () => show(chartHovers.get(svg)?.index || 0));
+  svg.addEventListener("keydown", (event) => {
+    const hover = chartHovers.get(svg);
+    if (!hover?.points?.length || !["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === "Escape") { hover.tooltip.hidden = true; return; }
+    show(event.key === "Home" ? 0 : event.key === "End" ? hover.points.length - 1 : hover.index + (event.key === "ArrowRight" ? 1 : -1));
+  });
+  svg.addEventListener("blur", () => { chartHovers.get(svg).tooltip.hidden = true; });
   svg.addEventListener("pointermove", (event) => {
     const hover = chartHovers.get(svg);
     if (!hover?.points?.length) return;
@@ -444,15 +496,7 @@ function attachChartTooltip(svg, points, xOf, { primaryLabel, secondaryLabel, fo
     for (let index = 1; index < hover.points.length; index += 1) {
       if (Math.abs(hover.xOf(index) - target) < Math.abs(hover.xOf(closest) - target)) closest = index;
     }
-    const point = hover.points[closest];
-    const lines = [axisDate(point.date), `${hover.primaryLabel}: ${hover.formatValue(point.value)}`];
-    if (Number.isFinite(point.secondary)) lines.push(`${hover.secondaryLabel}: ${hover.formatValue(point.secondary)}`);
-    hover.tooltip.textContent = lines.join(" · ");
-    hover.tooltip.hidden = false;
-    const ratio = geometryWidth() ? (hover.xOf(closest) / scale) / geometryWidth() : 0;
-    hover.tooltip.style.left = `${Math.round(ratio * 100)}%`;
-    // Cerca del borde derecho el tooltip se ancla al final para no desbordar.
-    hover.tooltip.style.transform = ratio > 0.7 ? "translateX(-100%)" : "translateX(-50%)";
+    show(closest);
   });
   svg.addEventListener("pointerleave", () => {
     const hover = chartHovers.get(svg);
@@ -918,7 +962,7 @@ function renderLabelledGrid(container, rows, emptyCopy) {
     const name = document.createElement("span"); name.textContent = label;
     const number = document.createElement("strong");
     // Una cifra de dinero sin moneda no dice nada: "7" no es "7 US$".
-    number.textContent = format === "currency" ? formatCurrency(value)
+    number.textContent = format === "currency" ? formatCurrency(value, state.snapshot?.currency)
       : format === "percent" ? formatPercent(value)
       : formatCompactNumber(value);
     item.append(name, number);
@@ -1240,6 +1284,41 @@ const byRange = (source) => {
   return isRanged(source) ? source[rangeKey()] || null : source;
 };
 
+function sourcePeriod(source) {
+  const period = source?.period;
+  const interval = period?.from ? `${shortDate(period.from)} – ${shortDate(period.to)}` : rangeLabel();
+  return source?.sourceState === "stale" ? `${interval} · ${t("Sin actualizar")}`
+    : source?.sourceState === "unavailable" ? t("No disponible") : interval;
+}
+
+function renderDataQuality(snapshot, analytics) {
+  const lines = [];
+  const relevant = {
+    resumen: ["subscriberTimeline", "freeSubscriberGrowth"],
+    audiencia: ["audience", "subscriberTimeline", "followerTimeseries", "audienceLocation", "audienceOverlap"],
+    crecimiento: ["growthSources", "visitorSources", "networkAttribution", "trafficTimeseries", "freeSubscriberGrowth"],
+  }[state.view] || [];
+  const failed = (analytics?.coverage || []).filter((row) => relevant.includes(row.key) && row.status !== "ready");
+  const coreFailed = Object.entries(snapshot.sourceHealth || {}).filter(([key, row]) => row.status !== "ready" && (key === "summary" || ["resumen", "publicaciones"].includes(state.view)));
+  if (failed.length || coreFailed.length || Object.values(snapshot.metricMeta || {}).some((row) => row.status !== "ready")) lines.push(t("Datos parciales o sin actualizar. Consulta Estado de datos para ver las fuentes afectadas."));
+  if (["resumen", "publicaciones"].includes(state.view)) {
+    const posts = withinRange(snapshot.campaigns, (row) => row.date).kept;
+    const measured = posts.filter((row) => row.detailAvailable).length;
+    const old = posts.filter((row) => row.detailAvailable && (!row.detailUpdatedAt || Date.now() - new Date(row.detailUpdatedAt).getTime() > 7 * 86400000)).length;
+    lines.push(t("Resultados acumulados de los envíos del periodo · {measured}/{total} artículos con detalle.", { measured, total: posts.length }));
+    if (old) lines.push(t("{count} artículos tienen métricas antiguas o sin fecha; se renuevan por lotes al sincronizar.", { count: old }));
+  }
+  if (state.days === ALL_TIME && ["crecimiento", "audiencia", "resumen", "postal"].includes(state.view)) {
+    const period = analytics?.period;
+    if (period?.from) lines.push(t("Algunas fuentes cubren solo del {from} al {to}; Todo muestra el histórico disponible de cada fuente.", { from: shortDate(period.from), to: shortDate(period.to) }));
+  }
+  const stamp = new Date(snapshot.capturedAt);
+  if (Date.now() - stamp.getTime() > 86400000) lines.push(t("Última sincronización: {date}. Sincroniza para actualizar las cifras.", { date: stamp.toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "short" }) }));
+  const node = $("#data-quality");
+  node.textContent = lines.join(" ");
+  node.hidden = !lines.length;
+}
+
 // Un color por canal de adquisición, el mismo en todas las vistas: quien ve
 // Notas en verde en el Resumen la encuentra en verde en Crecimiento.
 const CHANNEL_COLORS = [
@@ -1261,18 +1340,21 @@ function channelColor(label) {
 function renderGrowthBrief(snapshot, analytics) {
   const derived = getDerivedMetrics(snapshot, state.days);
   const growth = derived.subscriberGrowth;
-  const daily = fillDailyGaps(windowedSubscriberDaily(analytics), (date) => ({ date, signups: 0 }));
-  const gained = daily.reduce((sum, point) => sum + safeNumber(point.signups), 0);
 
   // El titular lee la tendencia; la cifra y su base ya las da la tarjeta de
   // suscriptores justo debajo. Solo añade lo que no está en pantalla: altas.
-  const altas = gained ? tn(gained, " y sumó {count} alta", " y sumó {count} altas", { count: formatCompactNumber(gained) }) : "";
+  const altas = "";
   $("#growth-verdict").textContent = growth === null
     ? t("Aún falta historial para saber si el ritmo mejora.")
     : growth >= GROWTH_AS_MULTIPLE ? t("Tu audiencia se ha multiplicado en {range}{signups}.", { range: rangeLabel(), signups: altas })
     : growth > 1 ? t("Tu audiencia crece{signups}.", { signups: altas })
     : growth >= 0 ? t("Tu audiencia se mantiene estable.")
     : t("Tu audiencia retrocede. Revisa Altas y bajas en Cómo creces.");
+  if (derived.subscriberGrowth !== null && derived.comparison.basis !== "none") {
+    const net = snapshot.metrics.subscribers - derived.comparison.subscribers;
+    const movement = t("Cambio neto: {count} suscriptores en {range}.", { count: `${net > 0 ? "+" : ""}${net.toLocaleString(LOCALE)}`, range: rangeLabel() });
+    $("#growth-verdict").textContent += ` ${movement}`;
+  }
 }
 
 function renderSourcesTable(analytics) {
@@ -1302,7 +1384,7 @@ function renderSourcesTable(analytics) {
   // una version anterior el badge lo dice, en vez de etiquetar 12 meses con el
   // nombre del rango elegido.
   $("#acquisition-period").textContent = isRanged(analytics?.growth?.sources)
-    ? rangeLabel()
+    ? sourcePeriod(growth)
     : t("Sincroniza para aplicar el rango");
 
   const body = $("#sources-body");
@@ -2147,7 +2229,7 @@ function renderPostal(snapshot, analytics) {
   hint.textContent = story === config.story ? "" : t("«{story}» no tiene datos en este periodo: se muestra «{fallback}».", { story: POSTAL_STORY_NAMES[config.story], fallback: POSTAL_STORY_NAMES.period });
   hint.hidden = story === config.story;
 
-  const period = state.days === ALL_TIME ? t("Desde el principio") : t("Últimos {days} días", { days: state.days });
+  const period = state.days === ALL_TIME ? t("Histórico disponible") : t("Últimos {days} días", { days: state.days });
   // Fecha corta ("11 oct 2026"): cabe en una línea en los tres formatos.
   $("#postal-period").textContent = `${period} · ${new Date().toLocaleDateString(LOCALE, { day: "numeric", month: "short", year: "numeric" })}`;
   $("#postal-name").textContent = snapshot.publication || t("Tu newsletter");
@@ -2424,7 +2506,7 @@ function renderCoverage(analytics, snapshot) {
       // El motivo de un fallo se lee en la fila, no solo al pasar el ratón.
       meta: source.status === "ready" ? t("{count} registros", { count: formatCompactNumber(source.records || 0) }) : source.error || "",
       status: source.status,
-      statusCopy: source.status === "ready" ? t("Disponible") : t("No disponible"),
+      statusCopy: source.status === "ready" ? t("Disponible") : source.status === "partial" ? t("Parcial") : source.status === "stale" ? t("Sin actualizar") : t("No disponible"),
       title: source.error || "",
     }));
   });
@@ -2465,9 +2547,14 @@ const tableDate = (value) => parseDay(value)
 
 const formatCell = (campaign, column) => {
   const value = campaign[column.key];
+  if (campaign.measured && column.key in campaign.measured) {
+    if (!campaign.measured[column.key]) return "—";
+    if (column.type === "percent") return formatPercent(value);
+    if (column.type === "number") return formatCompactNumber(value);
+  }
   if (column.type === "date") return value ? tableDate(value) : "—";
   if (column.type === "percent") return value ? formatPercent(value) : "—";
-  if (column.type === "currency") return value ? formatCurrency(value) : "—";
+  if (column.type === "currency") return value ? formatCurrency(value, state.snapshot?.currency) : "—";
   if (column.type === "number") return value ? formatCompactNumber(value) : "—";
   return value || "—";
 };
@@ -2744,7 +2831,7 @@ function renderPostRates(campaigns, ownMedian) {
 
 // Altas por cada mil impresiones: conversión de alcance a suscriptor, la
 // métrica anti-vanidad de las notas. `null` sin detalle o sin impresiones.
-const noteConversion = (note) => (note.detailed && note.analytics.reach.impressions > 0
+const noteConversion = (note) => (note.detailed && note.stats.measured.impressions && note.stats.measured.freeSubscribers && note.analytics.reach.impressions > 0
   ? (note.analytics.results.freeSubscribers / note.analytics.reach.impressions) * 1000
   : null);
 
@@ -2756,14 +2843,29 @@ function renderNotesOverview(snapshot) {
   // Seis cifras grandes y ninguna letra pequeña: las tasas y los desgloses
   // por nota están en la tabla de abajo, que es donde se comparan.
   const total = analytics.total;
+  const displayMeasured = (selector, key) => {
+    const count = analytics.measuredCount[key];
+    $(selector).textContent = count ? `${count < ranged.length ? "≥ " : ""}${formatCompactNumber(total[key])}` : t("Sin dato");
+    const copy = t("Medido en {count} de {total} notas", { count, total: ranged.length });
+    $(selector).setAttribute("aria-label", `${$(selector).textContent} · ${copy}`);
+    setHint($(selector), copy);
+    return copy;
+  };
   [
     ["#notes-total", analytics.ranked.length],
-    ["#notes-impressions", total.impressions],
-    ["#notes-interactions", total.interactions],
-    ["#notes-profile-visits", total.profileVisits],
-    ["#notes-link-clicks", total.linkClicks],
-    ["#notes-signups", total.freeSubscribers],
+    ["#notes-interactions", ranged.reduce((sum, note) => sum + note.reactions + note.replies + note.restacks, 0)],
   ].forEach(([selector, value]) => { $(selector).textContent = formatCompactNumber(value); });
+  $("#notes-impressions-basis").textContent = displayMeasured("#notes-impressions", "impressions");
+  $("#notes-signups-basis").textContent = displayMeasured("#notes-signups", "freeSubscribers");
+  displayMeasured("#notes-profile-visits", "profileVisits");
+  displayMeasured("#notes-link-clicks", "linkClicks");
+  const measured = ranged.filter((note) => note.stats.available && note.stats.measured.impressions).map((note) => note.stats.reach.impressions).sort((a, b) => a - b);
+  const middle = Math.floor(measured.length / 2);
+  const typical = measured.length % 2 ? measured[middle] : (measured[middle - 1] + measured[middle]) / 2;
+  $("#notes-typical").textContent = measured.length ? formatCompactNumber(typical) : t("Sin dato");
+  setHint($("#notes-typical"), t("Mediana de las notas con impresiones medidas; resultados acumulados, sin igualar la antigüedad."));
+  const old = ranged.filter((note) => note.stats.available && (!note.stats.fetchedAt && !note.stats.updatedAt || Date.now() - new Date(note.stats.updatedAt || note.stats.fetchedAt).getTime() > 7 * 86400000)).length;
+  $("#notes-freshness").textContent = old ? t("{count} notas tienen métricas de hace más de 7 días o sin fecha de medición. Sincroniza para renovarlas por lotes.", { count: old }) : t("Los resultados se acumulan desde la publicación de cada nota; no son eventos ocurridos solo dentro del periodo.");
   renderNotesReach(analytics);
 }
 
@@ -2800,20 +2902,18 @@ function renderNotesReach(analytics) {
   $("#notes-surfaces-coverage").textContent = cobertura;
   $("#notes-audience-coverage").textContent = cobertura;
 
-  const surfacesDrawn = drawDonut($("#notes-surfaces-donut"), surfaces);
-  const surfacesCenter = $("#notes-surfaces-center");
-  if (surfacesDrawn) {
-    renderDonutLegend($("#notes-surfaces-legend"), surfaces);
-    const top = [...surfaces].sort((a, b) => b.value - a.value)[0];
-    const totalSurfaces = surfaces.reduce((sum, segment) => sum + segment.value, 0);
-    surfacesCenter.replaceChildren();
-    const big = document.createElement("strong"); big.textContent = formatPercent((top.value / totalSurfaces) * 100, 0);
-    const label = document.createElement("span"); label.textContent = top.label;
-    surfacesCenter.append(big, label);
-  } else {
-    surfacesCenter.replaceChildren();
-    emptyMessage($("#notes-surfaces-legend"), t("Ninguna nota del periodo tiene desglose de superficies."), "coverage-empty");
+  const bars = $("#notes-surfaces-donut");
+  bars.replaceChildren();
+  const surfaceTotal = surfaces.reduce((sum, row) => sum + row.value, 0);
+  for (const row of [...surfaces].filter((row) => row.value > 0).sort((a, b) => b.value - a.value)) {
+    const item = document.createElement("div"); item.className = "surface-row";
+    const label = document.createElement("span"); label.textContent = row.label;
+    const value = document.createElement("strong"); value.textContent = `${formatPercent(row.value / surfaceTotal * 100, 0)} · ${formatCompactNumber(row.value)}`;
+    const track = document.createElement("i"); track.setAttribute("aria-hidden", "true"); track.style.width = `${row.value / Math.max(...surfaces.map((row) => row.value)) * 100}%`;
+    item.append(label, value, track); bars.append(item);
   }
+  $("#notes-surfaces-legend").replaceChildren();
+  if (!surfaceTotal) emptyMessage($("#notes-surfaces-legend"), t("Ninguna nota del periodo tiene desglose de superficies."), "coverage-empty");
 
   const audienceDrawn = drawDonut($("#notes-audience-donut"), audience);
   const audienceCenter = $("#notes-audience-center");
@@ -2939,7 +3039,7 @@ function renderNotesTable(snapshot) {
     date: dateDesc,
     interactions: (a, b) => b.analytics.interactions.total - a.analytics.interactions.total || dateDesc(a, b),
     conversion: nullsLast(noteConversion),
-    subscribers: nullsLast((note) => (note.detailed ? note.analytics.results.freeSubscribers : null)),
+    subscribers: nullsLast((note) => (note.detailed && note.stats.measured.freeSubscribers ? note.analytics.results.freeSubscribers : null)),
   };
   notes.sort(comparators[state.notesSort] || comparators.interactions);
   const standoutThreshold = (getter) => {
@@ -2987,7 +3087,7 @@ function renderNotesTable(snapshot) {
     // estado real de la captura, no en un 0 que parecería una nota sin alcance.
     const detailed = note.detailed;
     const stateCopy = NOTE_STATE_COPY[note.stats?.fetchState] || NOTE_STATE_COPY.pending;
-    const impressions = detailed ? note.analytics.reach.impressions : null;
+    const impressions = detailed && note.stats.measured.impressions ? note.analytics.reach.impressions : null;
     const engagementRatio = detailed && impressions > 0 ? (interactions.total / impressions) * 100 : null;
     const conversion = noteConversion(note);
     const noteDate = note.date
@@ -2999,7 +3099,7 @@ function renderNotesTable(snapshot) {
       { value: formatCompactNumber(interactions.replies), raw: interactions.replies, threshold: standout.replies },
       { value: formatCompactNumber(interactions.restacks), raw: interactions.restacks, threshold: standout.restacks },
       { value: formatCompactNumber(interactions.total), raw: interactions.total, threshold: standout.total },
-      { value: detailed ? formatCompactNumber(interactions.profileVisits) : "—", raw: detailed ? interactions.profileVisits : null, threshold: standout.profile },
+      { value: detailed && note.stats.measured.profileVisits ? formatCompactNumber(interactions.profileVisits) : "—", raw: detailed && note.stats.measured.profileVisits ? interactions.profileVisits : null, threshold: standout.profile },
       { value: impressions === null ? "—" : formatCompactNumber(impressions), raw: impressions, threshold: standout.impressions },
       { value: engagementRatio === null ? "—" : formatPercent(engagementRatio), raw: engagementRatio, threshold: standout.engagement },
       { value: conversion === null ? "—" : decimal(conversion), raw: conversion, threshold: standout.conversion },
@@ -3015,7 +3115,7 @@ function renderNotesTable(snapshot) {
       row.append(cell);
     });
     const subscribers = document.createElement("td");
-    if (!detailed) {
+    if (!detailed || !note.stats.measured.freeSubscribers) {
       subscribers.textContent = "—";
       setHint(subscribers, stateCopy);
     } else {
@@ -3101,6 +3201,7 @@ function renderDashboard() {
   // quedan quietas y Estado de datos no es donde nadie mira primero. Se va sola
   // en cuanto una sincronización vuelve a traerla.
   $("#reauth-notice").hidden = !(state.analytics?.coverage || []).some((source) => source.reason === "reauth");
+  renderDataQuality(snapshot, state.analytics);
   (VIEW_RENDERERS[state.view] || VIEW_RENDERERS.resumen)(snapshot);
   applyPrivacy();
 }

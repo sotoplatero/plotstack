@@ -188,10 +188,11 @@ export function installDom(htmlPath) {
 
   // Escaneo de etiquetas: basta para reconstruir ids, clases y data-* reales.
   const stack = [root];
-  for (const match of html.matchAll(/<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>/g)) {
+  for (const match of html.replace(/<!--[\s\S]*?-->/g, "").matchAll(/<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>/g)) {
     const [, closing, tag, rawAttrs, selfClose] = match;
     if (closing) {
-      if (stack.length > 1) stack.pop();
+      const index = stack.findLastIndex((node) => node.tagName === tag.toUpperCase());
+      if (index > 0) stack.length = index;
       continue;
     }
     const node = new Node(tag);

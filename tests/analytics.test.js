@@ -27,7 +27,7 @@ import {
   normalizeSnapshot,
   viewsPerDelivery,
 } from "../src/shared/analytics.js";
-import { weightedRate } from "../src/providers/substack-api.js";
+import { mapCampaign, weightedRate } from "../src/providers/substack-api.js";
 
 test("getNotesAnalytics aggregates detailed note statistics and ranks them", () => {
   const result = getNotesAnalytics(normalizeSnapshot({
@@ -63,6 +63,17 @@ test("normalizeSnapshot sanitizes values and orders trends", () => {
 test("formatters produce compact Spanish labels", () => {
   assert.match(formatCompactNumber(12500), /12,5.?mil/i);
   assert.equal(formatPercent(42.56), "42,6%");
+});
+
+test("las tasas excluyen numeradores ausentes y conservan un cero realmente medido", () => {
+  const snapshot = { campaigns: [
+    mapCampaign({ id: 1, post_date: new Date().toISOString(), stats: { delivered: 100, opened: null, clicked: null } }),
+    mapCampaign({ id: 2, post_date: new Date().toISOString(), stats: { delivered: 100, opened: 0, clicked: 0 } }),
+    mapCampaign({ id: 3, post_date: new Date().toISOString(), stats: { delivered: 100, opened: 50, clicked: 10 } }),
+  ] };
+  const rates = getRateWindows(snapshot, 30).current;
+  assert.equal(rates.openRate, 25);
+  assert.equal(rates.clickRate, 5);
 });
 
 test("normalizeSnapshot no rellena trend.opens", () => {

@@ -99,6 +99,22 @@ vistas menos Cobertura. Las tres fuentes que Substack agrega en servidor
 —adquisición, tráfico y efecto de red— se sincronizan una vez por ventana,
 porque sus totales no se pueden recortar en cliente.
 
+El periodo de Artículos y Notas selecciona las piezas por su fecha de publicación:
+sus impresiones, aperturas, clics y altas son resultados acumulados hasta la
+medición, no eventos ocurridos únicamente dentro de esa ventana. Las cifras
+parciales muestran su cobertura y las métricas sin medición dicen «Sin dato».
+«Todo» muestra el histórico disponible de cada fuente: adquisición, fuentes de
+tráfico y varias series diarias solo cubren los últimos doce meses. La interfaz
+declara esos intervalos; no promete datos desde el inicio de la publicación.
+
+Las pasadas incrementales conservan los artículos ya guardados. El recorrido
+completo usa su propia fecha de control, independiente de la última sincronización.
+Además de las doce piezas recientes, se renuevan hasta 24 detalles antiguos de
+artículos y 24 de Notas por pasada. Un fallo conserva la última medición y se
+señala como dato sin actualizar; las fuentes ampliadas registran su estado por
+ventana. Desconectar invalida las escrituras pendientes de esa sincronización.
+Las curvas se pueden explorar con flechas izquierda/derecha, Inicio, Fin y Escape.
+
 ## Limitaciones actuales
 
 Substack no documenta públicamente sus endpoints internos de estadísticas. PlotStack usa rutas de solo lectura que consume el propio dashboard web; pueden cambiar y requerir una actualización de la extensión. La primera versión admite publicaciones bajo `*.substack.com`; los dominios personalizados quedan fuera de alcance.

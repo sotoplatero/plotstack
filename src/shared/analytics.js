@@ -84,6 +84,8 @@ const cleanNoteStats = (stats = {}) => ({
   fetchState: cleanFetchState(stats),
   attempts: Math.max(0, Math.round(safeNumber(stats.attempts))),
   updatedAt: String(stats.updatedAt || ""),
+  fetchedAt: String(stats.fetchedAt || ""),
+  measured: Object.fromEntries(["impressions", "freeSubscribers", "profileVisits", "linkClicks"].map((key) => [key, stats.measured ? Boolean(stats.measured[key]) : Boolean(stats.available)])),
   interactions: {
     total: Math.max(0, Math.round(safeNumber(stats.interactions?.total))),
     likes: Math.max(0, Math.round(safeNumber(stats.interactions?.likes))),
@@ -159,6 +161,8 @@ export function normalizeSnapshot(input = {}) {
         comments: Math.max(0, Math.round(safeNumber(campaign?.comments))),
         engagementRate: Math.max(0, safeNumber(campaign?.engagementRate)),
         detailAvailable: Boolean(campaign?.detailAvailable),
+        detailUpdatedAt: String(campaign?.detailUpdatedAt || ""),
+        measured: Object.fromEntries(["opened", "clicked", "openRate", "clickRate"].map((key) => [key, campaign?.measured ? Boolean(campaign.measured[key]) : campaign?.[key] !== null && campaign?.[key] !== undefined])),
       }))
     : [];
 
@@ -180,6 +184,17 @@ export function normalizeSnapshot(input = {}) {
     provider: String(input.provider || "unconnected"),
     publication: String(input.publication || t("Mi newsletter")),
     capturedAt: String(input.capturedAt || new Date().toISOString()),
+    lastFullRefreshAt: String(input.lastFullRefreshAt || ""),
+    currency: /^[A-Z]{3}$/.test(input.currency || "") ? input.currency : "",
+    metricMeta: Object.fromEntries(["subscribers", "paidSubscribers", "monthlyRevenue", "totalViews"].filter((key) => input.metricMeta?.[key]).map((key) => [key, {
+      status: ["ready", "stale", "unavailable"].includes(input.metricMeta[key].status) ? input.metricMeta[key].status : "unavailable",
+      fetchedAt: String(input.metricMeta[key].fetchedAt || ""),
+      source: String(input.metricMeta[key].source || ""), unit: String(input.metricMeta[key].unit || ""),
+    }])),
+    sourceHealth: Object.fromEntries(["summary", "posts"].filter((key) => input.sourceHealth?.[key]).map((key) => [key, {
+      status: ["ready", "stale", "unavailable"].includes(input.sourceHealth[key].status) ? input.sourceHealth[key].status : "unavailable",
+      fetchedAt: String(input.sourceHealth[key].fetchedAt || ""),
+    }])),
     sourceUrl: String(input.sourceUrl || ""),
     metrics: cleanMetricSet(input.metrics),
     previous: cleanMetricSet(input.previous),
@@ -200,6 +215,7 @@ export function getNotesAnalytics(snapshot = {}) {
   };
   const surfaces = Object.fromEntries(NOTE_SURFACE_KEYS.map((key) => [key, 0]));
   const audience = Object.fromEntries(NOTE_AUDIENCE_KEYS.map((key) => [key, 0]));
+  const measuredCount = Object.fromEntries(["impressions", "freeSubscribers", "profileVisits", "linkClicks"].map((key) => [key, 0]));
   const ranked = notes.map((note) => {
     const detailed = Boolean(note.stats?.available);
     const interactions = detailed ? note.stats.interactions : {
@@ -214,6 +230,7 @@ export function getNotesAnalytics(snapshot = {}) {
     for (const key of ["freeSubscribers", "paidSubscribers"]) total[key] += safeNumber(results[key]);
     total.impressions += safeNumber(reach.impressions);
     if (detailed) {
+      for (const key of Object.keys(measuredCount)) if (note.stats.measured ? note.stats.measured[key] : true) measuredCount[key] += 1;
       for (const key of NOTE_SURFACE_KEYS) surfaces[key] += safeNumber(note.stats.surfaces?.[key]);
       for (const key of NOTE_AUDIENCE_KEYS) audience[key] += safeNumber(note.stats.audience?.[key]);
     }
@@ -222,6 +239,7 @@ export function getNotesAnalytics(snapshot = {}) {
 
   return {
     total,
+    measuredCount,
     surfaces,
     audience,
     ranked,
@@ -300,10 +318,11 @@ export function sourceLabel(raw) {
   return known || value.charAt(0).toLocaleUpperCase(LOCALE) + value.slice(1);
 }
 
-export function formatCurrency(value) {
+export function formatCurrency(value, currency = "") {
+  if (!/^[A-Z]{3}$/.test(currency)) return `${safeNumber(value).toLocaleString(LOCALE, { maximumFractionDigits: 0 })} · ${t("Moneda sin confirmar")}`;
   return safeNumber(value).toLocaleString(LOCALE, {
     style: "currency",
-    currency: "USD",
+    currency,
     maximumFractionDigits: 0,
   });
 }
@@ -324,7 +343,9 @@ export function getRateWindows(snapshot, days = 30, now = Date.now()) {
     let denominator = 0;
     for (const row of rows) {
       if (row.delivered <= 0) continue;
-      numerator += safeNumber(row[key]);
+      const rateKey = key === "opened" ? "openRate" : "clickRate";
+      if (!row.measured[key] && !row.measured[rateKey]) continue;
+      numerator += row.measured[key] ? safeNumber(row[key]) : row[rateKey] * row.delivered / 100;
       denominator += row.delivered;
     }
     // `null` cuando no hay envios con destinatarios: ausencia, no cero.
@@ -671,7 +692,7 @@ export function getDerivedMetrics(snapshot, days = 30) {
 
   return {
     comparison: base,
-    subscriberGrowth: change(metrics.subscribers, base.subscribers),
+    subscriberGrowth: snapshot.metricMeta?.subscribers?.status === "unavailable" ? null : change(metrics.subscribers, base.subscribers),
     paidGrowth: change(metrics.paidSubscribers, base.paidSubscribers),
     // Substack ya publica la variación en `summary.openRateDiff`. Derivarla de
     // `previous.openRate` daba siempre 0, porque ese campo era una copia de
@@ -893,7 +914,8 @@ export function withLoyaltyHistory(fresh = {}, previous = {}, now = Date.now()) 
   const ratings = fresh?.audience?.timeline?.ratings;
   const total = Array.isArray(ratings) ? ratings.reduce((sum, count) => sum + safeNumber(count), 0) : 0;
   const today = civilDay(now);
-  const history = total > 0
+  const source = fresh.coverage?.find((row) => row.key === "subscriberTimeline");
+  const history = total > 0 && (!source || source.status === "ready")
     ? [...prior.filter((point) => point.date !== today), { date: today, core: safeNumber(ratings[5]), active: safeNumber(ratings[4]) + safeNumber(ratings[5]), total }]
     : prior;
   history.sort((a, b) => a.date.localeCompare(b.date));
